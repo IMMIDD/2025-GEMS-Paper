@@ -1,1 +1,4 @@
 /.vscode
+localtests.jl
+/data
+/results
