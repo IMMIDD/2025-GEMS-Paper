@@ -5,6 +5,7 @@ export plot_county_commutes_out_fraction
 export plot_mun_commutes_in_fraction
 export plot_county_commutes_in_fraction
 
+export mobility
 
 # DATA PREPARATION
 
@@ -160,6 +161,7 @@ function plot_county_commutes_in_fraction(county_commutes_df)
             title = "Fraction of workforce commuting from a different county")
 end
 
+# RUN ALL ANALYSES
 
 """
     mobility(;

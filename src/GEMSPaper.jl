@@ -4,6 +4,7 @@ module GEMSPaper
 using DataFrames
 using Dates
 using Plots
+using Statistics
 using Revise
 using Reexport
 
@@ -39,6 +40,7 @@ DE_sim() = Simulation(
 
 # INCLUDE ANALYSES
 include("mobility.jl")
+include("settings.jl")
 
 
 
@@ -54,6 +56,12 @@ function runall(;
 
     # sim object
     sim = isnothing(sim_obj) ? Simulation(configfile, popfile, settingsfile) : sim_obj
+
+    # run setting analyses
+    settinanalyses(
+        folder = folder,
+        sim = sim
+    )
 
     # run mobility analyses
     mobility(
