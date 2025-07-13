@@ -66,6 +66,8 @@ function settinganalyses(;
     # plot average office sizes
     p_od_m = plot_mun_office_sizes(od_m)
     png(p_od_m, joinpath(folder, "mun_mean_office_sizes.png"))
+    p_od_c = plot_county_office_sizes(od_m)
+    png(p_od_c, joinpath(folder, "county_mean_office_sizes.png"))
 
 
 end

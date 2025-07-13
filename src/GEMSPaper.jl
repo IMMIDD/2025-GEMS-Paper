@@ -58,7 +58,7 @@ function runall(;
     sim = isnothing(sim_obj) ? Simulation(configfile, popfile, settingsfile) : sim_obj
 
     # run setting analyses
-    settinanalyses(
+    settinganalyses(
         folder = folder,
         sim = sim
     )
