@@ -39,12 +39,22 @@ DE_sim() = Simulation(
         "data/settings.jld2")
 
 # INCLUDE ANALYSES
-include("mobility.jl")
+include("demographics.jl")
 include("settings.jl")
+include("mobility.jl")
 
 
 
 # RUN ALL
+"""
+    runall(;
+        sim_obj = nothing,
+        configfile = "models/DE_model_R0_3.28.toml",
+        popfile = "data/people.jld2",
+        settingsfile = "data/settings.jld2")
+
+Executes all model analyses.
+"""
 function runall(;
         sim_obj = nothing,
         configfile = "models/DE_model_R0_3.28.toml",
@@ -56,6 +66,12 @@ function runall(;
 
     # sim object
     sim = isnothing(sim_obj) ? Simulation(configfile, popfile, settingsfile) : sim_obj
+
+    # run mobility analyses
+    demographics(
+        folder = folder,
+        sim = sim
+    )
 
     # run setting analyses
     settinganalyses(
