@@ -271,11 +271,9 @@ function mobility(;
     ccif = county_commutes_in_fraction(cc)
     ccof = county_commutes_out_fraction(cc)
     
-    # add county names and store data
-    leftjoin(ccif, county_data(), on = [:off_ags => :ags]) |>
-        df -> CSV.write(joinpath(folder, "county_commutes_in_fraction.csv"), df)
-    leftjoin(ccif, county_data(), on = [:off_ags => :ags]) |>
-        df -> CSV.write(joinpath(folder, "county_commutes_out_fraction.csv"), df)
+    # store data
+    CSV.write(joinpath(folder, "county_commutes_in_fraction.csv"), ccif)
+    CSV.write(joinpath(folder, "county_commutes_out_fraction.csv"), ccof)
 
     # plot fraction of outgoing commuters per municipality
     p_out_mc = plot_mun_commutes_out_fraction(mcof)
