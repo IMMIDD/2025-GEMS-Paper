@@ -1,6 +1,7 @@
 module GEMSPaper
 
 # PACKAGES
+using CSV
 using DataFrames
 using Dates
 using Measures
@@ -68,18 +69,21 @@ function runall(;
     # sim object
     sim = isnothing(sim_obj) ? Simulation(configfile, popfile, settingsfile) : sim_obj
 
+    printinfo("### RUNNING DEMOGRAPHICS ANALYSES")
     # run mobility analyses
     demographics(
         folder = folder,
         sim = sim
     )
 
+    printinfo("### RUNNING SETTINGS ANALYSES")
     # run setting analyses
     settinganalyses(
         folder = folder,
         sim = sim
     )
 
+    printinfo("### RUNNING MOBILITY ANALYSES")
     # run mobility analyses
     mobility(
         folder = folder,
