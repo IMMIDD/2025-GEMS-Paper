@@ -4,6 +4,7 @@ export plot_mun_commutes_out_fraction
 export plot_county_commutes_out_fraction
 export plot_mun_commutes_in_fraction
 export plot_county_commutes_in_fraction
+export plot_county_commutes_combined
 
 export mobility
 
@@ -76,16 +77,17 @@ function plot_mun_commutes_out_fraction(mun_commutes_df)
     return mun_commutes_df |>
         # calculate fraction of outgoing commutes
         df -> groupby(df, :hh_ags) |>
-        df -> combine(df, [:hh_ags, :off_ags, :commutes] => ((h, o, c) -> sum(c[o .!= h[1]]) / sum(c)) => :out_fraction) |>
+        df -> combine(df, [:hh_ags, :off_ags, :commutes] => ((h, o, c) -> 100 * sum(c[o .!= h[1]]) / sum(c)) => :out_fraction) |>
         df -> rename!(df, :hh_ags => :ags) |>
         # mapping
         df -> transform(df, :ags => (a -> convert(Vector{AGS} , a)) => :ags) |>
-        df -> prepare_map_df!(df, level = 3) |>
+        df -> prepare_map_df(df, level = 3) |>
         df -> agsmap(df,
             linecolor = nothing,
-            clims = (0, 1),
+            clims = (0, 100),
+            colorbar_title = "Percentage (%)", 
             fontfamily = "Times Roman",
-            title = "Fraction of working people commuting to a different municipality")
+            title = "Fraction of working people commuting \n to a different municipality")
 end
 
 
@@ -100,16 +102,17 @@ function plot_county_commutes_out_fraction(county_commutes_df)
     return county_commutes_df |>
         # calculate fraction of outgoing commutes
         df -> groupby(df, :hh_ags) |>
-        df -> combine(df, [:hh_ags, :off_ags, :commutes] => ((h, o, c) -> sum(c[o .!= h[1]]) / sum(c)) => :out_fraction) |>
+        df -> combine(df, [:hh_ags, :off_ags, :commutes] => ((h, o, c) -> 100 * sum(c[o .!= h[1]]) / sum(c)) => :out_fraction) |>
         df -> rename!(df, :hh_ags => :ags) |>
         # mapping
         df -> transform(df, :ags => (a -> convert(Vector{AGS} , a)) => :ags) |>
-        df -> prepare_map_df!(df, level = 2) |>
+        df -> prepare_map_df(df, level = 2) |>
         df -> agsmap(df,
             linecolor = nothing,
-            clims = (0, 1),
+            clims = (0, 100),
+            colorbar_title = "Percentage (%)",
             fontfamily = "Times Roman",
-            title = "Fraction of working people commuting to a different county")
+            title = "Fraction of working people commuting \n to a different county")
 end
 
 
@@ -124,16 +127,17 @@ function plot_mun_commutes_in_fraction(mun_commutes_df)
     return mun_commutes_df |>
         # calculate fraction of incoming commutes
         df -> groupby(df, :off_ags) |>
-        df -> combine(df, [:hh_ags, :off_ags, :commutes] => ((h, o, c) -> sum(c[h .!= o[1]]) / sum(c)) => :in_fraction) |>
+        df -> combine(df, [:hh_ags, :off_ags, :commutes] => ((h, o, c) -> 100 * sum(c[h .!= o[1]]) / sum(c)) => :in_fraction) |>
         df -> rename!(df, :off_ags => :ags) |>
         # mapping
         df -> transform(df, :ags => (a -> convert(Vector{AGS} , a)) => :ags) |>
-        df -> prepare_map_df!(df, level = 3) |>
+        df -> prepare_map_df(df, level = 3) |>
         df -> agsmap(df,
             linecolor = nothing,
-            clims = (0, 1),
+            clims = (0, 100),
+            colorbar_title = "Percentage (%)",
             fontfamily = "Times Roman",
-            title = "Fraction of workforce from a different municipality")
+            title = "Fraction of workforce commuting \n from a different municipality")
 end
 
 
@@ -149,16 +153,39 @@ function plot_county_commutes_in_fraction(county_commutes_df)
     return county_commutes_df |>
         # calculate fraction of outgoing commutes
         df -> groupby(df, :off_ags) |>
-        df -> combine(df, [:hh_ags, :off_ags, :commutes] => ((h, o, c) -> sum(c[h .!= o[1]]) / sum(c)) => :in_fraction) |>
+        df -> combine(df, [:hh_ags, :off_ags, :commutes] => ((h, o, c) -> 100 * sum(c[h .!= o[1]]) / sum(c)) => :in_fraction) |>
         df -> rename!(df, :off_ags => :ags) |>
         # mapping
         df -> transform(df, :ags => (a -> convert(Vector{AGS} , a)) => :ags) |>
-        df -> prepare_map_df!(df, level = 2) |>
+        df -> prepare_map_df(df, level = 2) |>
         df -> agsmap(df,
             linecolor = nothing,
-            clims = (0, 1),
+            clims = (0, 100),
+            colorbar_title = "Percentage (%)", 
             fontfamily = "Times Roman",
-            title = "Fraction of workforce commuting from a different county")
+            title = "Fraction of workforce commuting \n from a different county")
+end
+
+
+"""
+    plot_county_commutes_combined(p_in_cc, p_out_cc)
+
+
+Returns the combined plot of county in- and out commutes.
+Input must be the in- and out commute plots (output of
+`plot_county_commutes_in_fraction()` and
+`plot_county_commutes_out_fraction` function).
+"""
+function plot_county_commutes_combined(p_in_cc, p_out_cc)
+    l = @layout [a{0.34w} b{0.66w}]
+    
+    return plot(plot!(p_in_cc, colorbar = false), p_out_cc,
+        titlefontsize = 34,
+        ytickfontsize = 24,
+        colorbar_titlefontsize = 24,
+        right_margin=5mm,
+        layout = l,
+        size = (3000, 1500))
 end
 
 # RUN ALL ANALYSES
@@ -197,4 +224,6 @@ function mobility(;
     p_in_cc = plot_county_commutes_in_fraction(cc)
     png(p_in_cc, joinpath(folder, "incoming_commuters_fraction_per_county.png"))
 
+    p_comb = plot_county_commutes_combined(p_in_cc, p_out_cc)
+    png(p_comb, joinpath(folder, "in_and_out_commuter_fraction_per_county.png"))
 end
