@@ -1,5 +1,6 @@
 export individual_data
 export plot_age_per_state
+export plot_agemap
 
 export demographics
 
@@ -66,6 +67,16 @@ function plot_age_per_state(individual_data_df)
 end
 
 
+function plot_agemap(sim)
+    return gemsmap(sim, type = :AgeMap,
+        level = 2,
+        linecolor = nothing,
+        fit_lims = true,
+        colorbar_title = "Age", 
+        fontfamily = "Times Roman",
+        size = (1600, 2000))
+end
+
 
 # RUN ALL ANALYSES
 
@@ -89,5 +100,8 @@ function demographics(;
     # plot age structure per state
     p_age_state = plot_age_per_state(id)
     png(p_age_state, joinpath(folder, "age_structure_per_state.png"))
-    
+
+    # plot average age
+    p_avg_age = plot_agemap(sim)   
+    png(p_avg_age, joinpath(folder, "avg_age_map.png"))
 end

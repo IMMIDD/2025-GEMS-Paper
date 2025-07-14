@@ -16,6 +16,9 @@ using Reexport
 
 export result_folder
 export DE_sim
+export map_dims
+export map_titlefontsize
+export map_legendfontsize
 export runall
 
 # COMMON FUNCTIONS
@@ -39,6 +42,15 @@ DE_sim() = Simulation(
         "models/DE_model_R0_3.28.toml",
         "data/people.jld2",
         "data/settings.jld2")
+
+"""
+    map_dims()
+
+Returns standard map dimensions (for Germany).
+"""
+map_dims() = (1600, 2000)
+map_titlefontsize() = 34
+map_legendfontsize() = 24
 
 # INCLUDE ANALYSES
 include("demographics.jl")

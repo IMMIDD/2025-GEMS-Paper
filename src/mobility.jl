@@ -148,6 +148,11 @@ function plot_mun_commutes_out_fraction(mun_commutes_out_fraction_df)
         df -> transform(df, :ags => (a -> convert(Vector{AGS} , a)) => :ags) |>
         df -> prepare_map_df(df, level = 3) |>
         df -> agsmap(df,
+            size = map_dims(),
+            titlefontsize = map_titlefontsize(),
+            ytickfontsize = map_legendfontsize(),
+            colorbar_titlefontsize = map_legendfontsize(),
+            right_margin=5mm,
             linecolor = nothing,
             clims = (0, 100),
             colorbar_title = "Percentage (%)", 
@@ -172,6 +177,11 @@ function plot_county_commutes_out_fraction(county_commutes_out_fraction_df)
         df -> transform(df, :ags => (a -> convert(Vector{AGS} , a)) => :ags) |>
         df -> prepare_map_df(df, level = 2) |>
         df -> agsmap(df,
+            size = map_dims(),
+            titlefontsize = map_titlefontsize(),
+            ytickfontsize = map_legendfontsize(),
+            colorbar_titlefontsize = map_legendfontsize(),
+            right_margin=5mm,
             linecolor = nothing,
             clims = (0, 100),
             colorbar_title = "Percentage (%)",
@@ -195,6 +205,11 @@ function plot_mun_commutes_in_fraction(mun_commutes_in_fraction_df)
         df -> transform(df, :ags => (a -> convert(Vector{AGS} , a)) => :ags) |>
         df -> prepare_map_df(df, level = 3) |>
         df -> agsmap(df,
+            size = map_dims(),
+            titlefontsize = map_titlefontsize(),
+            ytickfontsize = map_legendfontsize(),
+            colorbar_titlefontsize = map_legendfontsize(),
+            right_margin=5mm,
             linecolor = nothing,
             clims = (0, 100),
             colorbar_title = "Percentage (%)",
@@ -219,6 +234,11 @@ function plot_county_commutes_in_fraction(county_commutes_in_fraction_df)
         df -> transform(df, :ags => (a -> convert(Vector{AGS} , a)) => :ags) |>
         df -> prepare_map_df(df, level = 2) |>
         df -> agsmap(df,
+            size = map_dims(),
+            titlefontsize = map_titlefontsize(),
+            ytickfontsize = map_legendfontsize(),
+            colorbar_titlefontsize = map_legendfontsize(),
+            right_margin=5mm,
             linecolor = nothing,
             clims = (0, 100),
             colorbar_title = "Percentage (%)", 
@@ -237,7 +257,7 @@ Input must be the in- and out commute plots (output of
 `plot_county_commutes_out_fraction` function).
 """
 function plot_county_commutes_combined(p_in_cc, p_out_cc)
-    l = @layout [a{0.34w} b{0.66w}]
+    l = @layout [a{0.41w} b{0.59w}]
     
     return plot(plot!(p_in_cc, colorbar = false), p_out_cc,
         titlefontsize = 34,
@@ -245,7 +265,7 @@ function plot_county_commutes_combined(p_in_cc, p_out_cc)
         colorbar_titlefontsize = 24,
         right_margin=5mm,
         layout = l,
-        size = (3000, 1500))
+        size = (2 * map_dims()[1], map_dims()[2]))
 end
 
 # RUN ALL ANALYSES
