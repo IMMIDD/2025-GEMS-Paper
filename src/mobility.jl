@@ -167,6 +167,7 @@ household. Input must be county out fraction dataframe
 function plot_county_commutes_out_fraction(county_commutes_out_fraction_df)
     return county_commutes_out_fraction_df |>
         df -> rename(df, :hh_ags => :ags) |>
+        df -> DataFrames.select(df, :ags, :out_fraction) |>
         # mapping
         df -> transform(df, :ags => (a -> convert(Vector{AGS} , a)) => :ags) |>
         df -> prepare_map_df(df, level = 2) |>
@@ -213,6 +214,7 @@ Input must be county in fraction dataframe
 function plot_county_commutes_in_fraction(county_commutes_in_fraction_df)
     return county_commutes_in_fraction_df |>
         df -> rename(df, :off_ags => :ags) |>
+        df -> DataFrames.select(df, :ags, :in_fraction) |>
         # mapping
         df -> transform(df, :ags => (a -> convert(Vector{AGS} , a)) => :ags) |>
         df -> prepare_map_df(df, level = 2) |>
