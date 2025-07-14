@@ -260,9 +260,9 @@ function plot_county_commutes_combined(p_in_cc, p_out_cc)
     l = @layout [a{0.41w} b{0.59w}]
     
     return plot(plot!(p_in_cc, colorbar = false), p_out_cc,
-        titlefontsize = 34,
-        ytickfontsize = 24,
-        colorbar_titlefontsize = 24,
+        titlefontsize = map_titlefontsize(),
+        ytickfontsize = map_legendfontsize(),
+        colorbar_titlefontsize = map_legendfontsize(),
         right_margin=5mm,
         layout = l,
         size = (2 * map_dims()[1], map_dims()[2]))

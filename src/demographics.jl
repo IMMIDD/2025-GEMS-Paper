@@ -1,6 +1,9 @@
 export individual_data
 export plot_age_per_state
 export plot_agemap
+export plot_household_sizes
+export plot_pop_density
+export plot_singles
 
 export demographics
 
@@ -70,11 +73,62 @@ end
 function plot_agemap(sim)
     return gemsmap(sim, type = :AgeMap,
         level = 2,
+        size = map_dims(),
+        plot_titlefontsize = map_titlefontsize(),
+        titlefontsize = map_titlefontsize(),
+        ytickfontsize = map_legendfontsize(),
+        colorbar_titlefontsize = map_legendfontsize(),
+        right_margin=5mm,
         linecolor = nothing,
         fit_lims = true,
-        colorbar_title = "Age", 
-        fontfamily = "Times Roman",
-        size = (1600, 2000))
+        plot_title = "Mean Age Per Region",
+        colorbar_title = "Mean Age", 
+        fontfamily = "Times Roman")
+end
+
+function plot_household_sizes(sim)
+    return gemsmap(sim, type = :HouseholdSizeMap,
+        level = 2,
+        size = map_dims(),
+        plot_titlefontsize = map_titlefontsize(),
+        titlefontsize = map_titlefontsize(),
+        ytickfontsize = map_legendfontsize(),
+        colorbar_titlefontsize = map_legendfontsize(),
+        right_margin=5mm,
+        linecolor = nothing,
+        fit_lims = true,
+        colorbar_title = "Mean Household Size", 
+        fontfamily = "Times Roman")
+end
+
+function plot_pop_density(sim)
+    return gemsmap(sim, type = :PopDensityMap,
+        level = 2,
+        size = map_dims(),
+        plot_titlefontsize = map_titlefontsize(),
+        titlefontsize = map_titlefontsize(),
+        ytickfontsize = map_legendfontsize(),
+        colorbar_titlefontsize = map_legendfontsize(),
+        right_margin=5mm,
+        linecolor = nothing,
+        fit_lims = true,
+        colorbar_title = "People per km²", 
+        fontfamily = "Times Roman")
+end
+
+function plot_singles(sim)
+    return gemsmap(sim, type = :SinglesMap,
+        level = 2,
+        size = map_dims(),
+        plot_titlefontsize = map_titlefontsize(),
+        titlefontsize = map_titlefontsize(),
+        ytickfontsize = map_legendfontsize(),
+        colorbar_titlefontsize = map_legendfontsize(),
+        right_margin=5mm,
+        linecolor = nothing,
+        fit_lims = true,
+        colorbar_title = "Percentage (%)", 
+        fontfamily = "Times Roman")
 end
 
 
@@ -101,7 +155,19 @@ function demographics(;
     p_age_state = plot_age_per_state(id)
     png(p_age_state, joinpath(folder, "age_structure_per_state.png"))
 
-    # plot average age
-    p_avg_age = plot_agemap(sim)   
-    png(p_avg_age, joinpath(folder, "avg_age_map.png"))
+    # plot mean age
+    p_mean_age = plot_agemap(sim)   
+    png(p_mean_age, joinpath(folder, "mean_age_map.png"))
+
+    # plot mean household size
+    p_mean_hh_size = plot_household_sizes(sim)   
+    png(p_mean_hh_size, joinpath(folder, "mean_household_size_map.png"))
+
+    # plot population density
+    p_pop_density = plot_pop_density(sim)   
+    png(p_pop_density, joinpath(folder, "pop_density_map.png"))
+
+    # plot fraction of singles
+    p_singles = plot_singles(sim)   
+    png(p_singles, joinpath(folder, "fraction_of_single_person_households.png"))
 end
