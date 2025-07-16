@@ -34,14 +34,14 @@ function result_folder()
 end
 
 """
-    DE_sim()
+    DE_sim(;configfile = "models/DE_model_R0_3.28.toml")
 
 Wrapper for German simulation model.
 """
-DE_sim() = Simulation(
-        "models/DE_model_R0_3.28.toml",
-        "data/people.jld2",
-        "data/settings.jld2")
+DE_sim(;configfile = "models/DE_model_R0_3.28.toml") = Simulation(
+    configfile,
+    "data/people.jld2",
+    "data/settings.jld2")
 
 """
     map_dims()
@@ -56,6 +56,8 @@ map_legendfontsize() = 24
 include("demographics.jl")
 include("settings.jl")
 include("mobility.jl")
+# INCLUDE SCCENARIOS
+include("sc_outbreak.jl")
 
 
 
@@ -73,7 +75,8 @@ function runall(;
         sim_obj = nothing,
         configfile = "models/DE_model_R0_3.28.toml",
         popfile = "data/people.jld2",
-        settingsfile = "data/settings.jld2")
+        settingsfile = "data/settings.jld2",
+        sc_outbreak_config = "models/DE_model_R0_3.28_Heinsberg_Seed.toml")
 
     # create result folder
     folder = result_folder()
@@ -101,6 +104,16 @@ function runall(;
         folder = folder,
         sim = sim
     )
+
+    # break here, if sim-object was provided
+    if !is_nothing(sim_obj)
+        @warn "If you pass a sim-object to runall(), it will not perform the simulation scenarios."
+        return;
+    end
+
+    printinfo("### RUNNING OUTBREAK SCENARIO")
+
+    
 end
 
 end # module GEMSPaper

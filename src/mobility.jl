@@ -250,7 +250,6 @@ end
 """
     plot_county_commutes_combined(p_in_cc, p_out_cc)
 
-
 Returns the combined plot of county in- and out commutes.
 Input must be the in- and out commute plots (output of
 `plot_county_commutes_in_fraction()` and
