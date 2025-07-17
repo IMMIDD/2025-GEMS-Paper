@@ -114,7 +114,7 @@ function runall(;
 
     printinfo("### RUNNING CONTACT ANALYSES")
     # run contact analyses
-    contact(
+    contacts(
         folder = folder,
         sim = sim
     )
