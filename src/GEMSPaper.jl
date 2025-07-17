@@ -54,10 +54,15 @@ map_dims() = (1600, 2000)
 map_titlefontsize() = 34
 map_legendfontsize() = 24
 
+# INCLUDE STYLES
+include("styles/rd_contacts_only.jl")
+
 # INCLUDE ANALYSES
 include("demographics.jl")
 include("settings.jl")
 include("mobility.jl")
+include("contacts.jl")
+
 # INCLUDE SCCENARIOS
 include("sc_outbreak.jl")
 
@@ -103,6 +108,13 @@ function runall(;
     printinfo("### RUNNING MOBILITY ANALYSES")
     # run mobility analyses
     mobility(
+        folder = folder,
+        sim = sim
+    )
+
+    printinfo("### RUNNING CONTACT ANALYSES")
+    # run contact analyses
+    contact(
         folder = folder,
         sim = sim
     )
