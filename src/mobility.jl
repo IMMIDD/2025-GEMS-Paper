@@ -183,7 +183,7 @@ function plot_county_commutes_out_fraction(county_commutes_out_fraction_df)
             colorbar_titlefontsize = map_legendfontsize(),
             right_margin=5mm,
             linecolor = nothing,
-            clims = (0, 100),
+            clims = (0, 75),
             colorbar_title = "Percentage (%)",
             fontfamily = "Times Roman",
             title = "Fraction of working people commuting \n to a different county")
@@ -240,7 +240,7 @@ function plot_county_commutes_in_fraction(county_commutes_in_fraction_df)
             colorbar_titlefontsize = map_legendfontsize(),
             right_margin=5mm,
             linecolor = nothing,
-            clims = (0, 100),
+            clims = (0, 75),
             colorbar_title = "Percentage (%)", 
             fontfamily = "Times Roman",
             title = "Fraction of workforce commuting \n from a different county")
@@ -297,16 +297,16 @@ function mobility(;
     CSV.write(joinpath(folder, "county_commutes_out_fraction.csv"), ccof)
 
     # plot fraction of outgoing commuters per municipality
-    p_out_mc = plot_mun_commutes_out_fraction(mcof)
-    png(p_out_mc, joinpath(folder, "outgoing_commuters_fraction_per_municipality.png"))
+    # p_out_mc = plot_mun_commutes_out_fraction(mcof)
+    # png(p_out_mc, joinpath(folder, "outgoing_commuters_fraction_per_municipality.png"))
 
     # plot fraction of outgoing commuters per county
     p_out_cc = plot_county_commutes_out_fraction(ccof)
     png(p_out_cc, joinpath(folder, "outgoing_commuters_fraction_per_county.png"))
 
     # plot fraction of workforce as incoming commuters per municipality
-    p_in_mc = plot_mun_commutes_in_fraction(mcif)
-    png(p_in_mc, joinpath(folder, "incoming_commuters_fraction_per_municipality.png"))
+    # p_in_mc = plot_mun_commutes_in_fraction(mcif)
+    # png(p_in_mc, joinpath(folder, "incoming_commuters_fraction_per_municipality.png"))
 
     # plot fraction of workforce as incoming commuters per county
     p_in_cc = plot_county_commutes_in_fraction(ccif)
