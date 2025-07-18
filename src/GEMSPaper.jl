@@ -62,6 +62,7 @@ include("demographics.jl")
 include("settings.jl")
 include("mobility.jl")
 include("contacts.jl")
+include("benchmarking.jl")
 
 # INCLUDE SCCENARIOS
 include("sc_outbreak.jl")
