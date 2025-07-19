@@ -66,6 +66,7 @@ include("benchmarking.jl")
 
 # INCLUDE SCCENARIOS
 include("sc_outbreak.jl")
+include("sc_sweeping.jl")
 
 
 
