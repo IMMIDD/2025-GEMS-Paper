@@ -64,8 +64,9 @@ include("mobility.jl")
 include("contacts.jl")
 include("benchmarking.jl")
 
-# INCLUDE SCCENARIOS
+# INCLUDE SCENARIOS
 include("sc_outbreak.jl")
+include("sc_self_isolation.jl")
 include("sc_sweeping.jl")
 
 
