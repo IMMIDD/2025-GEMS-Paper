@@ -65,21 +65,25 @@ Requires the input of `run_sweeps()`.
 """
 function plot_sweeps(df)
 
+    formattick(x) = Int(round(100x)) |>
+        x -> x % 5 == 0 ? "$x %" : ""
+
     return gemsheatmap(df.xvals, df.yvals, df.outvals,
         xlabel = "Rate of Symptomatic Cases",
         ylabel = "Adherence Rate",
         colorbar_title = "\nBasic Reproduction Number",
         xrev = true,
         yrev = true,
-        xformatter = (x -> "$(Int(round(100x)))%"),
-        yformatter = (x -> "$(Int(round(100x)))%"),
+        xformatter = formattick,
+        yformatter = formattick,
         color = :r0,
-        size = (1600, 1000),
-        tickfontsize = 24,
+        size = (2000, 1200),
+        tickfontsize = 20,
         labelfontsize = 24,
         colorbar_fontsize = 24,
         colorbar_titlefontsize = 24,
-        margin = 10mm,
+        xrotation = 45,
+        margin = 15mm,
         right_margin = 18mm)
 
 end
