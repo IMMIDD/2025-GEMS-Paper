@@ -68,6 +68,7 @@ include("benchmarking.jl")
 include("sc_outbreak.jl")
 include("sc_self_isolation.jl")
 include("sc_sweeping.jl")
+include("sc_testing.jl")
 
 
 
@@ -129,6 +130,12 @@ function runall(;
     end
 
     printinfo("### RUNNING OUTBREAK SCENARIO")
+
+    printinfo("### RUNNING SIMPLE INTERVENTION SCENARIO")
+
+    printinfo("### RUNNING PARAMETER SWEEPS")
+
+    printinfo("### RUNNING TESTING SCENARIOS")
 
     
 end
