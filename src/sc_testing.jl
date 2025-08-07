@@ -1,8 +1,71 @@
+export calc_outcomes
+export outcome_df
+
 export run_testing_sims
 export run_recursive_testing_sims
 export plot_scenario_testing
 
 export scenario_testing
+
+###
+### DATA ANALYSIS
+###
+
+"""
+    calc_outcomes(rds; kwargs...)
+
+Generates a dataframe from a vector of `ResultData` objects and a series
+of keyworded lamda-functions that extract values from each of the `rds`.
+
+This example extracts the label and the number of total infections from each object:
+
+```julia
+calc_outcomes([rd1, rd2, rd3],
+        label = label,
+        total_infections = total_infections)
+```
+"""
+function calc_outcomes(rds; kwargs...)
+
+    res = Dict()
+
+    for (key, val) in kwargs
+        # apply function to each rd object, store result under name
+        res[key] = val.(rds)
+    end
+
+    return DataFrame(res)
+end
+
+"""
+    outcome_df(rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing)
+
+Builds a dataframe with main simulation outcomes for the three RDs
+that come out of `run_testing_sims()`
+"""
+function outcome_df(rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing)
+    return calc_outcomes([rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing],
+        label = label,
+        total_infections = total_infections,
+        total_tests = rd -> try
+                total_tests(rd)["Antigen Test"]
+            catch
+                0
+            end,
+        total_attack_rate = attack_rate,
+        quarantine_days = total_quarantines,
+        detection_rate = detection_rate,
+        base_reproduction = r0,
+        hospitalizations = rd -> sum(tick_hosptitalizations(rd).hospital_cnt),
+        icu_admissions = rd -> sum(tick_hosptitalizations(rd).icu_cnt),
+        deaths = rd -> sum(tick_deaths(rd).death_cnt),
+        time_to_detection = rd -> time_to_detection(rd).mean_time_to_detection |>
+            vec -> vec[.!ismissing.(vec)] |>
+            vec -> isempty(vec) ? Inf : median(vec),
+        max_hospital_load = rd -> maximum(tick_hosptitalizations(rd).current_hospitalized),
+        max_icu_load = rd -> maximum(tick_hosptitalizations(rd).current_icu),
+    )
+end
 
 """
     run_testing_sims(;
@@ -198,40 +261,58 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
     # spacing R plot ticks
     tick_to_R(t) = "        $(round(Int, t))"
 
-    
-    l = @layout [a{0.15h}; b{0.15h}; c{0.15h}; d{0.55h}]
+
+    l = @layout [a{0.12h}; b{0.12h}; c{0.12h}; d{0.12h}; e{0.52h}]
     return plot(
+        # DAILY INFECTIONS
         gemsplot([rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing],
             type = :TickCases,
             titlefontsize = map_legendfontsize(),
-            #title = "Daily Infections",
             title = "",
             plot_title = "",
             ylabel = "Infections",
             yformatter = tick_to_m,
+            xformatter = x -> "",
             xlims = (0, 365),
-            bottom_margin = 15mm,
+            xlabel = "",
             legend = :topleft),
+            
+
+        # EFFECTIVE REPRODUCTION
         gemsplot([rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing],
             type = :EffectiveReproduction,
-            #title = "Effective Reproduction Number",
             title = "",
             ylabel = "Effective R",
             yformatter = tick_to_R,
+            xformatter = x -> "",
             plot_title = "",
             xlims = (0, 365),
-            bottom_margin = 15mm,
+            xlabel = "",
             legend = false),
+
+        # TESTS PER DAY
         gemsplot([rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing],
             type = :TotalTests,
-            #title = "Tests per Day",
             title = "",
             ylabel = "Tests",
+            yformatter = tick_to_m,
+            xformatter = x -> "",
+            plot_title = "",
+            xlims = (0, 365),
+            xlabel = "",
+            #left_margin = 30mm,
+            legend = false),
+
+        # ISOLATED PEOPLE
+        gemsplot([rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing],
+            type = :CumulativeIsolations,
+            title = "",
+            ylabel = "In Quarantine",
             yformatter = tick_to_m,
             plot_title = "",
             xlims = (0, 365),
             bottom_margin = 15mm,
-            left_margin = 30mm,
+            #left_margin = 30mm,
             legend = false),
 
         # GRID
@@ -245,23 +326,21 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
                     ylabel = "Observed R",
                     yformatter = tick_to_R,
                     ylims = (0, obs_R_ymax),
-                    xticks = false,
+                    xformatter = x -> "",
                     xlabel = "",
                     legend = :topleft),
                 # DETECTED CASES
                 gemsplot(rd_isolation_only, type = :DetectedCases,
-                    #title = label(rd_isolation_only),
                     title = "",
                     plot_title = "",
                     ylabel = "Detections",
                     yformatter = tick_to_m,
                     ylims = (0, det_cases_ymax),
-                    xticks = false,
+                    xformatter = x -> "",
                     xlabel = "",
                     legend = :topleft),
                 # DARK FIGURE
                 gemsplot(rd_isolation_only, type = :ActiveDarkFigure,
-                    #title = label(rd_isolation_only),
                     title = "",
                     plot_title = "",
                     ylabel = "Dark Figure",
@@ -280,29 +359,27 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
                     title = label(rd_isolation_and_test),
                     plot_title = "",
                     ylims = (0, obs_R_ymax),
-                    yticks = false,
+                    yformatter = x -> "",
                     ylabel = "",
-                    xticks = false,
+                    xformatter = x -> "",
                     xlabel = "",
                     legend = false),
                 # DETECTED CASES
                 gemsplot(rd_isolation_and_test, type = :DetectedCases,
-                    #title = label(rd_isolation_and_test),
                     title = "",
                     plot_title = "",
                     ylims = (0, det_cases_ymax),
-                    yticks = false,
+                    yformatter = x -> "",
                     ylabel = "",
-                    xticks = false,
+                    xformatter = x -> "",
                     xlabel = "",
                     legend = false),
                 # DARK FIGURE
                 gemsplot(rd_isolation_and_test, type = :ActiveDarkFigure,
-                    #title = label(rd_isolation_and_test),
                     title = "",
                     plot_title = "",
                     ylims = (0, dark_fig_ymax),
-                    yticks = false,
+                    yformatter = x -> "",
                     ylabel = "",
                     xlabel = "Day",
                     legend = false),
@@ -316,36 +393,34 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
                     title = label(rd_testing_and_tracing),
                     plot_title = "",
                     ylims = (0, obs_R_ymax),
-                    yticks = false,
+                    yformatter = x -> "",
                     ylabel = "",
-                    xticks = false,
+                    xformatter = x -> "",
                     xlabel = "",
                     legend = false),         
                 # DETECTED CASES
                 gemsplot(rd_testing_and_tracing, type = :DetectedCases,
-                    #title = label(rd_testing_and_tracing),
                     title = "",
                     plot_title = "",
                     ylims = (0, det_cases_ymax),
-                    yticks = false,
+                    yformatter = x -> "",
                     ylabel = "",
-                    xticks = false,
+                    xformatter = x -> "",
                     xlabel = "",
                     legend = false),
                 # DARK FIGURE
                 gemsplot(rd_testing_and_tracing, type = :ActiveDarkFigure,
-                    #title = label(rd_testing_and_tracing),
                     title = "",
                     plot_title = "",
                     ylims = (0, dark_fig_ymax),
-                    yticks = false,
+                    yformatter = x -> "",
                     ylabel = "",
                     xlabel = "Day",
                     legend = false),
                 layout = (3, 1),
             ),
             layout = (1, 3),
-            bottom_margin = 10mm,
+            bottom_margin = 5mm,
         ),
 
         tickfontsize = map_legendfontsize(),
@@ -353,6 +428,10 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
         xlabelfontsize = map_legendfontsize(),
         ylabelfontsize = map_titlefontsize(),
         titlefontsize = map_legendfontsize(),
+
+        xlims = (0, 365),
+        grid = true,
+        gridlinewidth = 2.0,
         layout = l,
         size = (2800, 2500),
     )
@@ -386,4 +465,8 @@ function scenario_testing(;
     # plot results
     p_testing = plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing, sim)
     png(p_testing, joinpath(folder, "sc_testing_and_observed_progression.png"))
+
+    # extract KPIs and store as CSV
+    df = outcome_df(rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing)
+    CSV.write(joinpath(folder, "sc_testing_outcomes.csv"), df)
 end
