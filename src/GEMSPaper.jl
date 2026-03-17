@@ -77,23 +77,21 @@ include("sc_testing.jl")
     runall(;
         sim_obj = nothing,
         configfile = "models/DE_model_R0_3.28.toml",
-        popfile = "data/people.jld2",
-        settingsfile = "data/settings.jld2")
+        population = "DE2")
 
 Executes all model analyses.
 """
 function runall(;
         sim_obj = nothing,
         configfile = "models/DE_model_R0_3.28.toml",
-        popfile = "data/people.jld2",
-        settingsfile = "data/settings.jld2",
+        population = "DE2",
         sc_outbreak_config = "models/DE_model_R0_3.28_Heinsberg_Seed.toml")
 
     # create result folder
     folder = result_folder()
 
     # sim object
-    sim = isnothing(sim_obj) ? Simulation(configfile, popfile, settingsfile) : sim_obj
+    sim = isnothing(sim_obj) ? Simulation(configfile=configfile, population=population) : sim_obj
 
     printinfo("### RUNNING DEMOGRAPHICS ANALYSES")
     # run mobility analyses
