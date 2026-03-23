@@ -3,8 +3,8 @@
     # seed = 1234
     tickunit = 'd'
     GlobalSetting = false
-    startdate = '2024.01.01'
-    enddate = '2024.12.31'
+    startdate = '2024-01-01'
+    enddate = '2024-12-31'
     [Simulation.StartCondition]
         type = "InfectedFraction"
         [Simulation.StartCondition.parameters]
@@ -29,7 +29,7 @@
         [Pathogens.Covid19.transmission_function]
             type = "ConstantTransmissionRate"
             [Pathogens.Covid19.transmission_function.parameters]
-                transmission_rate = 0.029 # R0 = 3.25, according to fitting
+                transmission_rate = 0.0275 # R0 = 3.28, according to fitting
 
         [Pathogens.Covid19.progressions]
 
@@ -165,7 +165,7 @@
         [Pathogens.Covid19.progression_assignment]
             type = "AgeBasedProgressionAssignment"
             [Pathogens.Covid19.progression_assignment.parameters]
-                age_groups = ["0-40", "40-60", "60-80", "80+"]
+                age_groups = ["-39", "40-59", "60-79", "80-"]
                 progression_categories = ["Asymptomatic", "Symptomatic", "Severe", "Hospitalized", "Critical"]
                 # Recalculated from old matrix + rates (Hosp 0.3, ICU 0.3)
                 stratification_matrix = [
