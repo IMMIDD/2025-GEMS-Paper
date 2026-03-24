@@ -17,15 +17,17 @@ export scenario_outbreak
 """
     run_outbreak_sim(;
         configfile = "models/DE_model_R0_3.28_Heinsberg_Seed.toml",
-        population = "DE2")
+        population = "localdata/DE2/people.jld2",
+        settingsfile = "localdata/DE2/settings.jld2")
 
 Runs the outbreak scenario simulation and returns the ResultData object. 
 """
 function run_outbreak_sim(;
     configfile = "models/DE_model_R0_3.28_Heinsberg_Seed.toml",
-    population = "DE2")
+    population = "localdata/DE2/people.jld2",
+    settingsfile = "localdata/DE2/settings.jld2")
 
-    sim = Simulation(configfile=configfile, population=population)
+    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile)
     run!(sim)
     rd = ResultData(sim)
 
@@ -135,7 +137,7 @@ function plot_gemsplots(rd)
             gemsplot(rd, type = :CumulativeDiseaseProgressions,
                 xlims = (0, 41),
                 top_margin = -20mm),
-            gemsplot(rd, type = :SymptomCategories,
+            gemsplot(rd, type = :ProgressionCategories,
                 top_margin = -20mm),
 
             layout = (6, 1),
@@ -153,7 +155,7 @@ function plot_gemsplots(rd)
         #     :HouseholdAttackRate,
         #     :InfectionDuration,
         #     :CumulativeDiseaseProgressions,
-        #     :SymptomCategories,
+        #     :ProgressionCategories,
         #     ),
         #     ar_only = true,
         #     tickfontsize = map_legendfontsize(),
@@ -198,21 +200,24 @@ end
 """
     scenario_outbreak(;
         configfile = "models/DE_model_R0_3.28_Heinsberg_Seed.toml",
-        population = "DE2",
+        population = "localdata/DE2/people.jld2",
+        settingsfile = "localdata/DE2/settings.jld2",
         folder = nothing)
 
 Runs the outbreak scenario and all analyses.
 """
 function scenario_outbreak(;
     configfile = "models/DE_model_R0_3.28_Heinsberg_Seed.toml",
-    population = "DE2",
+    population = "localdata/DE2/people.jld2",
+    settingsfile = "localdata/DE2/settings.jld2",
     folder = nothing)
 
 
     # load, run, and post-process simulation
     rd = run_outbreak_sim(
         configfile = configfile,
-        population = population)
+        population = population,
+        settingsfile = settingsfile)
 
     # create result folder if not passed
     isnothing(folder) ? folder = result_folder() : nothing    

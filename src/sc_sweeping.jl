@@ -21,18 +21,42 @@ function run_sweeps(;
     yvals = []
     outvals = []
 
+    dp_a = Asymptomatic(
+        exposure_to_infectiousness_onset = 0,
+        infectiousness_onset_to_recovery = 7  
+    )
+
+    dp_s = Symptomatic(
+        exposure_to_infectiousness_onset = 0,
+        infectiousness_onset_to_symptom_onset = 2, 
+        symptom_onset_to_recovery = 7             
+    )
+
     # run all simulations three times
     for i in 1:rep
         # vary symptomatic rate
         for symp in 0.0:step_size:1.0
+            
+            pa = AgeBasedProgressionAssignment(
+                age_groups = ["0-120"], 
+                progression_categories = ["Asymptomatic", "Symptomatic"],
+                stratification_matrix = [[1.0 - symp, symp]] 
+            )
+
+            my_pathogen = Pathogen(
+                name = "My Pathogen",
+                progressions = [dp_a, dp_s],
+                progression_assignment = pa,
+                transmission_function = ConstantTransmissionRate(transmission_rate = 0.04)
+            )
+
             # vary adherence
             for adherence in 0.0:step_size:1.0
-                # set up scenario
+                
                 sim = Simulation(
                     population = "SL",
-                    transmission_rate = 0.04,
-                    infectious_offset = 0,
-                    progression_categories = [1.0-symp, symp, 0, 0])
+                    pathogen = my_pathogen
+                )
 
                 self_isolation = IStrategy("Self Isolation", sim, condition = i -> rand() <= adherence)
                 add_measure!(self_isolation, SelfIsolation(14))
@@ -55,7 +79,6 @@ function run_sweeps(;
         yvals = yvals,
         outvals = outvals)
 end
-
 
 """
     plot_sweeps(df)

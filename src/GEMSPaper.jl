@@ -77,22 +77,25 @@ include("sc_testing.jl")
     runall(;
         sim_obj = nothing,
         configfile = "models/DE_model_R0_3.28.toml",
-        population = "DE2")
+        population = "localdata/DE2/people.jld2",
+        settingsfile = "localdata/DE2/settings.jld2")
 
 Executes all model analyses.
 """
 function runall(;
         sim_obj = nothing,
         configfile = "models/DE_model_R0_3.28.toml",
-        population = "DE2",
+        population = "localdata/DE2/people.jld2",
+        settingsfile = "localdata/DE2/settings.jld2",
         sc_outbreak_config = "models/DE_model_R0_3.28_Heinsberg_Seed.toml")
 
     # create result folder
     folder = result_folder()
 
     # sim object
-    sim = isnothing(sim_obj) ? Simulation(configfile=configfile, population=population) : sim_obj
+    sim = isnothing(sim_obj) ? Simulation(configfile=configfile, population=population, settingsfile=settingsfile) : sim_obj
 
+    
     printinfo("### RUNNING DEMOGRAPHICS ANALYSES")
     # run mobility analyses
     demographics(
@@ -122,18 +125,40 @@ function runall(;
     )
 
     # break here, if sim-object was provided
-    if !is_nothing(sim_obj)
+    if !isnothing(sim_obj)
         @warn "If you pass a sim-object to runall(), it will not perform the simulation scenarios."
         return;
     end
+    
 
     printinfo("### RUNNING OUTBREAK SCENARIO")
+    scenario_outbreak(
+        configfile = sc_outbreak_config,
+        population = population,
+        settingsfile = settingsfile,
+        folder = folder
+    )
 
     printinfo("### RUNNING SIMPLE INTERVENTION SCENARIO")
+    scenario_self_isolation(
+        configfile = configfile,
+        population = population,
+        settingsfile = settingsfile,
+        folder = folder
+    )
 
     printinfo("### RUNNING PARAMETER SWEEPS")
+    scenario_sweeping(
+        folder = folder
+    )
 
     printinfo("### RUNNING TESTING SCENARIOS")
+    scenario_testing(
+        configfile = configfile,
+        population = population,
+        settingsfile = settingsfile,
+        folder = folder
+    )
 
     
 end

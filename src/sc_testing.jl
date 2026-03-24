@@ -70,7 +70,8 @@ end
 """
     run_testing_sims(;
         configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
-        population = "DE2",
+        population = "localdata/DE2/people.jld2",
+        settingsfile = "localdata/DE2/settings.jld2",
         isolation_duration = 14,
         sensitivity = .8,
         specificity = .99)
@@ -81,7 +82,8 @@ Returns the three `ResultData` objects and the last `Simulation` object (for any
 """
 function run_testing_sims(;
     configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
-    population = "DE2",
+    population = "localdata/DE2/people.jld2",
+    settingsfile = "localdata/DE2/settings.jld2",
     
     isolation_duration = 14,
     sensitivity = .8,
@@ -92,7 +94,7 @@ function run_testing_sims(;
     ### ISOLATION ONLY SCENARIO
     ###
 
-    sim = Simulation(configfile=configfile, population=population, label = "Isolation Only")
+    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile, label = "Isolation Only")
 
     # STRATEGY & MEASURE DEFINITION
     isolation_only = IStrategy("Self Isolation", sim)
@@ -109,7 +111,7 @@ function run_testing_sims(;
     ### ISOLATION & TESTING SCENARIO
     ###
 
-    sim = Simulation(configfile=configfile, population=population, label = "Isolation & Testing")
+    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile, label = "Isolation & Testing")
 
 
     # test type definition
@@ -134,7 +136,7 @@ function run_testing_sims(;
     ### TRACING & TESTING SCENARIO
     ###
 
-    sim = Simulation(configfile=configfile, population=population, label = "Isolation, Testing & Tracing")
+    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile, label = "Isolation, Testing & Tracing")
 
     # test type definition
     antigen_test = TestType("Antigen Test", pathogen(sim), sim,
@@ -439,14 +441,16 @@ end
 """
     scenario_testing(;
         configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
-        population = "DE2",
+        population = "localdata/DE2/people.jld2",
+        settingsfile = "localdata/DE2/settings.jld2",
         folder = nothing)
 
 Runs the testing-scenario and all analyses.
 """
 function scenario_testing(;
     configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
-    population = "DE2",
+    population = "localdata/DE2/people.jld2",
+    settingsfile = "localdata/DE2/settings.jld2",
     folder = nothing)
 
     # create result folder
@@ -455,7 +459,8 @@ function scenario_testing(;
     # run simulations and get result data objects
     rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing, sim = run_testing_sims(
         configfile = configfile,
-        population = population)
+        population = population,
+        settingsfile=settingsfile)
 
     # plot results
     p_testing = plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing, sim)
