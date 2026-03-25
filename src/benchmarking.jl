@@ -22,7 +22,7 @@ Runs benchmarking simulations for each German state and the
 complete German model as well as synthetic populations of various
 sizes. Returns a DataFrame with timings.
 """
-function run_sims()
+function run_sims(num_runs::Int = 10)
     
     # run everything once to pre-compile simulation
     sim = Simulation()
@@ -32,8 +32,8 @@ function run_sims()
     res = DataFrame(
         model = String[],
         type = String[],
-        pop_size = Int[],
-        infections = Int[],
+        pop_size = Float64[],      # Changed to Float64 for averages
+        infections = Float64[],    # Changed to Float64 for averages
         mean_infection_duration = Float64[],
         initialization_time = Float64[],
         simulation_time = Float64[],
@@ -71,44 +71,72 @@ function run_sims()
 
     # run German models
     for p in pop_codes
-        init_t = @timed Simulation(population = p)
-        sim = init_t.value # get sim object
-        sim_t = @timed run!(sim)
-        proc_t = @timed ResultData(sim)
+        # Initialize accumulators for this model
+        pop_size_sum = 0.0
+        infs_sum = 0.0
+        dur_sum = 0.0
+        init_t_sum = 0.0
+        sim_t_sum = 0.0
+        proc_t_sum = 0.0
 
-        pop_size = individuals(sim) |> length
-        infs = total_infections(proc_t.value)
+        for _ in 1:num_runs
+            init_t = @timed Simulation(population = p)
+            sim = init_t.value # get sim object
+            sim_t = @timed run!(sim)
+            proc_t = @timed ResultData(sim)
+
+            pop_size_sum += length(individuals(sim))
+            infs_sum += total_infections(proc_t.value)
+            dur_sum += mean_infection_duration(proc_t.value)
+            init_t_sum += init_t.time
+            sim_t_sum += sim_t.time
+            proc_t_sum += proc_t.time
+        end
 
         push!(res, (
             model = p, 
             type = "Gesyland",
-            pop_size = pop_size,
-            infections = infs,
-            mean_infection_duration = mean_infection_duration(proc_t.value),
-            initialization_time = init_t.time,
-            simulation_time = sim_t.time,
-            post_processing_time = proc_t.time))
+            pop_size = pop_size_sum / num_runs,
+            infections = infs_sum / num_runs,
+            mean_infection_duration = dur_sum / num_runs,
+            initialization_time = init_t_sum / num_runs,
+            simulation_time = sim_t_sum / num_runs,
+            post_processing_time = proc_t_sum / num_runs))
     end
 
     # run synthetic models
     for s in synth_sizes
-        init_t = @timed Simulation(pop_size = s)
-        sim = init_t.value # get sim object
-        sim_t = @timed run!(sim)
-        proc_t = @timed ResultData(sim)
+        # Initialize accumulators for this model
+        pop_size_sum = 0.0
+        infs_sum = 0.0
+        dur_sum = 0.0
+        init_t_sum = 0.0
+        sim_t_sum = 0.0
+        proc_t_sum = 0.0
 
-        pop_size = individuals(sim) |> length
-        infs = total_infections(proc_t.value)
+        for _ in 1:num_runs
+            init_t = @timed Simulation(pop_size = s)
+            sim = init_t.value # get sim object
+            sim_t = @timed run!(sim)
+            proc_t = @timed ResultData(sim)
+
+            pop_size_sum += length(individuals(sim))
+            infs_sum += total_infections(proc_t.value)
+            dur_sum += mean_infection_duration(proc_t.value)
+            init_t_sum += init_t.time
+            sim_t_sum += sim_t.time
+            proc_t_sum += proc_t.time
+        end
 
         push!(res, (
             model = "Size_$s", 
             type = "Synthetic",
-            pop_size = pop_size,
-            infections = infs,
-            mean_infection_duration = mean_infection_duration(proc_t.value),
-            initialization_time = init_t.time,
-            simulation_time = sim_t.time,
-            post_processing_time = proc_t.time))
+            pop_size = pop_size_sum / num_runs,
+            infections = infs_sum / num_runs,
+            mean_infection_duration = dur_sum / num_runs,
+            initialization_time = init_t_sum / num_runs,
+            simulation_time = sim_t_sum / num_runs,
+            post_processing_time = proc_t_sum / num_runs))
     end
 
     return res
