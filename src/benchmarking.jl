@@ -1,29 +1,26 @@
 export run_sims
 export plot_timings
 export plot_benchmarks
-
 export benchmark
 
 # DATA GENERATION
 
 """
     mean_infection_duration(rd)
-    
+
 Calculates mean duration of infection (exposure to removal).
 """
-mean_infection_duration(rd) = rd |> infections |>
-    df -> df.removed_tick .- df.tick |>
-    mean
+mean_infection_duration(rd) = rd |> infections |> df -> df.removed_tick .- df.tick |> mean
 
 """
     run_sims()
 
-Runs benchmarking simulations for each German state and the 
-complete German model as well as synthetic populations of various
-sizes. Returns a DataFrame with timings.
+Runs benchmarking simulations for each German state and the complete German model
+as well as synthetic populations of various sizes.
+
+Returns a DataFrame with timings.
 """
-function run_sims(num_runs::Int = 10)
-    
+function run_sims(num_runs::Int = 11)
     # run everything once to pre-compile simulation
     sim = Simulation()
     run!(sim)
@@ -32,31 +29,31 @@ function run_sims(num_runs::Int = 10)
     res = DataFrame(
         model = String[],
         type = String[],
-        pop_size = Float64[],      # Changed to Float64 for averages
-        infections = Float64[],    # Changed to Float64 for averages
+        pop_size = Float64[],       # Changed to Float64 for averages
+        infections = Float64[],     # Changed to Float64 for averages
         mean_infection_duration = Float64[],
         initialization_time = Float64[],
         simulation_time = Float64[],
         post_processing_time = Float64[])
 
     pop_codes = [
-        "BW",  # Baden-Württemberg
-        "BY",  # Bayern (Bavaria)
-        "BE",  # Berlin
-        "BB",  # Brandenburg
-        "HB",  # Bremen
-        "HH",  # Hamburg
-        "HE",  # Hessen
-        "MV",  # Mecklenburg-Vorpommern
-        "NI",  # Niedersachsen (Lower Saxony)
+        "BW", # Baden-Württemberg
+        "BY", # Bayern (Bavaria)
+        "BE", # Berlin
+        "BB", # Brandenburg
+        "HB", # Bremen
+        "HH", # Hamburg
+        "HE", # Hessen
+        "MV", # Mecklenburg-Vorpommern
+        "NI", # Niedersachsen (Lower Saxony)
         "NRW", # Nordrhein-Westfalen (North Rhine–Westphalia)
-        "RP",  # Rheinland-Pfalz (Rhineland-Palatinate)
-        "SL",  # Saarland
-        "SN",  # Sachsen (Saxony)
-        "ST",  # Sachsen-Anhalt (Saxony-Anhalt)
-        "SH",  # Schleswig-Holstein
-        "TH",  # Thüringen (Thuringia)
-        "DE"   # Germany
+        "RP", # Rheinland-Pfalz (Rhineland-Palatinate)
+        "SL", # Saarland
+        "SN", # Sachsen (Saxony)
+        "ST", # Sachsen-Anhalt (Saxony-Anhalt)
+        "SH", # Schleswig-Holstein
+        "TH", # Thüringen (Thuringia)
+        "DE"  # Germany
     ]
 
     synth_sizes = [
@@ -72,12 +69,12 @@ function run_sims(num_runs::Int = 10)
     # run German models
     for p in pop_codes
         # Initialize accumulators for this model
-        pop_size_sum = 0.0
-        infs_sum = 0.0
-        dur_sum = 0.0
-        init_t_sum = 0.0
-        sim_t_sum = 0.0
-        proc_t_sum = 0.0
+        pop_sizes = Float64[]
+        infs = Float64[]
+        durs = Float64[]
+        init_ts = Float64[]
+        sim_ts = Float64[]
+        proc_ts = Float64[]
 
         for _ in 1:num_runs
             init_t = @timed Simulation(population = p)
@@ -85,34 +82,35 @@ function run_sims(num_runs::Int = 10)
             sim_t = @timed run!(sim)
             proc_t = @timed ResultData(sim)
 
-            pop_size_sum += length(individuals(sim))
-            infs_sum += total_infections(proc_t.value)
-            dur_sum += mean_infection_duration(proc_t.value)
-            init_t_sum += init_t.time
-            sim_t_sum += sim_t.time
-            proc_t_sum += proc_t.time
+            push!(pop_sizes, length(individuals(sim)))
+            push!(infs, total_infections(proc_t.value))
+            push!(durs, mean_infection_duration(proc_t.value))
+
+            push!(init_ts, init_t.time)
+            push!(sim_ts, sim_t.time)
+            push!(proc_ts, proc_t.time)
         end
 
         push!(res, (
-            model = p, 
+            model = p,
             type = "Gesyland",
-            pop_size = pop_size_sum / num_runs,
-            infections = infs_sum / num_runs,
-            mean_infection_duration = dur_sum / num_runs,
-            initialization_time = init_t_sum / num_runs,
-            simulation_time = sim_t_sum / num_runs,
-            post_processing_time = proc_t_sum / num_runs))
+            pop_size = median(pop_sizes),
+            infections = median(infs),
+            mean_infection_duration = median(durs),
+            initialization_time = median(init_ts),
+            simulation_time = median(sim_ts),
+            post_processing_time = median(proc_ts)))
     end
 
     # run synthetic models
     for s in synth_sizes
         # Initialize accumulators for this model
-        pop_size_sum = 0.0
-        infs_sum = 0.0
-        dur_sum = 0.0
-        init_t_sum = 0.0
-        sim_t_sum = 0.0
-        proc_t_sum = 0.0
+        pop_sizes = Float64[]
+        infs = Float64[]
+        durs = Float64[]
+        init_ts = Float64[]
+        sim_ts = Float64[]
+        proc_ts = Float64[]
 
         for _ in 1:num_runs
             init_t = @timed Simulation(pop_size = s)
@@ -120,29 +118,28 @@ function run_sims(num_runs::Int = 10)
             sim_t = @timed run!(sim)
             proc_t = @timed ResultData(sim)
 
-            pop_size_sum += length(individuals(sim))
-            infs_sum += total_infections(proc_t.value)
-            dur_sum += mean_infection_duration(proc_t.value)
-            init_t_sum += init_t.time
-            sim_t_sum += sim_t.time
-            proc_t_sum += proc_t.time
+            push!(pop_sizes, length(individuals(sim)))
+            push!(infs, total_infections(proc_t.value))
+            push!(durs, mean_infection_duration(proc_t.value))
+
+            push!(init_ts, init_t.time)
+            push!(sim_ts, sim_t.time)
+            push!(proc_ts, proc_t.time)
         end
 
         push!(res, (
-            model = "Size_$s", 
+            model = "Size_$s",
             type = "Synthetic",
-            pop_size = pop_size_sum / num_runs,
-            infections = infs_sum / num_runs,
-            mean_infection_duration = dur_sum / num_runs,
-            initialization_time = init_t_sum / num_runs,
-            simulation_time = sim_t_sum / num_runs,
-            post_processing_time = proc_t_sum / num_runs))
+            pop_size = median(pop_sizes),
+            infections = median(infs),
+            mean_infection_duration = median(durs),
+            initialization_time = median(init_ts),
+            simulation_time = median(sim_ts),
+            post_processing_time = median(proc_ts)))
     end
 
     return res
-
 end
-
 
 # PLOTTING
 
@@ -153,8 +150,7 @@ generates a single benchmarking plot.
 """
 function plot_timings(x, y, types, title, xlab, ylab)
     return scatter(
-        log10.(x),
-        log10.(y),
+        log10.(x), log10.(y),
         title = title,
         color = (t -> (t == "Gesyland" ? :tomato : :deepskyblue)).(types),
         markerstrokewidth=0,
@@ -175,7 +171,6 @@ function plot_timings(x, y, types, title, xlab, ylab)
         bottom_margin = 10mm,
         fontfamily = "Times Roman",
         legend = nothing)
-
 end
 
 """
@@ -183,63 +178,40 @@ end
 
 Returns a multiplot for initialization, simulation, and post-processing benchmarks.
 Requires a timings dataframe as input (which is the output of the `run_sims()` function).
-
 """
 function plot_benchmarks(df)
-        
     init_times = plot_timings(
-        df.pop_size,
-        df.initialization_time,
-        df.type,
-        "Initialization Time",
-        "Population Size",
-        "Runtime")
-
-
+        df.pop_size, df.initialization_time, df.type,
+        "Initialization Time", "Population Size", "Runtime")
     sim_times = plot_timings(
-        df.pop_size,
-        df.simulation_time,
-        df.type,
-        "Simulation Time",
-        "Population Size",
-        "Runtime")
-
+        df.pop_size, df.simulation_time, df.type,
+        "Simulation Time", "Population Size", "Runtime")
     proc_times = plot_timings(
-        df.pop_size,
-        df.post_processing_time,
-        df.type,
-        "Post-Processing Time",
-        "Population Size",
-        "Runtime")
-
-    return plot(init_times, sim_times, proc_times,
-        layout = (1, 3),
-        size = (1800, 600))
-
+        df.pop_size, df.post_processing_time, df.type,
+        "Post-Processing Time", "Population Size", "Runtime")
+        
+    return plot(init_times, sim_times, proc_times, layout = (1, 3), size = (1800, 600))
 end
+
 
 # RUN ALL ANALYSES
 
 """
-    benchmark(;
-        folder = nothing)
+    benchmark(; folder = nothing)
 
 Runs all benchmark-related analyses.
 """
-function benchmark(;
-        folder = nothing)
-
+function benchmark(; folder = nothing)
     # create result folder if not passed
     isnothing(folder) ? folder = result_folder() : nothing
-
+    
     # run benchmark simulations
     df = run_sims()
 
     # export dataframe
-    CSV.write(joinpath(folder, "benchmarks.csv"), df) 
-    
+    CSV.write(joinpath(folder, "benchmarks.csv"), df)
+
     # plot benchmarks
     bench_p = plot_benchmarks(df)
     png(bench_p, joinpath(folder, "benchmarks.png"))
-
 end
