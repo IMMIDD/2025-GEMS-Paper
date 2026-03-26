@@ -2,3 +2,5 @@
 localtests.jl
 /data
 /results
+/localdata
+gmt.history
