@@ -14,7 +14,7 @@ Returns a dataframe with xvals, yvals, and outvals.
 """
 function run_sweeps(;
     rep::Int64 = 3,
-    step_size::Float64 = 0.1)
+    step_size::Float64 = 0.025)
 
     # observables
     xvals = []
@@ -55,7 +55,8 @@ function run_sweeps(;
                 
                 sim = Simulation(
                     population = "SL",
-                    pathogen = my_pathogen
+                    pathogen = my_pathogen,
+                    seed = i
                 )
 
                 self_isolation = IStrategy("Self Isolation", sim, condition = i -> rand() <= adherence)

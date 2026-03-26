@@ -27,7 +27,7 @@ function run_outbreak_sim(;
     population = "localdata/DE2/people.jld2",
     settingsfile = "localdata/DE2/settings.jld2")
 
-    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile)
+    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile, seed = 0)
     run!(sim)
     rd = ResultData(sim)
 
@@ -43,34 +43,21 @@ The `weeks` argument takes a vector of Integers to specify which
 weeks should be plotted. In the current plot layout, 
 it should have 6 entries.
 """
-function plot_weekly_incidence(rd; weeks = [10, 18, 20, 24, 26, 30])
-
+function plot_weekly_incidence(rd; weeks = 1:52)
     # wrapper function for gemsmap
     plotweek(rd, week) = gemsmap(rd, type = :WeeklyIncidenceMap, week = week,
         linecolor = nothing,
         titlefontsize = map_titlefontsize(),
-        ytickfontsize = map_legendfontsize()*2,
+        ytickfontsize = map_legendfontsize() * 2.5, 
         colorbar_titlefontsize = map_legendfontsize(),
         plot_title = "",
         title = "",
         xlabel = "Week $week",
-        xlabelfontsize = map_legendfontsize(),
+        xlabelfontsize = map_legendfontsize() * 2.5,
         size = map_dims(),
     )
 
-    plts = (w -> plotweek(rd, w)).(weeks)
-
-    # build multiplot
-    return plot(
-        plts[1:6]...,
-        layout = (2,3),
-        top_margin = -50mm,
-        right_margin = 10mm,
-        bottom_margin = -50mm,
-        left_margin = -80mm,
-        xlabelfontsize = map_legendfontsize() * 2.5,
-        size = (4 * map_dims()[1], 2 * map_dims()[2])
-    )
+    return [(w, plotweek(rd, w)) for w in weeks]
 end
 
 
@@ -221,10 +208,15 @@ function scenario_outbreak(;
 
     # create result folder if not passed
     isnothing(folder) ? folder = result_folder() : nothing    
+    weekly_folder = joinpath(folder, "weekly_incidence")
+    mkpath(weekly_folder)
 
     # weekly incidence
-    p_wi = plot_weekly_incidence(rd)
-    png(p_wi, joinpath(folder, "sc_outbreak_weekly_incidence.png"))
+    weekly_plots = plot_weekly_incidence(rd, weeks=1:52)
+    for (w, p) in weekly_plots
+        week_str = lpad(w, 2, "0") 
+        png(p, joinpath(weekly_folder, "sc_outbreak_weekly_incidence_week_$(week_str).png"))
+    end
 
     #r0
     r0map = plot_r0_by_region(rd)

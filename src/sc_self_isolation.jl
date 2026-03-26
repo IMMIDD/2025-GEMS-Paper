@@ -21,14 +21,14 @@ function run_self_isolation_sims(;
     settingsfile = "localdata/DE2/settings.jld2")
 
     # baseline simultion
-    sim = Simulation(configfile=configfile, population = population, settingsfile=settingsfile)
+    sim = Simulation(configfile=configfile, population = population, settingsfile=settingsfile, seed = 0)
     sim.label = "Baseline"
     run!(sim)
     rd_b = ResultData(sim, style = "LightRD")
 
 
     # simulation with 14-day isolation (at home) upon experiencing symptoms
-    sim = Simulation(configfile=configfile, population = population, settingsfile=settingsfile)
+    sim = Simulation(configfile=configfile, population = population, settingsfile=settingsfile, seed = 0)
     sim.label = "Scenario"
     self_isolation = IStrategy("Self Isolation", sim)
     add_measure!(self_isolation, SelfIsolation(14))

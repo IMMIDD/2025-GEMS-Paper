@@ -94,7 +94,7 @@ function run_testing_sims(;
     ### ISOLATION ONLY SCENARIO
     ###
 
-    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile, label = "Isolation Only")
+    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile, label = "Isolation Only", seed = 0)
 
     # STRATEGY & MEASURE DEFINITION
     isolation_only = IStrategy("Self Isolation", sim)
@@ -111,7 +111,7 @@ function run_testing_sims(;
     ### ISOLATION & TESTING SCENARIO
     ###
 
-    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile, label = "Isolation & Testing")
+    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile, label = "Isolation & Testing", seed = 0)
 
 
     # test type definition
@@ -136,7 +136,7 @@ function run_testing_sims(;
     ### TRACING & TESTING SCENARIO
     ###
 
-    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile, label = "Isolation, Testing & Tracing")
+    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile, label = "Isolation, Testing & Tracing", seed = 0)
 
     # test type definition
     antigen_test = TestType("Antigen Test", pathogen(sim), sim,
