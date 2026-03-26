@@ -121,7 +121,7 @@ Runs the parameter sweep scenario and all analyses.
 """
 function scenario_sweeping(;
     rep = 3, # repetitions per combination
-    step_size::Float64 = 0.1,
+    step_size::Float64 = 0.025,
     folder = nothing)
 
     # create result folder if not passed
