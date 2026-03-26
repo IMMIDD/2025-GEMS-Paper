@@ -76,8 +76,8 @@ function run_sims(num_runs::Int = 11)
         sim_ts = Float64[]
         proc_ts = Float64[]
 
-        for _ in 1:num_runs
-            init_t = @timed Simulation(population = p)
+        for i in 1:num_runs
+            init_t = @timed Simulation(population = p, seed = i)
             sim = init_t.value # get sim object
             sim_t = @timed run!(sim)
             proc_t = @timed ResultData(sim)
@@ -112,8 +112,8 @@ function run_sims(num_runs::Int = 11)
         sim_ts = Float64[]
         proc_ts = Float64[]
 
-        for _ in 1:num_runs
-            init_t = @timed Simulation(pop_size = s)
+        for i in 1:num_runs
+            init_t = @timed Simulation(pop_size = s, seed = i)
             sim = init_t.value # get sim object
             sim_t = @timed run!(sim)
             proc_t = @timed ResultData(sim)

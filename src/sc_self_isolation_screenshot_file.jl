@@ -1,10 +1,10 @@
     using GEMS # load GEMS package
     
-    sim_baseline = Simulation(label = "Baseline")   # initialize baseline simulation
+    sim_baseline = Simulation(label = "Baseline", seed = 0)   # initialize baseline simulation
     run!(sim_baseline)                              # run baseline simulation
     rd_baseline = ResultData(sim_baseline)          # process baseline simulation results
 
-    sim_scenario = Simulation(label = "Scenario")               # initialize scenario simulation
+    sim_scenario = Simulation(label = "Scenario", seed = 0)               # initialize scenario simulation
     self_isolation = IStrategy("Self Isolation", sim_scenario)  # define self-isolation strategy
     add_measure!(self_isolation, SelfIsolation(14))             # add 14-day self-isolation measure to strategy
     trigger = SymptomTrigger(self_isolation)                    # define trigger for self-isolation based on symptoms

@@ -55,7 +55,8 @@ function run_sweeps(;
                 
                 sim = Simulation(
                     population = "SL",
-                    pathogen = my_pathogen
+                    pathogen = my_pathogen,
+                    seed = i
                 )
 
                 self_isolation = IStrategy("Self Isolation", sim, condition = i -> rand() <= adherence)

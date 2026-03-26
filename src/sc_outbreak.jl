@@ -27,7 +27,7 @@ function run_outbreak_sim(;
     population = "localdata/DE2/people.jld2",
     settingsfile = "localdata/DE2/settings.jld2")
 
-    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile)
+    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile, seed = 0)
     run!(sim)
     rd = ResultData(sim)
 

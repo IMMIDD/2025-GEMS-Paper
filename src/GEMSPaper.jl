@@ -41,9 +41,10 @@ end
 Wrapper for German simulation model.
 """
 DE_sim(;configfile = "models/DE_model_R0_3.28.toml") = Simulation(
-    configfile,
-    "data/people.jld2",
-    "data/settings.jld2")
+    configfile=configfile,
+    population="data/people.jld2",
+    settingsfile="data/settings.jld2",
+    seed = 0)
 
 """
     map_dims()
@@ -93,7 +94,7 @@ function runall(;
     folder = result_folder()
 
     # sim object
-    sim = isnothing(sim_obj) ? Simulation(configfile=configfile, population=population, settingsfile=settingsfile) : sim_obj
+    sim = isnothing(sim_obj) ? Simulation(configfile=configfile, population=population, settingsfile=settingsfile, seed = 0) : sim_obj
 
     
     printinfo("### RUNNING DEMOGRAPHICS ANALYSES")

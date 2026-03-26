@@ -183,7 +183,7 @@ Runs all setting-related analyses.
 """
 function settinganalyses(;
         folder = nothing,
-        sim = Simulation(population = "SL"))
+        sim = Simulation(population = "SL", seed = 0))
 
     # create result folder if not passed
     isnothing(folder) ? folder = result_folder() : nothing
