@@ -130,7 +130,6 @@ function runall(;
         @warn "If you pass a sim-object to runall(), it will not perform the simulation scenarios."
         return;
     end
-    
 
     printinfo("### RUNNING OUTBREAK SCENARIO")
     scenario_outbreak(
@@ -148,11 +147,6 @@ function runall(;
         folder = folder
     )
 
-    printinfo("### RUNNING PARAMETER SWEEPS")
-    scenario_sweeping(
-        folder = folder
-    )
-
     printinfo("### RUNNING TESTING SCENARIOS")
     scenario_testing(
         configfile = configfile,
@@ -161,7 +155,16 @@ function runall(;
         folder = folder
     )
 
-    
+    printinfo("### RUNNING BENCHMARK")
+    benchmark(
+        folder = folder
+    )
+
+    printinfo("### RUNNING PARAMETER SWEEPS")
+    scenario_sweeping(
+        folder = folder
+    )
+
 end
 
 end # module GEMSPaper
