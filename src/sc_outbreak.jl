@@ -43,7 +43,7 @@ The `weeks` argument takes a vector of Integers to specify which
 weeks should be plotted. In the current plot layout, 
 it should have 6 entries.
 """
-function plot_weekly_incidence(rd; weeks = 1:52)
+function plot_weekly_incidence(rd; weeks = 1:51)
     # wrapper function for gemsmap
     plotweek(rd, week) = gemsmap(rd, type = :WeeklyIncidenceMap, week = week,
         linecolor = nothing,
