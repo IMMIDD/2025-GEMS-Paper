@@ -31,7 +31,7 @@
         [Pathogens.Covid19.transmission_function]
             type = "ConstantTransmissionRate"
             [Pathogens.Covid19.transmission_function.parameters]
-                transmission_rate = 0.0275 # R0 = 3.28, according to fitting
+                transmission_rate = 0
 
         [Pathogens.Covid19.progressions]
 
@@ -66,11 +66,11 @@
                 # derived from old infectious_offset (2.0)
                 [Pathogens.Covid19.progressions.Severe.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
-                    parameters = [2.0]
+                    parameters = [4.55]
                 # derived from old onset_of_symptoms (6.55) - infectious_offset (2.0)
                 [Pathogens.Covid19.progressions.Severe.infectiousness_onset_to_symptom_onset]
                     distribution = "Poisson"
-                    parameters = [4.55]
+                    parameters = [2.0]
                 # derived from old onset_of_severeness (3.0)
                 [Pathogens.Covid19.progressions.Severe.symptom_onset_to_severeness_onset]
                     distribution = "Poisson"
@@ -89,11 +89,11 @@
                 # derived from old infectious_offset (2.0)
                 [Pathogens.Covid19.progressions.Hospitalized.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
-                    parameters = [2.0]
+                    parameters = [4.55]
                 # derived from old onset_of_symptoms (6.55) - infectious_offset (2.0)
                 [Pathogens.Covid19.progressions.Hospitalized.infectiousness_onset_to_symptom_onset]
                     distribution = "Poisson"
-                    parameters = [4.55]
+                    parameters = [2.0]
                 # derived from old onset_of_severeness (3.0)
                 [Pathogens.Covid19.progressions.Hospitalized.symptom_onset_to_severeness_onset]
                     distribution = "Poisson"
@@ -122,11 +122,11 @@
                 # derived from old infectious_offset (2.0)
                 [Pathogens.Covid19.progressions.Critical.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
-                    parameters = [2.0]
+                    parameters = [4.55]
                 # derived from old onset_of_symptoms (6.55) - infectious_offset (2.0)
                 [Pathogens.Covid19.progressions.Critical.infectiousness_onset_to_symptom_onset]
                     distribution = "Poisson"
-                    parameters = [4.55]
+                    parameters = [2.0]
                 # derived from old onset_of_severeness (3.0)
                 [Pathogens.Covid19.progressions.Critical.symptom_onset_to_severeness_onset]
                     distribution = "Poisson"
