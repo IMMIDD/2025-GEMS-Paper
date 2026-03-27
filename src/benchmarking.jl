@@ -25,7 +25,6 @@ function run_sims(num_runs::Int = 11)
         type = String[],
         pop_size = Float64[],       # Changed to Float64 for averages
         infections = Float64[],     # Changed to Float64 for averages
-        mean_infection_duration = Float64[],
         initialization_time = Float64[],
         simulation_time = Float64[],
         post_processing_time = Float64[])
