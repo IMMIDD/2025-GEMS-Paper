@@ -77,11 +77,11 @@ end
 
 # Group 1: Standard Municipality Contacts
 config_group1 = "models/DE_model_R0_3.28.toml"
-best_tr_group1 = fit_transmission_rate(config_group1, target_r0_value, tr_low=0.01, tr_high=0.15)
+best_tr_group1 = fit_transmission_rate(config_group1, target_r0_value, tr_low=0.01, tr_high=0.05)
 
 # Group 2: Fewer Municipality Contacts
 config_group2 = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml"
-best_tr_group2 = fit_transmission_rate(config_group2, target_r0_value, tr_low=0.02, tr_high=0.20)
+best_tr_group2 = fit_transmission_rate(config_group2, target_r0_value, tr_low=0.02, tr_high=0.12)
 
 println("\nFitting complete.")
 println("1. Update 'DE_model_R0_3.28.toml' and 'DE_model_R0_3.28_Heinsberg_Seed.toml' with:")
