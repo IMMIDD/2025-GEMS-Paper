@@ -31,7 +31,7 @@
         [Pathogens.Covid19.transmission_function]
             type = "ConstantTransmissionRate"
             [Pathogens.Covid19.transmission_function.parameters]
-                transmission_rate = 0.0
+                transmission_rate = 0.06888
 
         [Pathogens.Covid19.progressions]
 
