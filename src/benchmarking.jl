@@ -5,12 +5,6 @@ export benchmark
 
 # DATA GENERATION
 
-"""
-    mean_infection_duration(rd)
-
-Calculates mean duration of infection (exposure to removal).
-"""
-mean_infection_duration(rd) = rd |> infections |> df -> df.removed_tick .- df.tick |> mean
 
 """
     run_sims()
@@ -71,7 +65,6 @@ function run_sims(num_runs::Int = 11)
         # Initialize accumulators for this model
         pop_sizes = Float64[]
         infs = Float64[]
-        durs = Float64[]
         init_ts = Float64[]
         sim_ts = Float64[]
         proc_ts = Float64[]
@@ -84,8 +77,6 @@ function run_sims(num_runs::Int = 11)
 
             push!(pop_sizes, length(individuals(sim)))
             push!(infs, total_infections(proc_t.value))
-            push!(durs, mean_infection_duration(proc_t.value))
-
             push!(init_ts, init_t.time)
             push!(sim_ts, sim_t.time)
             push!(proc_ts, proc_t.time)
@@ -96,7 +87,6 @@ function run_sims(num_runs::Int = 11)
             type = "Gesyland",
             pop_size = median(pop_sizes),
             infections = median(infs),
-            mean_infection_duration = median(durs),
             initialization_time = median(init_ts),
             simulation_time = median(sim_ts),
             post_processing_time = median(proc_ts)))
@@ -107,7 +97,6 @@ function run_sims(num_runs::Int = 11)
         # Initialize accumulators for this model
         pop_sizes = Float64[]
         infs = Float64[]
-        durs = Float64[]
         init_ts = Float64[]
         sim_ts = Float64[]
         proc_ts = Float64[]
@@ -120,8 +109,6 @@ function run_sims(num_runs::Int = 11)
 
             push!(pop_sizes, length(individuals(sim)))
             push!(infs, total_infections(proc_t.value))
-            push!(durs, mean_infection_duration(proc_t.value))
-
             push!(init_ts, init_t.time)
             push!(sim_ts, sim_t.time)
             push!(proc_ts, proc_t.time)
@@ -132,7 +119,6 @@ function run_sims(num_runs::Int = 11)
             type = "Synthetic",
             pop_size = median(pop_sizes),
             infections = median(infs),
-            mean_infection_duration = median(durs),
             initialization_time = median(init_ts),
             simulation_time = median(sim_ts),
             post_processing_time = median(proc_ts)))

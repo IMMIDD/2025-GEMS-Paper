@@ -55,6 +55,7 @@ function plot_weekly_incidence(rd; weeks = 1:51)
         xlabel = "Week $week",
         xlabelfontsize = map_legendfontsize() * 2.5,
         size = map_dims(),
+        right_margin = 50mm
     )
 
     return [(w, plotweek(rd, w)) for w in weeks]
@@ -212,7 +213,7 @@ function scenario_outbreak(;
     mkpath(weekly_folder)
 
     # weekly incidence
-    weekly_plots = plot_weekly_incidence(rd, weeks=1:52)
+    weekly_plots = plot_weekly_incidence(rd, weeks=1:51)
     for (w, p) in weekly_plots
         week_str = lpad(w, 2, "0") 
         png(p, joinpath(weekly_folder, "sc_outbreak_weekly_incidence_week_$(week_str).png"))

@@ -38,7 +38,7 @@
                 # derived from old infectious_offset (2.0)
                 [Pathogens.Covid19.progressions.Asymptomatic.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
-                    parameters = [2.0]
+                    parameters = [4.55]
                 # derived from old time_to_recovery (13.4)
                 [Pathogens.Covid19.progressions.Asymptomatic.infectiousness_onset_to_recovery]
                     distribution = "Poisson"
@@ -49,11 +49,11 @@
                 # derived from old infectious_offset (2.0)
                 [Pathogens.Covid19.progressions.Symptomatic.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
-                    parameters = [2.0]
+                    parameters = [4.55]
                 # derived from old onset_of_symptoms (6.55) - infectious_offset (2.0)
                 [Pathogens.Covid19.progressions.Symptomatic.infectiousness_onset_to_symptom_onset]
                     distribution = "Poisson"
-                    parameters = [4.55]
+                    parameters = [2.0]
                 # derived from old time_to_recovery (13.4)
                 [Pathogens.Covid19.progressions.Symptomatic.symptom_onset_to_recovery]
                     distribution = "Poisson"
