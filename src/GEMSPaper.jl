@@ -78,16 +78,16 @@ include("sc_testing.jl")
     runall(;
         sim_obj = nothing,
         configfile = "models/DE_model_R0_3.28.toml",
-        population = "localdata/DE2/people.jld2",
-        settingsfile = "localdata/DE2/settings.jld2")
+        population = "localdata/DE/people.jld2",
+        settingsfile = "localdata/DE/settings.jld2")
 
 Executes all model analyses.
 """
 function runall(;
         sim_obj = nothing,
         configfile = "models/DE_model_R0_3.28.toml",
-        population = "localdata/DE2/people.jld2",
-        settingsfile = "localdata/DE2/settings.jld2",
+        population = "localdata/DE/people.jld2",
+        settingsfile = "localdata/DE/settings.jld2",
         sc_outbreak_config = "models/DE_model_R0_3.28_Heinsberg_Seed.toml")
 
     # create result folder

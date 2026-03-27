@@ -70,8 +70,8 @@ end
 """
     run_testing_sims(;
         configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
-        population = "localdata/DE2/people.jld2",
-        settingsfile = "localdata/DE2/settings.jld2",
+        population = "localdata/DE/people.jld2",
+        settingsfile = "localdata/DE/settings.jld2",
         isolation_duration = 14,
         sensitivity = .8,
         specificity = .99)
@@ -82,8 +82,8 @@ Returns the three `ResultData` objects and the last `Simulation` object (for any
 """
 function run_testing_sims(;
     configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
-    population = "localdata/DE2/people.jld2",
-    settingsfile = "localdata/DE2/settings.jld2",
+    population = "localdata/DE/people.jld2",
+    settingsfile = "localdata/DE/settings.jld2",
     
     isolation_duration = 14,
     sensitivity = .8,
@@ -441,16 +441,16 @@ end
 """
     scenario_testing(;
         configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
-        population = "localdata/DE2/people.jld2",
-        settingsfile = "localdata/DE2/settings.jld2",
+        population = "localdata/DE/people.jld2",
+        settingsfile = "localdata/DE/settings.jld2",
         folder = nothing)
 
 Runs the testing-scenario and all analyses.
 """
 function scenario_testing(;
     configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
-    population = "localdata/DE2/people.jld2",
-    settingsfile = "localdata/DE2/settings.jld2",
+    population = "localdata/DE/people.jld2",
+    settingsfile = "localdata/DE/settings.jld2",
     folder = nothing)
 
     # create result folder

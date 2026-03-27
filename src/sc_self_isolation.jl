@@ -8,8 +8,8 @@ export scenario_self_isolation
 """
     run_self_isolation_sims(;
         configfile = "models/DE_model_R0_3.28.toml",
-        population = "localdata/DE2/people.jld2",
-        settingsfile = "localdata/DE2/settings.jld2")
+        population = "localdata/DE/people.jld2",
+        settingsfile = "localdata/DE/settings.jld2")
 
 Runs the self-isolation scenario simulations and returns 
 two ResultData objects: one for the baseline simulation and one for the scenario with self-isolation.
@@ -17,8 +17,8 @@ And also returns last simulation object for further data extraction.
 """
 function run_self_isolation_sims(;
     configfile = "models/DE_model_R0_3.28.toml",
-    population = "localdata/DE2/people.jld2",
-    settingsfile = "localdata/DE2/settings.jld2")
+    population = "localdata/DE/people.jld2",
+    settingsfile = "localdata/DE/settings.jld2")
 
     # baseline simultion
     sim = Simulation(configfile=configfile, population = population, settingsfile=settingsfile, seed = 0)
@@ -128,16 +128,16 @@ end
 """
     scenario_self_isolation(;
         configfile = "models/DE_model_R0_3.28.toml",
-        population = "localdata/DE2/people.jld2",
-        settingsfile = "localdata/DE2/settings.jld2",
+        population = "localdata/DE/people.jld2",
+        settingsfile = "localdata/DE/settings.jld2",
         folder = nothing)
 
 Runs the self-isolation scenario and all analyses.
 """
 function scenario_self_isolation(;
     configfile = "models/DE_model_R0_3.28.toml",
-    population = "localdata/DE2/people.jld2",
-    settingsfile = "localdata/DE2/settings.jld2",
+    population = "localdata/DE/people.jld2",
+    settingsfile = "localdata/DE/settings.jld2",
     folder = nothing)
 
     # create result folder if not passed
