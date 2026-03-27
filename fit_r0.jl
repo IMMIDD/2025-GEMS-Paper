@@ -38,7 +38,7 @@ function get_avg_r0(configfile, tr, runs)
 end
 
 # Bisection search algorithm to find the target transmission rate
-function fit_transmission_rate(configfile, target_r0; tr_low=0.01, tr_high=0.15, tolerance=0.02, max_iterations=15, nr_runs=10)
+function fit_transmission_rate_bin(configfile, target_r0; tr_low=0.01, tr_high=0.15, tolerance=0.02, max_iterations=15, nr_runs=10)
     println("\nStarting fit for: $configfile")
     println("Target R0: $target_r0")
     
@@ -73,15 +73,43 @@ function fit_transmission_rate(configfile, target_r0; tr_low=0.01, tr_high=0.15,
     return best_tr
 end
 
+function fit_transmission_rate(configfile, target_r0; tr_start=0.05, tolerance=0.02, max_iterations=15, nr_runs=10)
+    println("\nStarting linear fit for: $configfile")
+    println("Target R0: $target_r0")
+    
+    current_tr = tr_start
+
+    for iter in 1:max_iterations
+        println("Iteration $iter: Testing TR = $(round(current_tr, digits=5))")
+        
+        current_r0 = get_avg_r0(configfile, current_tr, nr_runs)
+        
+        println("Result: R0 = $(round(current_r0, digits=3))")
+
+        if abs(current_r0 - target_r0) <= tolerance
+            println("Converged. Transmission rate $current_tr yields R0 ≈ $current_r0")
+            return current_tr
+        end
+
+        current_tr = current_tr * (target_r0 / current_r0)
+        
+        if iter == max_iterations
+            println("Max iterations reached. Best estimate is TR = $current_tr")
+        end
+    end
+    
+    return current_tr
+end
+
 # Main execution
 
 # Group 1: Standard Municipality Contacts
 config_group1 = "models/DE_model_R0_3.28.toml"
-best_tr_group1 = fit_transmission_rate(config_group1, target_r0_value, tr_low=0.01, tr_high=0.05)
+best_tr_group1 = fit_transmission_rate(config_group1, target_r0_value, tr_start=0.03)
 
 # Group 2: Fewer Municipality Contacts
 config_group2 = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml"
-best_tr_group2 = fit_transmission_rate(config_group2, target_r0_value, tr_low=0.02, tr_high=0.12)
+best_tr_group2 = fit_transmission_rate(config_group2, target_r0_value, tr_start=0.07)
 
 println("\nFitting complete.")
 println("1. Update 'DE_model_R0_3.28.toml' and 'DE_model_R0_3.28_Heinsberg_Seed.toml' with:")
