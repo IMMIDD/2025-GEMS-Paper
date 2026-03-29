@@ -17,17 +17,15 @@ export scenario_outbreak
 """
     run_outbreak_sim(;
         configfile = "models/DE_model_R0_3.28_Heinsberg_Seed.toml",
-        population = "localdata/DE/people.jld2",
-        settingsfile = "localdata/DE/settings.jld2")
+        population = "DE")
 
 Runs the outbreak scenario simulation and returns the ResultData object. 
 """
 function run_outbreak_sim(;
     configfile = "models/DE_model_R0_3.28_Heinsberg_Seed.toml",
-    population = "localdata/DE/people.jld2",
-    settingsfile = "localdata/DE/settings.jld2")
+    population = "DE")
 
-    sim = Simulation(configfile=configfile, population=population, settingsfile=settingsfile, seed = 0)
+    sim = Simulation(configfile=configfile, population=population, seed = 0)
     run!(sim)
     rd = ResultData(sim)
 
@@ -188,24 +186,21 @@ end
 """
     scenario_outbreak(;
         configfile = "models/DE_model_R0_3.28_Heinsberg_Seed.toml",
-        population = "localdata/DE/people.jld2",
-        settingsfile = "localdata/DE/settings.jld2",
+        population = "DE",
         folder = nothing)
 
 Runs the outbreak scenario and all analyses.
 """
 function scenario_outbreak(;
     configfile = "models/DE_model_R0_3.28_Heinsberg_Seed.toml",
-    population = "localdata/DE/people.jld2",
-    settingsfile = "localdata/DE/settings.jld2",
+    population = "DE",
     folder = nothing)
 
 
     # load, run, and post-process simulation
     rd = run_outbreak_sim(
         configfile = configfile,
-        population = population,
-        settingsfile = settingsfile)
+        population = population)
 
     # create result folder if not passed
     isnothing(folder) ? folder = result_folder() : nothing    

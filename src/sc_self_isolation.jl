@@ -8,8 +8,7 @@ export scenario_self_isolation
 """
     run_self_isolation_sims(;
         configfile = "models/DE_model_R0_3.28.toml",
-        population = "localdata/DE/people.jld2",
-        settingsfile = "localdata/DE/settings.jld2")
+        population = "DE")
 
 Runs the self-isolation scenario simulations and returns 
 two ResultData objects: one for the baseline simulation and one for the scenario with self-isolation.
@@ -17,18 +16,17 @@ And also returns last simulation object for further data extraction.
 """
 function run_self_isolation_sims(;
     configfile = "models/DE_model_R0_3.28.toml",
-    population = "localdata/DE/people.jld2",
-    settingsfile = "localdata/DE/settings.jld2")
+    population = "DE")
 
     # baseline simultion
-    sim = Simulation(configfile=configfile, population = population, settingsfile=settingsfile, seed = 0)
+    sim = Simulation(configfile=configfile, population = population, seed = 0)
     sim.label = "Baseline"
     run!(sim)
     rd_b = ResultData(sim, style = "LightRD")
 
 
     # simulation with 14-day isolation (at home) upon experiencing symptoms
-    sim = Simulation(configfile=configfile, population = population, settingsfile=settingsfile, seed = 0)
+    sim = Simulation(configfile=configfile, population = population, seed = 0)
     sim.label = "Scenario"
     self_isolation = IStrategy("Self Isolation", sim)
     add_measure!(self_isolation, SelfIsolation(14))
@@ -128,16 +126,14 @@ end
 """
     scenario_self_isolation(;
         configfile = "models/DE_model_R0_3.28.toml",
-        population = "localdata/DE/people.jld2",
-        settingsfile = "localdata/DE/settings.jld2",
+        population = "DE",
         folder = nothing)
 
 Runs the self-isolation scenario and all analyses.
 """
 function scenario_self_isolation(;
     configfile = "models/DE_model_R0_3.28.toml",
-    population = "localdata/DE/people.jld2",
-    settingsfile = "localdata/DE/settings.jld2",
+    population = "DE",
     folder = nothing)
 
     # create result folder if not passed
@@ -146,8 +142,7 @@ function scenario_self_isolation(;
     # run simulations and get result data objects
     rd_b, rd_s, sim = run_self_isolation_sims(
         configfile = configfile,
-        population = population,
-        settingsfile=settingsfile)    
+        population = population)
 
     p_si_sc = plot_scenario_self_isolation(rd_b, rd_s, sim)
     png(p_si_sc, joinpath(folder, "sc_self_isolation_(R0-comparison).png"))

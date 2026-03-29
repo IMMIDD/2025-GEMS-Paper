@@ -42,8 +42,7 @@ Wrapper for German simulation model.
 """
 DE_sim(;configfile = "models/DE_model_R0_3.28.toml") = Simulation(
     configfile=configfile,
-    population="data/people.jld2",
-    settingsfile="data/settings.jld2",
+    population="DE",
     seed = 0)
 
 """
@@ -78,23 +77,20 @@ include("sc_testing.jl")
     runall(;
         sim_obj = nothing,
         configfile = "models/DE_model_R0_3.28.toml",
-        population = "localdata/DE/people.jld2",
-        settingsfile = "localdata/DE/settings.jld2")
+        population = "DE")
 
 Executes all model analyses.
 """
 function runall(;
         sim_obj = nothing,
         configfile = "models/DE_model_R0_3.28.toml",
-        population = "localdata/DE/people.jld2",
-        settingsfile = "localdata/DE/settings.jld2",
-        sc_outbreak_config = "models/DE_model_R0_3.28_Heinsberg_Seed.toml")
+        population = "DE")
 
     # create result folder
     folder = result_folder()
 
     # sim object
-    sim = isnothing(sim_obj) ? Simulation(configfile=configfile, population=population, settingsfile=settingsfile, seed = 0) : sim_obj
+    sim = isnothing(sim_obj) ? Simulation(configfile=configfile, population=population, seed = 0) : sim_obj
 
     
     printinfo("### RUNNING DEMOGRAPHICS ANALYSES")
@@ -134,21 +130,18 @@ function runall(;
     printinfo("### RUNNING OUTBREAK SCENARIO")
     scenario_outbreak(
         population = population,
-        settingsfile = settingsfile,
         folder = folder
     )
 
     printinfo("### RUNNING SIMPLE INTERVENTION SCENARIO")
     scenario_self_isolation(
         population = population,
-        settingsfile = settingsfile,
         folder = folder
     )
 
     printinfo("### RUNNING TESTING SCENARIOS")
     scenario_testing(
         population = population,
-        settingsfile = settingsfile,
         folder = folder
     )
 

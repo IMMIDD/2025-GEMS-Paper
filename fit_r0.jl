@@ -1,8 +1,7 @@
 using GEMSPaper, DataFrames, Statistics
 
 # Global settings
-people_file = "localdata/DE/people.jld2"
-stngs_file = "localdata/DE/settings.jld2"
+population = "DE"
 target_r0_value = 3.28
 
 # Define custom ResultDataStyle for effective R extraction
@@ -25,7 +24,7 @@ end
 function get_avg_r0(configfile, tr, runs)
     r0_sum = 0.0
     for y in 1:runs
-        sim = Simulation(configfile = configfile, population = people_file, settingsfile = stngs_file)
+        sim = Simulation(configfile = configfile, population = population)
         sim.label = "TR: $tr"
         pathogen(sim).transmission_function = ConstantTransmissionRate(transmission_rate = tr)
         sim.stop_criterion = TimesUp(limit = 70)
