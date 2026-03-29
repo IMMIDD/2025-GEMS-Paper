@@ -133,7 +133,6 @@ function runall(;
 
     printinfo("### RUNNING OUTBREAK SCENARIO")
     scenario_outbreak(
-        configfile = sc_outbreak_config,
         population = population,
         settingsfile = settingsfile,
         folder = folder
@@ -141,7 +140,6 @@ function runall(;
 
     printinfo("### RUNNING SIMPLE INTERVENTION SCENARIO")
     scenario_self_isolation(
-        configfile = configfile,
         population = population,
         settingsfile = settingsfile,
         folder = folder
@@ -149,7 +147,6 @@ function runall(;
 
     printinfo("### RUNNING TESTING SCENARIOS")
     scenario_testing(
-        configfile = configfile,
         population = population,
         settingsfile = settingsfile,
         folder = folder
