@@ -54,6 +54,9 @@ function outcome_df(rd_isolation_only, rd_isolation_and_test, rd_testing_and_tra
             end,
         total_attack_rate = attack_rate,
         quarantine_days = total_quarantines,
+        lost_schooldays = rd -> sum(cumulative_quarantines(rd).students), 
+        lost_workdays = rd -> sum(cumulative_quarantines(rd).workers), 
+        lost_otherdays = rd -> sum(cumulative_quarantines(rd).other), 
         detection_rate = detection_rate,
         base_reproduction = r0,
         hospitalizations = rd -> sum(tick_hosptitalizations(rd).hospital_admissions),
@@ -64,6 +67,11 @@ function outcome_df(rd_isolation_only, rd_isolation_and_test, rd_testing_and_tra
             vec -> isempty(vec) ? Inf : median(vec),
         max_hospital_load = rd -> maximum(tick_hosptitalizations(rd).current_hospitalized),
         max_icu_load = rd -> maximum(tick_hosptitalizations(rd).current_icu),
+        mild_days = rd -> sum(compartment_periods(rd).symptomatic) - sum(compartment_periods(rd).severe),
+        severe_days = rd -> sum(compartment_periods(rd).severe),
+        hospital_days = rd -> sum(compartment_periods(rd).hospitalized),
+        icu_days = rd -> sum(compartment_periods(rd).icu),
+        ventilation_days = rd -> sum(compartment_periods(rd).ventilated)
     )
 end
 
@@ -101,7 +109,7 @@ function run_testing_sims(;
     add_symptom_trigger!(sim, trigger)
 
     run!(sim)
-    rd_isolation_only = ResultData(sim, style = "LightRD")
+    rd_isolation_only = ResultData(sim)
 
 
 
@@ -109,7 +117,7 @@ function run_testing_sims(;
     ### ISOLATION & TESTING SCENARIO
     ###
 
-    sim = Simulation(configfile=configfile, population=population, label = "Isolation & Testing", seed = 0)
+    sim = Simulation(configfile=configfile, population=population, label = "Isolation & Testing", seed = 1)
 
 
     # test type definition
@@ -126,7 +134,7 @@ function run_testing_sims(;
     add_symptom_trigger!(sim, trigger)
 
     run!(sim)
-    rd_isolation_and_test = ResultData(sim, style = "LightRD")
+    rd_isolation_and_test = ResultData(sim)
 
 
 
@@ -134,7 +142,7 @@ function run_testing_sims(;
     ### TRACING & TESTING SCENARIO
     ###
 
-    sim = Simulation(configfile=configfile, population=population, label = "Isolation, Testing & Tracing", seed = 0)
+    sim = Simulation(configfile=configfile, population=population, label = "Isolation, Testing & Tracing", seed = 2)
 
     # test type definition
     antigen_test = TestType("Antigen Test", pathogen(sim), sim,
@@ -187,7 +195,7 @@ function run_testing_sims(;
     add_symptom_trigger!(sim, trigger)
 
     run!(sim)
-    rd_testing_and_tracing = ResultData(sim, style = "LightRD")
+    rd_testing_and_tracing = ResultData(sim)
 
     return rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing, sim
 end
@@ -202,6 +210,7 @@ that are produced in `run_testing_sims()`.
 """
 function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing, sim)
 
+    final_tick = final_tick(rd_isolation_only)
     # calculate y axis limits for observed reproduction plot
     obs_R_ymax = max(
         observed_R(rd_isolation_only).upper_est_R |>
@@ -271,7 +280,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
             ylabel = "Infections",
             yformatter = tick_to_m,
             xformatter = x -> "",
-            xlims = (0, 365),
+            xlims = (0, final_tick),
             xlabel = "",
             legend = :topleft),
             
@@ -284,7 +293,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
             yformatter = tick_to_R,
             xformatter = x -> "",
             plot_title = "",
-            xlims = (0, 365),
+            xlims = (0, final_tick),
             xlabel = "",
             legend = false),
 
@@ -296,7 +305,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
             yformatter = tick_to_m,
             xformatter = x -> "",
             plot_title = "",
-            xlims = (0, 365),
+            xlims = (0, final_tick),
             xlabel = "",
             #left_margin = 30mm,
             legend = false),
@@ -308,7 +317,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
             ylabel = "In Quarantine",
             yformatter = tick_to_m,
             plot_title = "",
-            xlims = (0, 365),
+            xlims = (0, final_tick),
             bottom_margin = 15mm,
             #left_margin = 30mm,
             legend = false),
@@ -427,7 +436,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
         ylabelfontsize = map_titlefontsize(),
         titlefontsize = map_legendfontsize(),
 
-        xlims = (0, 365),
+        xlims = (0, final_tick),
         grid = true,
         gridlinewidth = 2.0,
         layout = l,

@@ -88,7 +88,7 @@ function plot_scenario_self_isolation(rd_b, rd_s, sim)
                     select(df, :ags, :r0_diff),
                     size = 0.5 .* map_dims(),
                     # clims = (1.1, 1.2),
-                    title = "R0 Reduction by County",
+                    title = "R-Reduction by County",
                     linecolor = nothing,
                 ),
                 plot(
