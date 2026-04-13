@@ -210,7 +210,7 @@ that are produced in `run_testing_sims()`.
 """
 function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing, sim)
 
-    final_tick = final_tick(rd_isolation_only)
+    max_ticks = final_tick(rd_isolation_only)
     # calculate y axis limits for observed reproduction plot
     obs_R_ymax = max(
         observed_R(rd_isolation_only).upper_est_R |>
@@ -280,9 +280,9 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
             ylabel = "Infections",
             yformatter = tick_to_m,
             xformatter = x -> "",
-            xlims = (0, final_tick),
+            xlims = (0, max_ticks),
             xlabel = "",
-            legend = :topleft),
+            legend = :topright),
             
 
         # EFFECTIVE REPRODUCTION
@@ -293,7 +293,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
             yformatter = tick_to_R,
             xformatter = x -> "",
             plot_title = "",
-            xlims = (0, final_tick),
+            xlims = (0, max_ticks),
             xlabel = "",
             legend = false),
 
@@ -305,7 +305,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
             yformatter = tick_to_m,
             xformatter = x -> "",
             plot_title = "",
-            xlims = (0, final_tick),
+            xlims = (0, max_ticks),
             xlabel = "",
             #left_margin = 30mm,
             legend = false),
@@ -317,7 +317,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
             ylabel = "In Quarantine",
             yformatter = tick_to_m,
             plot_title = "",
-            xlims = (0, final_tick),
+            xlims = (0, max_ticks),
             bottom_margin = 15mm,
             #left_margin = 30mm,
             legend = false),
@@ -335,7 +335,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
                     ylims = (0, obs_R_ymax),
                     xformatter = x -> "",
                     xlabel = "",
-                    legend = :topleft),
+                    legend = :topright),
                 # DETECTED CASES
                 gemsplot(rd_isolation_only, type = :DetectedCases,
                     title = "",
@@ -345,7 +345,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
                     ylims = (0, det_cases_ymax),
                     xformatter = x -> "",
                     xlabel = "",
-                    legend = :topleft),
+                    legend = :topright),
                 # DARK FIGURE
                 gemsplot(rd_isolation_only, type = :ActiveDarkFigure,
                     title = "",
@@ -354,7 +354,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
                     yformatter = tick_to_m,
                     ylims = (0, dark_fig_ymax),
                     xlabel = "Day",
-                    legend = :topleft),
+                    legend = :topright),
                 layout = (3, 1),
                 left_margin = 30mm
             ),
@@ -436,7 +436,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
         ylabelfontsize = map_titlefontsize(),
         titlefontsize = map_legendfontsize(),
 
-        xlims = (0, final_tick),
+        xlims = (0, max_ticks),
         grid = true,
         gridlinewidth = 2.0,
         layout = l,
