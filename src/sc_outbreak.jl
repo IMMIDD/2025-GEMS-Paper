@@ -41,22 +41,33 @@ The `weeks` argument takes a vector of Integers to specify which
 weeks should be plotted. In the current plot layout, 
 it should have 6 entries.
 """
-function plot_weekly_incidence(rd; weeks = 1:51)
+function plot_weekly_incidence(rd; weeks = [16, 18, 20, 22, 25, 30])
     # wrapper function for gemsmap
     plotweek(rd, week) = gemsmap(rd, type = :WeeklyIncidenceMap, week = week,
         linecolor = nothing,
         titlefontsize = map_titlefontsize(),
-        ytickfontsize = map_legendfontsize() * 2.5, 
+        ytickfontsize = map_legendfontsize()*2,
         colorbar_titlefontsize = map_legendfontsize(),
         plot_title = "",
         title = "",
         xlabel = "Week $week",
-        xlabelfontsize = map_legendfontsize() * 2.5,
+        xlabelfontsize = map_legendfontsize(),
         size = map_dims(),
-        right_margin = 50mm
     )
 
-    return [(w, plotweek(rd, w)) for w in weeks]
+    plts = (w -> plotweek(rd, w)).(weeks)
+
+    # build multiplot
+    return plot(
+        plts[1:6]...,
+        layout = (2,3),
+        top_margin = -50mm,
+        right_margin = 10mm,
+        bottom_margin = -50mm,
+        left_margin = -80mm,
+        xlabelfontsize = map_legendfontsize() * 2.5,
+        size = (4 * map_dims()[1], 2 * map_dims()[2])
+    )
 end
 
 
@@ -208,11 +219,8 @@ function scenario_outbreak(;
     mkpath(weekly_folder)
 
     # weekly incidence
-    weekly_plots = plot_weekly_incidence(rd, weeks=1:51)
-    for (w, p) in weekly_plots
-        week_str = lpad(w, 2, "0") 
-        png(p, joinpath(weekly_folder, "sc_outbreak_weekly_incidence_week_$(week_str).png"))
-    end
+    p_wi = plot_weekly_incidence(rd)
+    png(p_wi, joinpath(folder, "sc_outbreak_weekly_incidence.png"))
 
     #r0
     r0map = plot_r0_by_region(rd)
