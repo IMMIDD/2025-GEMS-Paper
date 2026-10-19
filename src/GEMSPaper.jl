@@ -63,12 +63,16 @@ include("settings.jl")
 include("mobility.jl")
 include("contacts.jl")
 include("benchmarking.jl")
+include("rki_data.jl")
+include("rki_seeding.jl")
+include("rki_imports.jl")
 
 # INCLUDE SCENARIOS
 include("sc_outbreak.jl")
 include("sc_self_isolation.jl")
 include("sc_sweeping.jl")
 include("sc_testing.jl")
+include("sc_rki_validation.jl")
 
 
 

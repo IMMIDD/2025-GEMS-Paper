@@ -1,0 +1,260 @@
+# Like DE_model_R0_3.28_Heinsberg_Seed.toml, but without initial infections
+# (seeds via add_seeding!).
+[Simulation]
+
+    # seed = 1234
+    tickunit = 'd'
+    GlobalSetting = false
+    startdate = '2020-02-10'
+    enddate = '2020-03-22'
+
+    [Simulation.StartCondition]
+        type = "InfectedFraction"
+        [Simulation.StartCondition.parameters]
+            fraction = 0.0
+            pathogen = "Covid19"
+
+    [Simulation.StopCriterion]
+        type = "TimesUp"
+        [Simulation.StopCriterion.parameters]
+            limit = 42
+
+[Population]
+    n = 100_000
+    avg_household_size = 3
+    avg_office_size = 5
+    avg_school_size = 100
+    empty = false
+
+[Pathogens]
+
+    [Pathogens.Covid19]
+        [Pathogens.Covid19.transmission_function]
+            type = "ConstantTransmissionRate"
+            [Pathogens.Covid19.transmission_function.parameters]
+                transmission_rate = 0.03142
+
+        [Pathogens.Covid19.progressions]
+
+            # ASYMPTOMATIC PROGRESSION
+            [Pathogens.Covid19.progressions.Asymptomatic]
+                # derived from old infectious_offset (2.0)
+                [Pathogens.Covid19.progressions.Asymptomatic.exposure_to_infectiousness_onset]
+                    distribution = "Poisson"
+                    parameters = [4.55]
+                # derived from old time_to_recovery (13.4)
+                [Pathogens.Covid19.progressions.Asymptomatic.infectiousness_onset_to_recovery]
+                    distribution = "Poisson"
+                    parameters = [13.4]
+
+            # SYMPTOMATIC PROGRESSION
+            [Pathogens.Covid19.progressions.Symptomatic]
+                # derived from old infectious_offset (2.0)
+                [Pathogens.Covid19.progressions.Symptomatic.exposure_to_infectiousness_onset]
+                    distribution = "Poisson"
+                    parameters = [4.55]
+                # derived from old onset_of_symptoms (6.55) - infectious_offset (2.0)
+                [Pathogens.Covid19.progressions.Symptomatic.infectiousness_onset_to_symptom_onset]
+                    distribution = "Poisson"
+                    parameters = [2.0]
+                # derived from old time_to_recovery (13.4)
+                [Pathogens.Covid19.progressions.Symptomatic.symptom_onset_to_recovery]
+                    distribution = "Poisson"
+                    parameters = [13.4]
+
+            # SEVERE PROGRESSION
+            [Pathogens.Covid19.progressions.Severe]
+                # derived from old infectious_offset (2.0)
+                [Pathogens.Covid19.progressions.Severe.exposure_to_infectiousness_onset]
+                    distribution = "Poisson"
+                    parameters = [4.55]
+                # derived from old onset_of_symptoms (6.55) - infectious_offset (2.0)
+                [Pathogens.Covid19.progressions.Severe.infectiousness_onset_to_symptom_onset]
+                    distribution = "Poisson"
+                    parameters = [2.0]
+                # derived from old onset_of_severeness (3.0)
+                [Pathogens.Covid19.progressions.Severe.symptom_onset_to_severeness_onset]
+                    distribution = "Poisson"
+                    parameters = [3.0]
+                # kept default for offset
+                [Pathogens.Covid19.progressions.Severe.severeness_onset_to_severeness_offset]
+                    distribution = "Poisson"
+                    parameters = [7.0]
+                # kept default for recovery
+                [Pathogens.Covid19.progressions.Severe.severeness_offset_to_recovery]
+                    distribution = "Poisson"
+                    parameters = [4.0]
+
+            # HOSPITALIZED PROGRESSION
+            [Pathogens.Covid19.progressions.Hospitalized]
+                # derived from old infectious_offset (2.0)
+                [Pathogens.Covid19.progressions.Hospitalized.exposure_to_infectiousness_onset]
+                    distribution = "Poisson"
+                    parameters = [4.55]
+                # derived from old onset_of_symptoms (6.55) - infectious_offset (2.0)
+                [Pathogens.Covid19.progressions.Hospitalized.infectiousness_onset_to_symptom_onset]
+                    distribution = "Poisson"
+                    parameters = [2.0]
+                # derived from old onset_of_severeness (3.0)
+                [Pathogens.Covid19.progressions.Hospitalized.symptom_onset_to_severeness_onset]
+                    distribution = "Poisson"
+                    parameters = [3.0]
+                # derived from old time_to_hospitalization (7.0) - onset_of_severeness (3.0)
+                [Pathogens.Covid19.progressions.Hospitalized.severeness_onset_to_hospital_admission]
+                    distribution = "Poisson"
+                    parameters = [4.0]
+                # derived from old length_of_stay (7.0)
+                [Pathogens.Covid19.progressions.Hospitalized.hospital_admission_to_hospital_discharge]
+                    distribution = "Poisson"
+                    parameters = [7.0]
+                # kept default
+                [Pathogens.Covid19.progressions.Hospitalized.hospital_discharge_to_severeness_offset]
+                    distribution = "Poisson"
+                    parameters = [3.0]
+                [Pathogens.Covid19.progressions.Hospitalized.severeness_offset_to_recovery]
+                    distribution = "Poisson"
+                    parameters = [4.0]
+
+            # CRITICAL PROGRESSION
+            [Pathogens.Covid19.progressions.Critical]
+                # probability of death (from old critical_death_rate [1, 1])
+                death_probability = 1.0
+                
+                # derived from old infectious_offset (2.0)
+                [Pathogens.Covid19.progressions.Critical.exposure_to_infectiousness_onset]
+                    distribution = "Poisson"
+                    parameters = [4.55]
+                # derived from old onset_of_symptoms (6.55) - infectious_offset (2.0)
+                [Pathogens.Covid19.progressions.Critical.infectiousness_onset_to_symptom_onset]
+                    distribution = "Poisson"
+                    parameters = [2.0]
+                # derived from old onset_of_severeness (3.0)
+                [Pathogens.Covid19.progressions.Critical.symptom_onset_to_severeness_onset]
+                    distribution = "Poisson"
+                    parameters = [3.0]
+                # derived from old time_to_hospitalization (7.0) - onset_of_severeness (3.0)
+                [Pathogens.Covid19.progressions.Critical.severeness_onset_to_hospital_admission]
+                    distribution = "Poisson"
+                    parameters = [4.0]
+                # from default file
+                [Pathogens.Covid19.progressions.Critical.hospital_admission_to_icu_admission]
+                    distribution = "Poisson"
+                    parameters = [2.0]
+                
+                # RECOVERY PATHWAY
+                # derived from old length_of_stay (7.0)
+                [Pathogens.Covid19.progressions.Critical.icu_admission_to_icu_discharge]
+                    distribution = "Poisson"
+                    parameters = [7.0]
+                # from default
+                [Pathogens.Covid19.progressions.Critical.icu_discharge_to_hospital_discharge]
+                    distribution = "Poisson"
+                    parameters = [7.0]
+                # kept default
+                [Pathogens.Covid19.progressions.Critical.hospital_discharge_to_severeness_offset]
+                    distribution = "Poisson"
+                    parameters = [3.0]
+                [Pathogens.Covid19.progressions.Critical.severeness_offset_to_recovery]
+                    distribution = "Poisson"
+                    parameters = [4.0]
+
+                # DEATH PATHWAY
+                # kept default (10) as old model had no explicit death time
+                [Pathogens.Covid19.progressions.Critical.icu_admission_to_death]
+                    distribution = "Poisson"
+                    parameters = [10]
+
+        # progression assignment method
+        [Pathogens.Covid19.progression_assignment]
+            type = "AgeBasedProgressionAssignment"
+            [Pathogens.Covid19.progression_assignment.parameters]
+                age_groups = ["-39", "40-59", "60-79", "80-"]
+                progression_categories = ["Asymptomatic", "Symptomatic", "Severe", "Hospitalized", "Critical"]
+                # Recalculated from old matrix + rates (Hosp 0.3, ICU 0.3)
+                stratification_matrix = [
+                    [0.17, 0.828, 0.0014, 0.00042, 0.00018],
+                    [0.17, 0.821, 0.0063, 0.00189, 0.00081],
+                    [0.17, 0.780, 0.0350, 0.01050, 0.00450],
+                    [0.17, 0.682, 0.1036, 0.03108, 0.01332]
+                ]
+
+[Settings]
+
+    [Settings.Household]
+        [Settings.Household.contact_sampling_method]
+                type = "ContactparameterSampling"
+
+                [Settings.Household.contact_sampling_method.parameters]
+                    contactparameter = 3.3
+
+    [Settings.Office]
+        [Settings.Office.contact_sampling_method]
+                type = "ContactparameterSampling"
+
+                [Settings.Office.contact_sampling_method.parameters]
+                    contactparameter = 1.4
+                    
+    [Settings.School]
+        [Settings.School.contact_sampling_method]
+                type = "ContactparameterSampling"
+
+                [Settings.School.contact_sampling_method.parameters]
+                    contactparameter = 0.225
+
+    [Settings.SchoolClass]
+        [Settings.SchoolClass.contact_sampling_method]
+                type = "ContactparameterSampling"
+
+                [Settings.SchoolClass.contact_sampling_method.parameters]
+                    contactparameter = 0.9
+
+    [Settings.Municipality]
+        [Settings.Municipality.contact_sampling_method]
+                type = "ContactparameterSampling"
+
+                [Settings.Municipality.contact_sampling_method.parameters]
+                    contactparameter = 4
+
+    [Settings.WorkplaceSite]
+        [Settings.WorkplaceSite.contact_sampling_method]
+                type = "ContactparameterSampling"
+
+                [Settings.WorkplaceSite.contact_sampling_method.parameters]
+                    contactparameter = 0.35
+
+    [Settings.SchoolComplex]
+        [Settings.SchoolComplex.contact_sampling_method]
+                type = "ContactparameterSampling"
+
+                [Settings.SchoolComplex.contact_sampling_method.parameters]
+                    contactparameter = 0.225
+
+    [Settings.SchoolYear]
+        [Settings.SchoolYear.contact_sampling_method]
+                type = "ContactparameterSampling"
+
+                [Settings.SchoolYear.contact_sampling_method.parameters]
+                    contactparameter = 0.45
+
+
+    [Settings.Department]
+        [Settings.Department.contact_sampling_method]
+                type = "ContactparameterSampling"
+
+                [Settings.Department.contact_sampling_method.parameters]
+                    contactparameter = 0.7
+
+    [Settings.Workplace]
+        [Settings.Workplace.contact_sampling_method]
+                type = "ContactparameterSampling"
+
+                [Settings.Workplace.contact_sampling_method.parameters]
+                    contactparameter = 0.35
+
+                    
+    [Settings.GlobalSetting]
+        [Settings.GlobalSetting.contact_sampling_method]
+                type = "ContactparameterSampling"
+
+                [Settings.GlobalSetting.contact_sampling_method.parameters]
+                    contactparameter = 0.0
