@@ -22,9 +22,9 @@ This README describes the **target** parameterization. Markers:
 |----|------|------|---------|
 | [P1](#p1) | DECISION | Death pathway. **B1** (shown): built-in categories, every death goes through ICU. **B2:** custom category "dies in hospital without ICU" | 4.4 |
 | [P2](#p2) | UPDATE | `Severe` = one severe case per hospitalized case | 4.4 |
-| [P3](#p3) | UPDATE | Progression matrix from Verity et al. 2020, `death_probability` from Karagiannidis et al. 2020 | 4.4 |
+| [P3](#p3) | UPDATE | Progression matrix from Verity et al. 2020 🔍, `death_probability` from Karagiannidis et al. 2020 🔍 | 4.4 |
 | [P4](#p4) | DECISION | Latent period 3.55 (incubation 6.55 d incl. GEMS' +1 day) instead of 4.55 (7.55 d) | 4.5 |
-| [P5](#p5) | INPUT | Literature sources for the severity, hospital, and ICU durations (all [A]), or keep as assumptions | 4.5 |
+| [P5](#p5) | UPDATE | Severity, hospital, and ICU durations from Schilling et al. 2020 🔍 (C9); check that GEMS accepts a fixed 0 for same-day transitions | 4.5 |
 | [P6](#p6) | DECISION | Asymptomatic infectious period 15.4 d (as symptomatic) instead of 13.4 d | 4.5 |
 | [P7](#p7) | INPUT | Reason for 0.5 municipality contacts in the multi-criteria example | 5.4 |
 | [P8](#p8) | DECISION | Fit transmission rates to R_init instead of mean R_eff over days 1–10 | 4.3 |
@@ -38,14 +38,15 @@ This README describes the **target** parameterization. Markers:
 
 | # | Parameter | Current | Target | Status |
 |---|---|---|---|---|
-| C1 | Progression matrix | WSC 2025 fatality values split 70/21/9 % into Severe/Hospitalized/Critical | from Verity et al. 2020 (Sec. 4.4) | [P3](#p3) |
+| C1 | Progression matrix | WSC 2025 fatality values split 70/21/9 % into Severe/Hospitalized/Critical | from Verity et al. 2020 🔍 (Sec. 4.4) | [P3](#p3) |
 | C2 | `Severe` share | 0.0014 / 0.0063 / 0.0350 / 0.1036 | = IHR per age group | [P2](#p2) |
 | C3 | `Hospitalized` / `Critical` split | 70 : 30 | `Critical = IFR / 0.53` | [P1](#p1) |
 | C4 | `Critical.death_probability` | 1.0 | 0.53 | [P3](#p3) |
 | C5 | `exposure_to_infectiousness_onset` | Poisson(λ = 4.55) | Poisson(λ = 3.55) | [P4](#p4) |
 | C6 | `Asymptomatic.infectiousness_onset_to_recovery` | Poisson(λ = 13.4) | Poisson(λ = 15.4) | [P6](#p6) |
 | C7 | Fit target in [fit_r0.jl](fit_r0.jl) | mean R_eff, days 1–10 | R_init | [P8](#p8) |
-| C8 | Transmission rates | 0.03142, 0.06888, 0.077, RKI grid | refit after C1–C7 | P14 |
+| C8 | Transmission rates | 0.03142, 0.06888, 0.077, RKI grid | refit after C1–C7, C9 | P14 |
+| C9 | Severity, hospital, and ICU durations | see Sec. 4.5 (`config: …`) | from Schilling et al. 2020 🔍 | [P5](#p5) |
 
 <a id="verify"></a>**🔍 To verify:**
 
@@ -53,9 +54,12 @@ This README describes the **target** parameterization. Markers:
 |----|------|
 | V1 | Population weights (currently approximate Destatis 31.12.2019 counts; table ID unverified). Use exact Destatis counts or the GEMS DE population |
 | V2 | Karagiannidis et al. 2020: 53 % mortality of invasively ventilated patients (so far only from abstract/press release) |
-| V3 | DOIs, volumes, and pages in [Section 9](#9-references) |
+| V3 | Verity et al. 2020: IFR (Table 1) and IHR (Table 3) by 10-year age bin |
+| V4 | Schilling et al. 2020, Table 5: durations used in Sec. 4.5 |
+| V5 | Salje et al. 2020: 19 % ICU admission among hospitalized (only needed for B2, [P1](#p1)) |
+| V6 | DOIs, volumes, and pages in [Section 8](#8-references) |
 
-Checked: Verity et al. 2020 Tables 1 and 3; Salje et al. 2020 (19 % ICU among hospitalized); GEMS defaults and +1 offset (source code). Adopted from the WSC 2025 model with its sources: Mossong, Liu, Byambasuren, Wu, Byrne.
+GEMS defaults and the +1 offset are taken from the GEMS v1.0.1 source code. Adopted from the WSC 2025 model with its sources: Mossong, Liu, Byambasuren, Wu, Byrne.
 
 **Manuscript fixes:**
 
@@ -161,7 +165,7 @@ Each infected individual's progression category is drawn from Categorical(p), wh
 | Input | Value | Source |
 |---|---|---|
 | Asymptomatic share | 0.17 | [L] Byambasuren et al. 2020 |
-| IFR and IHR by age | 🔄 | [L] Verity et al. 2020, Tables 1 and 3; adapted: population-weighted means of the 10-year bins per age group, weights 🔍 [V1](#verify) from Destatis 2019 |
+| IFR and IHR by age | 🔄 | [L] Verity et al. 2020, Tables 1 and 3 🔍 [V3](#verify); adapted: population-weighted means of the 10-year bins per age group, weights 🔍 [V1](#verify) from Destatis 2019 |
 | `Critical.death_probability` | 0.53 🔄 (`config: 1.0`) | [L] Karagiannidis et al. 2020 🔍 [V2](#verify); adapted: mortality of invasively ventilated patients |
 | `Severe` share | = IHR 🔄 | <a id="p2"></a>[A] one severe case per hospitalized case |
 
@@ -182,22 +186,25 @@ Matrix: `Critical = IFR / 0.53`, `Hospitalized = IHR − Critical`, `Severe = IH
 
 In days. GEMS adds 1 day to every exposure → infectiousness-onset draw.
 
-| Category | Transition | Distribution | Source |
+| Category | Transition | Distribution | Basis |
 |---|---|---|---|
 | all | exposure → infectiousness onset | <a id="p4"></a>🚧 1 + Poisson(λ = 3.55) 🔄 (`config: 1 + Poisson(λ = 4.55)`) | [L] adapted: incubation 6.55 (Wu et al. 2022) minus pre-symptomatic period 2.0 (Byrne et al. 2020) minus 1 |
 | Asymptomatic | infectiousness onset → recovery | <a id="p6"></a>🚧 Poisson(λ = 15.4) 🔄 (`config: Poisson(λ = 13.4)`) | [A] same as symptomatic (2.0 + 13.4) |
 | Symptomatic, Severe, Hospitalized, Critical | infectiousness onset → symptom onset | Poisson(λ = 2.0) | [L] Byrne et al. 2020 |
 | Symptomatic | symptom onset → recovery | Poisson(λ = 13.4) | [L] Byrne et al. 2020 |
-| Severe, Hospitalized, Critical | symptom onset → severeness onset | Poisson(λ = 3.0) | <a id="p5"></a>[A] |
-| Severe | severeness onset → severeness offset | Poisson(λ = 7.0) | [A] |
-| Severe, Hospitalized, Critical | severeness offset → recovery | Poisson(λ = 4.0) | [A] |
-| Hospitalized, Critical | severeness onset → hospital admission | Poisson(λ = 4.0) | [A] |
-| Hospitalized | hospital admission → hospital discharge | Poisson(λ = 7.0) | [A] |
-| Hospitalized, Critical | hospital discharge → severeness offset | Poisson(λ = 3.0) | [A] |
-| Critical | hospital admission → ICU admission | Poisson(λ = 2.0) | [A] |
-| Critical (survives) | ICU admission → ICU discharge | Poisson(λ = 7.0) | [A] |
-| Critical (survives) | ICU discharge → hospital discharge | Poisson(λ = 7.0) | [A] |
-| Critical (dies) | ICU admission → death | Poisson(λ = 10) | [A] |
+| Severe, Hospitalized | symptom onset → severeness onset | Poisson(λ = 4) 🔄 (`config: Poisson(λ = 3.0)`) | <a id="p5"></a>[L] Schilling et al. 2020 🔍 [V4](#verify): symptom onset → hospital admission, median 4 d |
+| Critical | symptom onset → severeness onset | Poisson(λ = 5) 🔄 (`config: Poisson(λ = 3.0)`) | [L] Schilling et al. 2020 🔍 [V4](#verify): symptom onset → hospital admission of ICU patients, median 5 d |
+| Hospitalized, Critical | severeness onset → hospital admission | 🚧 0 🔄 (`config: Poisson(λ = 4.0)`) | [A] admission at the onset of severe illness |
+| Critical | hospital admission → ICU admission | 🚧 0 🔄 (`config: Poisson(λ = 2.0)`) | [L] Schilling et al. 2020 🔍 [V4](#verify): median 0 d |
+| Hospitalized | hospital admission → hospital discharge | Poisson(λ = 8) 🔄 (`config: Poisson(λ = 7.0)`) | [L] Schilling et al. 2020 🔍 [V4](#verify): hospital stay without ICU, median 8 d |
+| Critical (survives) | ICU admission → ICU discharge | Poisson(λ = 11) 🔄 (`config: Poisson(λ = 7.0)`) | [L] Schilling et al. 2020 🔍 [V4](#verify): ICU stay of survivors, median 11 d |
+| Critical (dies) | ICU admission → death | Poisson(λ = 8) 🔄 (`config: Poisson(λ = 10)`) | [L] Schilling et al. 2020 🔍 [V4](#verify): ICU stay of deceased, median 8 d |
+| Critical (survives) | ICU discharge → hospital discharge | Poisson(λ = 3) 🔄 (`config: Poisson(λ = 7.0)`) | [L] adapted: Schilling et al. 2020 🔍 [V4](#verify) hospital stay of ICU patients (14 d) minus ICU stay of survivors (11 d) |
+| Severe | severeness onset → severeness offset | Poisson(λ = 8) 🔄 (`config: Poisson(λ = 7.0)`) | [A] same as hospital stay without ICU |
+| Hospitalized, Critical | hospital discharge → severeness offset | Poisson(λ = 3.0) | [A] patients are discharged before the severe phase is over and remain severely ill at home for 3 days |
+| Severe, Hospitalized, Critical | severeness offset → recovery | Poisson(λ = 4.0) | [A] 4-day convalescence phase between the end of severe illness and recovery |
+
+> 🚧 **UPDATE (P5):** Check that GEMS accepts a fixed 0 for the two same-day transitions.
 
 ## 5. Example-specific parameterization
 
@@ -333,7 +340,7 @@ No disease parameters are involved.
 
 ## 8. References
 
-🚧 ✅ = checked · 🔍 = to verify ([V1–V3](#verify)) · no marker = adopted from the WSC 2025 model.
+🚧 🔍 = to verify ([V1–V6](#verify)) · no marker = adopted from the WSC 2025 model.
 
 - Byambasuren, O., et al. (2020). Estimating the extent of asymptomatic COVID-19 and its potential for community transmission. *JAMMI* 5(4):223–234. https://doi.org/10.3138/jammi-2020-0030
 - Byrne, A. W., et al. (2020). Inferred duration of infectious period of SARS-CoV-2. *BMJ Open* 10(8):e039856. https://doi.org/10.1136/bmjopen-2020-039856
@@ -342,6 +349,7 @@ No disease parameters are involved.
 - Liu, Y., et al. (2020). The reproductive number of COVID-19 is higher compared to SARS coronavirus. *J Travel Med* 27(2):taaa021. https://doi.org/10.1093/jtm/taaa021
 - Mossong, J., et al. (2008). Social contacts and mixing patterns relevant to the spread of infectious diseases. *PLoS Med* 5(3):e74. https://doi.org/10.1371/journal.pmed.0050074
 - Ponge, J., et al. (2024). A standardized framework for modeling non-pharmaceutical interventions in individual-based infectious disease simulations. *WSC 2024*, 1106–1117. https://doi.org/10.1109/WSC63780.2024.10838778
-- ✅ Salje, H., et al. (2020). Estimating the burden of SARS-CoV-2 in France. *Science* 369(6500):208–211. https://doi.org/10.1126/science.abc3517
-- ✅ Verity, R., et al. (2020). Estimates of the severity of coronavirus disease 2019: a model-based analysis. *Lancet Infect Dis* 20(6):669–677. https://doi.org/10.1016/S1473-3099(20)30243-7
+- 🔍 Salje, H., et al. (2020). Estimating the burden of SARS-CoV-2 in France. *Science* 369(6500):208–211. https://doi.org/10.1126/science.abc3517
+- 🔍 Schilling, J., Lehfeld, A.-S., Schumacher, D., Ullrich, A., Diercke, M., Buda, S., Haas, W., RKI COVID-19 Study Group (2020). Krankheitsschwere der ersten COVID-19-Welle in Deutschland basierend auf den Meldungen gemäß Infektionsschutzgesetz. *Journal of Health Monitoring* 5(S11). https://doi.org/10.25646/7169
+- 🔍 Verity, R., et al. (2020). Estimates of the severity of coronavirus disease 2019: a model-based analysis. *Lancet Infect Dis* 20(6):669–677. https://doi.org/10.1016/S1473-3099(20)30243-7
 - Wu, Y., et al. (2022). Incubation period of COVID-19 caused by unique SARS-CoV-2 strains. *JAMA Netw Open* 5(8):e2228008. https://doi.org/10.1001/jamanetworkopen.2022.28008
