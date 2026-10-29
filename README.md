@@ -6,7 +6,7 @@ This repository contains the code and model configurations behind the example ap
 
 All simulations use [GEMS](https://github.com/IMMIDD/GEMS) **v1.0.1** (pinned in [Manifest.toml](Manifest.toml)).
 This README documents the parameterization of every example: population, contacts, transmission, disease progression, and interventions.
-Most examples share one **reference parameterization** ([Section 4](#4-reference-parameterization-covid-19-like-pathogen)); each example in [Section 5](#5-example-specific-parameterization) lists only what it changes.
+Most examples share one **reference parameterization** ([Section 4](#4-reference-parameterization-covid-19-wild-type-2020)); each example in [Section 5](#5-example-specific-parameterization) lists only what it changes.
 
 ---
 
@@ -24,7 +24,7 @@ This README describes the **target** parameterization. Markers:
 | [P2](#p2) | UPDATE | `Severe` = one severe case per hospitalized case | 4.4 |
 | [P3](#p3) | UPDATE | Progression matrix from Verity et al. 2020 🔍, `death_probability` from Karagiannidis et al. 2020 🔍 | 4.4 |
 | [P4](#p4) | DECISION | Latent period 3.55 (incubation 6.55 d incl. GEMS' +1 day) instead of 4.55 (7.55 d) | 4.5 |
-| [P5](#p5) | UPDATE | Severity, hospital, and ICU durations from Schilling et al. 2020 🔍 (C9); check that GEMS accepts a fixed 0 for same-day transitions | 4.5 |
+| [P5](#p5) | UPDATE | Severity, hospital, and ICU durations from Schilling et al. 2020 🔍 (C9); check that GEMS accepts a fixed 0 for same-day transitions (paper line 430–431 says durations can be set to zero) | 4.5 |
 | [P6](#p6) | DECISION | Asymptomatic infectious period 15.4 d (as symptomatic) instead of 13.4 d | 4.5 |
 | [P7](#p7) | INPUT | Reason for 0.5 municipality contacts in the multi-criteria example | 5.4 |
 | [P8](#p8) | DECISION | Fit transmission rates to R_init instead of mean R_eff over days 1–10 | 4.3 |
@@ -71,6 +71,10 @@ GEMS defaults and the +1 offset are taken from the GEMS v1.0.1 source code. Adop
 | M4 | Sec. 3.1.5 placeholder "(add table)" (line 854). |
 | M5 | Fig 8B shows ICU survival, but currently every ICU patient dies (`death_probability = 1.0`). Resolved by C4. |
 | M6 | Check stated incubation and infectious periods if P4 and P6 are adopted. |
+| M7 | Pathogen label. Line 747–748 (Sec. 3.1.1): "parameterize GEMS for a COVID-19-like pathogen" → "for COVID-19 (wild type, 2020; full parameterization in the paper repository)". Line 808–809 (Sec. 3.1.4): "a COVID-19-like outbreak with illustrative parameter values that are not calibrated to observed data" → "the COVID-19 parameterization of the previous examples; results are not calibrated to observed data". |
+| M8 | Numbers in the text that change with the rerun (P14): line 750–751 ("approximately eight months"), line 834–837 (attack rates 66.1 % / 38.5 %, 398 million tests, 649 million / 4.9 billion quarantine days), Fig 10, 11 (incl. regional R0 and fatality maps), 12A, 14, Tab 2. |
+| M9 | Data Availability (line 1040–1042): mention that the repository README contains the full parameterization of all examples. |
+| M10 | If the RKI validation is included ([P9](#p9)): line 1008–1012 states that the paper contains no validation against surveillance data. |
 
 ---
 
@@ -121,7 +125,7 @@ All simulations use fixed seeds ([Section 3](#3-overview-examples-code-and-confi
 | Sec. 3.2 Performance (Fig 15) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | GEMS defaults | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / seeds 1–11 |
 | 🚧 RKI validation ([P9](#p9)) | [sc_rki_validation.jl](src/sc_rki_validation.jl) | [DE_model_RKI_2020.toml](models/DE_model_RKI_2020.toml) 🔄, [DE_model_RKI_2020_short_gt.toml](models/DE_model_RKI_2020_short_gt.toml) 🔄 | DE | 42 d | seed 0 |
 
-## 4. Reference parameterization (COVID-19-like pathogen)
+## 4. Reference parameterization (COVID-19, wild type, 2020)
 
 Config: [models/DE_model_R0_3.28.toml](models/DE_model_R0_3.28.toml).
 
