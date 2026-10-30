@@ -1,0 +1,80 @@
+# Reference data for comparing the synthetic population (Gesyland)
+# with empirical statistics. One table entry per CSV file in this folder.
+#
+# CSV format (one row per group):
+#   state, state_name  only in *_by_state files; state = first two AGS digits (1-16)
+#   group_min          lower bound of the group (inclusive)
+#   group_max          upper bound of the group (inclusive); empty = open-ended (e.g. "5+")
+#   count              number of units in the group: persons (household members,
+#                      residents, employees) or institutions (schools),
+#                      depending on the table
+#
+# Fields per table:
+#   file                  CSV file in this folder
+#   description           what the table contains
+#   label                 short source name for captions (e.g. "Mikrozensus 2022")
+#   publisher             data provider
+#   table_id              provider's table code (e.g. GENESIS code)
+#   url                   where the data was retrieved
+#   reference_year        year the data refers to
+#   retrieved             date of download (YYYY-MM-DD)
+#   license               e.g. "dl-de/by-2-0"
+#   attribution           required attribution text
+#   used_in_construction  "yes" / "no" / "unknown": was this source used to build Gesyland?
+#   placeholder           true while the CSV contains made-up data
+
+[household_sizes]
+file = "household_sizes_by_state.csv"
+description = "Persons in private households (main residence) by household size and state; must exclude communal establishments such as care homes"
+label = "PLACEHOLDER"
+publisher = ""
+table_id = ""
+url = ""
+reference_year = ""
+retrieved = ""
+license = ""
+attribution = ""
+used_in_construction = "unknown"
+placeholder = true
+
+[age_structure]
+file = "age_by_state.csv"
+description = "Population by 10-year age group (90+ open-ended) and state"
+label = "PLACEHOLDER"
+publisher = ""
+table_id = ""
+url = ""
+reference_year = ""
+retrieved = ""
+license = ""
+attribution = ""
+used_in_construction = "unknown"
+placeholder = true
+
+[workplace_sizes]
+file = "workplace_sizes.csv"
+description = "Number of establishments by size class (1-19, 20-49, 50-99, 100-199, 200-249, 250+ employees), Germany"
+label = "PLACEHOLDER"
+publisher = ""
+table_id = ""
+url = ""
+reference_year = ""
+retrieved = ""
+license = ""
+attribution = ""
+used_in_construction = "unknown"
+placeholder = true
+
+[school_sizes]
+file = "school_sizes.csv"
+description = "Number of educational institutions by number of attendees, Germany; Gesyland schools include daycare centres and higher education, so the reference should cover the same institutions"
+label = "PLACEHOLDER"
+publisher = ""
+table_id = ""
+url = ""
+reference_year = ""
+retrieved = ""
+license = ""
+attribution = ""
+used_in_construction = "unknown"
+placeholder = true
