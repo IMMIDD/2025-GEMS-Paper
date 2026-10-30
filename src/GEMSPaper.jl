@@ -11,6 +11,9 @@ using Statistics
 using StatsBase
 using Revise
 using Reexport
+import LinearAlgebra
+import Random
+import TOML
 
 @reexport using GEMS
 
@@ -22,6 +25,7 @@ export map_dims
 export map_titlefontsize
 export map_legendfontsize
 export runall
+export run_first_wave
 
 # COMMON FUNCTIONS
 """
@@ -63,16 +67,24 @@ include("settings.jl")
 include("mobility.jl")
 include("contacts.jl")
 include("benchmarking.jl")
-include("rki_data.jl")
-include("rki_seeding.jl")
-include("rki_imports.jl")
+
+# INCLUDE RKI DATA AND MODEL (for the first wave scenario)
+include("first_wave/rki_data.jl")
+include("first_wave/rki_imports.jl")
+include("first_wave/rki_seeding.jl")
+include("first_wave/rki_phases.jl")
+include("first_wave/rki_reproduction.jl")
+include("first_wave/rki_simulation.jl")
+include("first_wave/rki_comparison.jl")
+include("first_wave/rki_calibration.jl")
+include("first_wave/rki_figures.jl")
 
 # INCLUDE SCENARIOS
 include("sc_outbreak.jl")
 include("sc_self_isolation.jl")
 include("sc_sweeping.jl")
 include("sc_testing.jl")
-include("sc_rki_validation.jl")
+include("sc_first_wave.jl")
 
 
 
@@ -157,6 +169,37 @@ function runall(;
     printinfo("### RUNNING PARAMETER SWEEPS")
     scenario_sweeping(
         folder = folder
+    )
+
+end
+
+
+# RUN FIRST WAVE SCENARIO
+"""
+    run_first_wave(;
+        configfile = "models/DE_model_RKI_2020_short_gt.toml",
+        population = "DE",
+        folder = nothing,
+        parts = FIRST_WAVE_PARTS)
+
+Executes the first wave 2020 scenario, compared with the RKI data (not part
+of `runall`). To continue an earlier run or to run single `parts`, pass its `folder`.
+"""
+function run_first_wave(;
+        configfile = "models/DE_model_RKI_2020_short_gt.toml",
+        population = "DE",
+        folder = nothing,
+        parts = FIRST_WAVE_PARTS)
+
+    # create result folder
+    isnothing(folder) ? folder = result_folder() : nothing
+
+    printinfo("### RUNNING FIRST WAVE SCENARIO")
+    scenario_first_wave(
+        configfile = configfile,
+        population = population,
+        folder = folder,
+        parts = parts
     )
 
 end
