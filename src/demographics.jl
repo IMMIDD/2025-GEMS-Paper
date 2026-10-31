@@ -324,17 +324,34 @@ const STATE_NAMES = [
     "Bavaria", "Saarland", "Berlin", "Brandenburg",
     "Mecklenburg-Vorpommern", "Saxony", "Saxony-Anhalt", "Thuringia"]
 
+const TICK_FONTSIZE = 42
+const LABEL_FONTSIZE = 48
+const HEADER_FONTSIZE = 62
+
 """
     comparison_panel(df; title, ymax, show_x = true, show_y = true,
-        legend = false, xrotation = 0, titlefontsize = 8, kwargs...)
+        legend = false, xrotation = 0, titlefontsize = LABEL_FONTSIZE,
+        xlabel = "", xgap = 0.024, ygap = 0.04, xlabel_offset = 0.3, kwargs...)
 
 Bars for the synthetic population, diamonds for the reference, and the
 total variation distance in the top-right corner.
+
+Tick labels and the x-axis label are drawn as annotations, as GR places
+its own labels at a fixed distance relative to the figure height, which
+leaves large gaps in tall figures. `xgap` and `ygap` set the distance
+between the axes and their tick labels (as share of the axis span),
+`xlabel_offset` the distance of the x-axis label below the x-axis
+(as share of `ymax`). The panel's margins need to make room for them.
 """
 function comparison_panel(df; title, ymax, show_x = true, show_y = true,
-        legend = false, xrotation = 0, titlefontsize = 8, kwargs...)
+        legend = false, xrotation = 0, titlefontsize = LABEL_FONTSIZE,
+        xlabel = "", xgap = 0.024, ygap = 0.04, xlabel_offset = 0.3, kwargs...)
 
-    x = 1:nrow(df)
+    n = nrow(df)
+    x = 1:n
+    xmin, xmax = 0.4, n + 0.6
+    yticks = 0:(ymax > 0.3 ? 0.1 : 0.05):ymax
+
     p = bar(x, df.model,
         label = "Gesyland",
         fillcolor = MODEL_COLOR,
@@ -342,16 +359,14 @@ function comparison_panel(df; title, ymax, show_x = true, show_y = true,
         bar_width = 0.7,
         title = title,
         titlefontsize = titlefontsize,
-        xticks = (x, show_x ? df.label : fill("", nrow(df))),
-        xrotation = xrotation,
-        yformatter = show_y ? (y -> "$(round(Int, 100y)) %") : (_ -> ""),
+        xticks = (x, fill("", n)),
+        yticks = (yticks, fill("", length(yticks))),
         ylims = (0, ymax),
-        xlims = (0.4, nrow(df) + 0.6),
-        tickfontsize = 7,
+        xlims = (xmin, xmax),
         grid = :y,
         gridalpha = 0.2,
         legend = legend,
-        legendfontsize = 8,
+        legendfontsize = LABEL_FONTSIZE,
         foreground_color_legend = nothing,
         # white backdrop hides the grid lines behind the legend
         background_color_legend = :white,
@@ -361,25 +376,51 @@ function comparison_panel(df; title, ymax, show_x = true, show_y = true,
     scatter!(p, x, df.reference,
         label = "Reference data",
         markershape = :diamond,
-        markersize = 4,
+        markersize = 15,
         markercolor = REFERENCE_COLOR,
         markerstrokewidth = 0)
 
     dev = all(isnan, df.model) ? "no model data" : "TVD $(round(100tvd(df), digits = 1)) %"
-    annotate!(p, nrow(df) + 0.5, 0.86ymax, text(dev, 8, :right, "Times Roman"))
+    annotate!(p, n + 0.5, 0.86ymax, text(dev, TICK_FONTSIZE, :right, "Times Roman"))
+
+    # tick labels
+    if show_y
+        for y in yticks
+            annotate!(p, xmin - xgap * (xmax - xmin), y,
+                text("$(round(Int, 100y)) %", TICK_FONTSIZE, :right, :vcenter, "Times Roman"))
+        end
+    end
+    if show_x
+        for (xi, lab) in zip(x, df.label)
+            # rotated labels end at their bar, unrotated ones are centered below it
+            annotate!(p, xrotation == 0 ? xi : xi + 0.15, -ygap * ymax,
+                text(lab, TICK_FONTSIZE, xrotation == 0 ? :center : :right, :top,
+                    "Times Roman", rotation = xrotation))
+        end
+    end
+    xlabel != "" && annotate!(p, (xmin + xmax) / 2, -xlabel_offset * ymax,
+        text(xlabel, LABEL_FONTSIZE, :center, :top, "Times Roman"))
 
     return p
 end
 
+# figure size in pixels (fonts in the same scale as the other figures)
+# and the left margin that holds the y tick labels
+const FIG_SIZE = (3000, 5100)
+const FIG_WIDTH = FIG_SIZE[1] * Plots.px
+const YLABEL_MARGIN = 30mm
+
 """
-    state_grid(model, reference; xrotation = 0)
+    state_grid(model, reference; xrotation = 0, bottom_margin = 20mm)
 
 4×4 grid of comparison panels, one per state, with a shared y-axis.
+`bottom_margin` makes room for the x tick labels below the last row.
 """
-function state_grid(model, reference; xrotation = 0)
+function state_grid(model, reference; xrotation = 0, bottom_margin = 20mm)
     comps = [compare(model[model.state .== s, :], reference[reference.state .== s, :]) for s in 1:16]
     ymax = 1.15 * maximum(c -> maximum(filter(!isnan, [c.model; c.reference])), comps)
 
+    gap = 2mm
     panels = map(1:16) do s
         comparison_panel(comps[s],
             title = STATE_NAMES[s],
@@ -387,12 +428,21 @@ function state_grid(model, reference; xrotation = 0)
             show_x = s > 12,
             show_y = s % 4 == 1,
             xrotation = xrotation,
+            # only the first column needs room for y tick labels
+            left_margin = s % 4 == 1 ? YLABEL_MARGIN : gap,
+            right_margin = gap,
             # pull the title closer to the data and the rows closer together
-            top_margin = -4mm,
-            bottom_margin = -4mm)
+            top_margin = -12mm,
+            bottom_margin = s > 12 ? bottom_margin : 0mm)
     end
 
-    return plot(panels..., layout = (4, 4), fontfamily = "Times Roman")
+    # widen the first column so that all panels have the same plot width
+    plot_width = (FIG_WIDTH - YLABEL_MARGIN - 7gap) / 4
+    w_first = (plot_width + YLABEL_MARGIN + gap) / FIG_WIDTH
+    w_other = (1 - w_first) / 3
+    return plot(panels...,
+        layout = grid(4, 4, widths = [w_first, w_other, w_other, w_other]),
+        fontfamily = "Times Roman")
 end
 
 """
@@ -401,8 +451,8 @@ end
 Empty subplot carrying a block title.
 """
 header(txt) = plot(framestyle = :none, legend = false, xlims = (0, 1), ylims = (0, 1),
-        bottom_margin = -6mm) |>
-    p -> annotate!(p, 0.5, 0, text(txt, 12, :center, :bottom, "Times Roman"))
+        bottom_margin = -12mm) |>
+    p -> annotate!(p, 0.5, 0, text(txt, HEADER_FONTSIZE, :center, :bottom, "Times Roman"))
 
 """
     plot_population_validation(sim; individual_data_df = individual_data(sim))
@@ -419,23 +469,28 @@ function plot_population_validation(sim; individual_data_df = individual_data(si
     wp_ref, _ = load_reference("workplace_sizes")
     sc_ref, _ = load_reference("school_sizes")
 
-    p_hh = state_grid(household_df(sim), hh_ref)
-    p_age = state_grid(age_df(individual_data_df), age_ref, xrotation = 45)
+    p_hh = state_grid(household_df(sim), hh_ref, bottom_margin = 16mm)
+    p_age = state_grid(age_df(individual_data_df), age_ref, xrotation = 45, bottom_margin = 30mm)
 
-    p_wp = comparison_panel(compare(workplace_size_df(sim), wp_ref),
-        title = "Workplace Sizes (National)",
-        titlefontsize = 12,
+    national = (
+        titlefontsize = HEADER_FONTSIZE,
         ymax = 0.5,
         xrotation = 30,
-        xlabel = "Employees per workplace", xguidefontsize = 9)
-    p_sc = comparison_panel(compare(school_size_df(sim), sc_ref),
+        xgap = 0.012,
+        ygap = 0.025,
+        xlabel_offset = 0.22,
+        left_margin = YLABEL_MARGIN,
+        bottom_margin = 45mm)
+    p_wp = comparison_panel(compare(workplace_size_df(sim), wp_ref);
+        title = "Workplace Sizes (National)",
+        xlabel = "Employees per workplace",
+        national...)
+    p_sc = comparison_panel(compare(school_size_df(sim), sc_ref);
         title = "School Sizes (National)",
-        titlefontsize = 12,
+        xlabel = "Attendees per school",
         # figure legend, below the TVD in the top-right corner
         legend = (0.72, 0.72),
-        ymax = 0.5,
-        xrotation = 30,
-        xlabel = "Attendees per school", xguidefontsize = 9)
+        national...)
 
     return plot(
         header("Household Sizes (by State)"), p_hh,
@@ -448,11 +503,8 @@ function plot_population_validation(sim; individual_data_df = individual_data(si
             d{0.394h}
             [e f]
         ]),
-        size = (1000, 1700),
-        dpi = 300,
-        fontfamily = "Times Roman",
-        left_margin = 4mm,
-        bottom_margin = 2mm)
+        size = FIG_SIZE,
+        fontfamily = "Times Roman")
 end
 
 
