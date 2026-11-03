@@ -49,7 +49,8 @@ const BOZEN_LONLAT = (11.354, 46.498)
 
 Disposable income of private households per inhabitant 2019 (EUR) per county:
 VGR der Länder, Reihe 2 Band 3, Tab. 2.4 (Berechnungsstand Februar 2025,
-statistikportal.de), boundaries as of 2023.
+statistikportal.de), boundaries as of 2023. License: Datenlizenz Deutschland -
+Namensnennung - Version 2.0 (see the header of the file).
 """
 const COUNTY_INCOME_FILE = joinpath("inputs", "county_income_2019.csv")
 
@@ -76,7 +77,7 @@ end
 # (16056, merged into the Wartburgkreis) gets the value of the Wartburgkreis in
 # case older shapes still contain it
 function _county_income()
-    d = CSV.read(COUNTY_INCOME_FILE, DataFrame)
+    d = CSV.read(COUNTY_INCOME_FILE, DataFrame, comment = "#")
     key(a) = (a < 100 ? a * 1000 : a) * 1000
     income = Dict(key(a) => Float64(i) for (a, i) in zip(d.ags, d.income_2019))
     income[16056000] = income[16063000]

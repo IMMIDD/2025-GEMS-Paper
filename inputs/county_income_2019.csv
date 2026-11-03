@@ -1,3 +1,8 @@
+# Disposable income of private households per inhabitant 2019 (EUR) per county.
+# Source: Statistische Aemter des Bundes und der Laender, Volkswirtschaftliche Gesamtrechnungen der Laender,
+# Reihe 2 Band 3, Tab. 2.4 (Berechnungsstand Februar 2025), www.statistikportal.de
+# License: Datenlizenz Deutschland - Namensnennung - Version 2.0 (www.govdata.de/dl-de/by-2-0)
+# Changes: extract of the 2019 values per county; columns renamed (ags, name, income_2019).
 ags,name,income_2019
 8111,"Stuttgart, Landeshauptstadt, Stadtkreis",27066
 8115,"Böblingen, Landkreis",27242
