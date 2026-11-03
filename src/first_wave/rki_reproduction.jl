@@ -10,12 +10,16 @@ First infection date of the back-calculations of R(t).
 const BACK_CALCULATION_START = Date(2020, 2, 1)
 
 """
-    GENERATION_TIME_FILE
+    generation_time_file(configfile)
 
-Forward generation time of the model (`gems_generation_time`, columns `s` and
-`w`), written by the part `:generation_time` of `scenario_first_wave`.
+File of the forward generation time of the model of a config
+(`gems_generation_time`, columns `s` and `w`), written by the part
+`:generation_time` of `scenario_first_wave`.
 """
-const GENERATION_TIME_FILE = joinpath("inputs", "generation_time_short_gt.csv")
+function generation_time_file(configfile)
+    name = splitext(basename(configfile))[1]
+    return joinpath("inputs", "generation_time_$name.csv")
+end
 
 
 """

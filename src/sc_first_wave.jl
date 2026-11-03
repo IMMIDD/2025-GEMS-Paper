@@ -97,7 +97,7 @@ Parts of `scenario_first_wave`, in the order they are run:
 - `:figures`: figures of all parts whose results exist (counterfactuals: with `:final`)
 
 The part `:generation_time` (not run by default) measures the generation time
-of the model (`GENERATION_TIME_FILE`), which `:calibration` needs.
+of the model (`generation_time_file`), which `:calibration` needs.
 """
 const FIRST_WAVE_PARTS = (
     :calibration,
@@ -172,14 +172,14 @@ function _rki_generation_time(s::RKISettings)
         transmission_rate = 0.05)
     w = gems_generation_time(res.pp)
     printinfo("Forward generation time: mean $(round(sum((1:length(w)) .* w), digits = 2)) days")
-    CSV.write(GENERATION_TIME_FILE, DataFrame(s = 1:length(w), w = w))
+    CSV.write(generation_time_file(s.configfile), DataFrame(s = 1:length(w), w = w))
 end
 
 
 # calibration on the RKI cases by onset up to `RKI_CUTOFF` (runs until `RKI_SHORT_LAST_DAY`), and
 # `band_size` samples of the factors
 function _rki_calibration(folder, s::RKISettings; seeds, band_size)
-    generation_time = CSV.read(GENERATION_TIME_FILE, DataFrame).w
+    generation_time = CSV.read(generation_time_file(s.configfile), DataFrame).w
     short = with_settings(s, days = simulation_days(s.startdate, RKI_SHORT_LAST_DAY))
     cal = calibrate_rki_phases(short,
         generation_time = generation_time,
