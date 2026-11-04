@@ -4,6 +4,11 @@
 # infectiousness ends with the end of culturable virus shedding instead of RNA
 # clearance (Byrne et al. 2020: 13.4 d from onset to two negative RT-PCR tests).
 #
+# Source tags (as in the README): [L] literature, [C] calibrated, [A] assumption,
+# [D] GEMS default, [I] illustrative / scenario setting.
+# All durations are Poisson distributed (days); GEMS adds 1 day to the draw of
+# exposure -> infectiousness onset.
+#
 # References (* = values not yet verified against the source, see README V2-V4):
 # - Byambasuren et al. 2020, JAMMI 5(4):223-234, doi:10.3138/jammi-2020-0030
 # - Byrne et al. 2020, BMJ Open 10(8):e039856, doi:10.1136/bmjopen-2020-039856
@@ -18,23 +23,29 @@
 # - Wu et al. 2022, JAMA Netw Open 5(8):e2228008, doi:10.1001/jamanetworkopen.2022.28008
 [Simulation]
 
+    # [D] daily ticks
     tickunit = 'd'
+    # [D] no global setting
     GlobalSetting = false
+    # [I] before the first imported infections of the first wave (reported from week 9 on)
     startdate = '2020-02-10'
+    # [I] end of the forecast
     enddate = '2020-05-31'
 
-    # no initial infections (seeds via add_seeding!)
+    # [I] no initial infections; imports and the Heinsberg cluster are seeded by the scenario
     [Simulation.StartCondition]
         type = "InfectedFraction"
         [Simulation.StartCondition.parameters]
             fraction = 0.0
             pathogen = "Covid19"
 
+    # [I] 10.02.-31.05.2020 (the scenario sets the number of days per run)
     [Simulation.StopCriterion]
         type = "TimesUp"
         [Simulation.StopCriterion.parameters]
             limit = 112
 
+# [D] only used for generated populations; the scenario uses the GEMS population models
 [Population]
     n = 100_000
     avg_household_size = 3
@@ -46,151 +57,161 @@
 
     [Pathogens.Covid19]
         [Pathogens.Covid19.transmission_function]
+            # [D] constant per-contact transmission probability
             type = "ConstantTransmissionRate"
             [Pathogens.Covid19.transmission_function.parameters]
-                # fitted to R0 = 3.28 (Liu et al. 2020) as in fit_r0.jl (mean effective R of
-                # ticks 1-10, 10 runs), on Rhineland-Palatinate (contact structure closest to DE)
+                # [C] fitted to R0 = 3.28 [L] Liu et al. 2020, as in fit_r0.jl (mean effective R
+                # of ticks 1-10, 10 runs), on Rhineland-Palatinate (contact structure closest to DE)
                 transmission_rate = 0.06541
 
-        # All durations Poisson (days). GEMS adds 1 day to exposure -> infectiousness onset.
-        # Incubation 1 + 3.65 + 2.0 = 6.65 d: pooled wild-type estimate (Wu et al. 2022).
-        # Infectiousness before symptom onset 2.0 d (Byrne et al. 2020).
-        # Infectiousness after symptom onset Poisson(5): its 95% quantile (9 d) corresponds to
-        # isolation success < 5% at 9.8 d after onset (Woelfel et al. 2020, Fig. 1f) and to the
-        # 8-10 d limit of virus isolation (Puhach et al. 2023, Fig. 2); no secondary cases among
-        # contacts first exposed >= 6 d after onset (Cheng et al. 2020).
-        # Severity, hospital, and ICU durations: Schilling et al. 2020 (README, Sec. 4.5).
         [Pathogens.Covid19.progressions]
 
             # ASYMPTOMATIC PROGRESSION
             [Pathogens.Covid19.progressions.Asymptomatic]
+                # [L] adapted: incubation 6.65 (Wu et al. 2022, wild type) - presymptomatic 2.0
+                # (Byrne et al. 2020) - 1 (GEMS offset)
                 [Pathogens.Covid19.progressions.Asymptomatic.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
                     parameters = [3.65]
-                # assumption: same infectious period as symptomatic cases (2.0 + 5)
+                # [A] same infectious period as symptomatic cases (2.0 + 5)
                 [Pathogens.Covid19.progressions.Asymptomatic.infectiousness_onset_to_recovery]
                     distribution = "Poisson"
                     parameters = [7.0]
 
             # SYMPTOMATIC PROGRESSION
             [Pathogens.Covid19.progressions.Symptomatic]
+                # [L] adapted: incubation 6.65 (Wu et al. 2022) - 2.0 (Byrne et al. 2020) - 1
                 [Pathogens.Covid19.progressions.Symptomatic.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
                     parameters = [3.65]
+                # [L] Byrne et al. 2020: infectious period before symptom onset
                 [Pathogens.Covid19.progressions.Symptomatic.infectiousness_onset_to_symptom_onset]
                     distribution = "Poisson"
                     parameters = [2.0]
+                # [L] adapted: 95% quantile of Poisson(5) is 9 d = isolation success < 5% at 9.8 d
+                # after onset (Woelfel et al. 2020, Fig. 1f), 8-10 d limit of virus isolation
+                # (Puhach et al. 2023, Fig. 2); no secondary cases among contacts first exposed
+                # >= 6 d after onset (Cheng et al. 2020)
                 [Pathogens.Covid19.progressions.Symptomatic.symptom_onset_to_recovery]
                     distribution = "Poisson"
                     parameters = [5.0]
 
             # SEVERE PROGRESSION
             [Pathogens.Covid19.progressions.Severe]
+                # [L] adapted: as symptomatic
                 [Pathogens.Covid19.progressions.Severe.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
                     parameters = [3.65]
+                # [L] Byrne et al. 2020
                 [Pathogens.Covid19.progressions.Severe.infectiousness_onset_to_symptom_onset]
                     distribution = "Poisson"
                     parameters = [2.0]
-                # symptom onset -> hospital admission, median 4 d (Schilling et al. 2020)
+                # [L] Schilling et al. 2020*: symptom onset -> hospital admission, median 4 d
                 [Pathogens.Covid19.progressions.Severe.symptom_onset_to_severeness_onset]
                     distribution = "Poisson"
                     parameters = [4.0]
-                # assumption: same as hospital stay without ICU
+                # [A] same as hospital stay without ICU
                 [Pathogens.Covid19.progressions.Severe.severeness_onset_to_severeness_offset]
                     distribution = "Poisson"
                     parameters = [8.0]
-                # assumption: 4-day convalescence
+                # [A] 4-day convalescence between the end of severe illness and recovery
                 [Pathogens.Covid19.progressions.Severe.severeness_offset_to_recovery]
                     distribution = "Poisson"
                     parameters = [4.0]
 
             # HOSPITALIZED PROGRESSION
             [Pathogens.Covid19.progressions.Hospitalized]
+                # [L] adapted: as symptomatic
                 [Pathogens.Covid19.progressions.Hospitalized.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
                     parameters = [3.65]
+                # [L] Byrne et al. 2020
                 [Pathogens.Covid19.progressions.Hospitalized.infectiousness_onset_to_symptom_onset]
                     distribution = "Poisson"
                     parameters = [2.0]
-                # symptom onset -> hospital admission, median 4 d (Schilling et al. 2020)
+                # [L] Schilling et al. 2020*: symptom onset -> hospital admission, median 4 d
                 [Pathogens.Covid19.progressions.Hospitalized.symptom_onset_to_severeness_onset]
                     distribution = "Poisson"
                     parameters = [4.0]
-                # assumption: admission at the onset of severe illness
+                # [A] admission at the onset of severe illness
                 [Pathogens.Covid19.progressions.Hospitalized.severeness_onset_to_hospital_admission]
                     distribution = "Poisson"
                     parameters = [0.0]
-                # hospital stay without ICU, median 8 d (Schilling et al. 2020)
+                # [L] Schilling et al. 2020*: hospital stay without ICU, median 8 d
                 [Pathogens.Covid19.progressions.Hospitalized.hospital_admission_to_hospital_discharge]
                     distribution = "Poisson"
                     parameters = [8.0]
-                # assumption: severely ill at home for 3 days after discharge
+                # [A] discharged before the severe phase is over, severely ill at home for 3 days
                 [Pathogens.Covid19.progressions.Hospitalized.hospital_discharge_to_severeness_offset]
                     distribution = "Poisson"
                     parameters = [3.0]
-                # assumption: 4-day convalescence
+                # [A] 4-day convalescence
                 [Pathogens.Covid19.progressions.Hospitalized.severeness_offset_to_recovery]
                     distribution = "Poisson"
                     parameters = [4.0]
 
             # CRITICAL PROGRESSION
             [Pathogens.Covid19.progressions.Critical]
-                # mortality of invasively ventilated patients (Karagiannidis et al. 2020)
+                # [L] adapted: mortality of invasively ventilated patients (Karagiannidis et al. 2020*)
                 death_probability = 0.53
 
+                # [L] adapted: as symptomatic
                 [Pathogens.Covid19.progressions.Critical.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
                     parameters = [3.65]
+                # [L] Byrne et al. 2020
                 [Pathogens.Covid19.progressions.Critical.infectiousness_onset_to_symptom_onset]
                     distribution = "Poisson"
                     parameters = [2.0]
-                # symptom onset -> hospital admission of ICU patients, median 5 d (Schilling et al. 2020)
+                # [L] Schilling et al. 2020*: symptom onset -> hospital admission of ICU patients,
+                # median 5 d
                 [Pathogens.Covid19.progressions.Critical.symptom_onset_to_severeness_onset]
                     distribution = "Poisson"
                     parameters = [5.0]
-                # assumption: admission at the onset of severe illness
+                # [A] admission at the onset of severe illness
                 [Pathogens.Covid19.progressions.Critical.severeness_onset_to_hospital_admission]
                     distribution = "Poisson"
                     parameters = [0.0]
-                # hospital -> ICU admission, median 0 d (Schilling et al. 2020)
+                # [L] Schilling et al. 2020*: hospital -> ICU admission, median 0 d
                 [Pathogens.Covid19.progressions.Critical.hospital_admission_to_icu_admission]
                     distribution = "Poisson"
                     parameters = [0.0]
 
                 # RECOVERY PATHWAY
-                # ICU stay of survivors, median 11 d (Schilling et al. 2020)
+                # [L] Schilling et al. 2020*: ICU stay of survivors, median 11 d
                 [Pathogens.Covid19.progressions.Critical.icu_admission_to_icu_discharge]
                     distribution = "Poisson"
                     parameters = [11.0]
-                # hospital stay of ICU patients 14 d minus ICU stay 11 d (Schilling et al. 2020)
+                # [L] adapted: hospital stay of ICU patients 14 d - ICU stay 11 d (Schilling et al. 2020*)
                 [Pathogens.Covid19.progressions.Critical.icu_discharge_to_hospital_discharge]
                     distribution = "Poisson"
                     parameters = [3.0]
-                # assumption: severely ill at home for 3 days after discharge
+                # [A] severely ill at home for 3 days after discharge
                 [Pathogens.Covid19.progressions.Critical.hospital_discharge_to_severeness_offset]
                     distribution = "Poisson"
                     parameters = [3.0]
-                # assumption: 4-day convalescence
+                # [A] 4-day convalescence
                 [Pathogens.Covid19.progressions.Critical.severeness_offset_to_recovery]
                     distribution = "Poisson"
                     parameters = [4.0]
 
                 # DEATH PATHWAY
-                # ICU stay of deceased, median 8 d (Schilling et al. 2020)
+                # [L] Schilling et al. 2020*: ICU stay of deceased, median 8 d
                 [Pathogens.Covid19.progressions.Critical.icu_admission_to_death]
                     distribution = "Poisson"
                     parameters = [8.0]
 
         # progression assignment method
         [Pathogens.Covid19.progression_assignment]
+            # [D] categories by age group
             type = "AgeBasedProgressionAssignment"
             [Pathogens.Covid19.progression_assignment.parameters]
                 age_groups = ["-39", "40-59", "60-79", "80-"]
                 progression_categories = ["Asymptomatic", "Symptomatic", "Severe", "Hospitalized", "Critical"]
-                # asymptomatic share 0.17 (Byambasuren et al. 2020); Severe = IHR,
-                # Critical = IFR / 0.53, Hospitalized = IHR - Critical (Verity et al. 2020,
-                # population-weighted per age group; README, Sec. 4.4)
+                # Asymptomatic: [L] Byambasuren et al. 2020 (0.17)
+                # Severe = IHR, Critical = IFR / 0.53, Hospitalized = IHR - Critical:
+                # [L] adapted: Verity et al. 2020* (IHR, IFR), population-weighted means of the
+                # 10-year bins per age group (README, Sec. 4.4); Symptomatic: remainder
                 stratification_matrix = [
                     [0.17, 0.803818, 0.013091, 0.012426, 0.000665],
                     [0.17, 0.700496, 0.064752, 0.057054, 0.007698],
@@ -200,7 +221,9 @@
 
 [Settings]
 
-    # daily contacts per setting (Mossong et al. 2008; README, Sec. 4.2)
+    # daily contacts, drawn uniformly from the members of the setting:
+    # household, office/workplace total 2.8, school total 1.8, municipality: [L] Mossong et al. 2008;
+    # split of work and school contacts over the levels 1/2, 1/4, 1/8, 1/8: [A]
     [Settings.Household]
         [Settings.Household.contact_sampling_method]
                 type = "ContactparameterSampling"
@@ -271,6 +294,7 @@
                 [Settings.Workplace.contact_sampling_method.parameters]
                     contactparameter = 0.35
 
+    # [D] no global setting
     [Settings.GlobalSetting]
         [Settings.GlobalSetting.contact_sampling_method]
                 type = "ContactparameterSampling"

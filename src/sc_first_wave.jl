@@ -4,6 +4,7 @@
 
 export FIRST_WAVE_PARTS
 export scenario_first_wave
+export calibrate_first_wave
 
 
 """
@@ -86,21 +87,18 @@ const BASES = (:report, :onset)
 """
     FIRST_WAVE_PARTS
 
-Parts of `scenario_first_wave`, in the order they are run:
+Parts of `scenario_first_wave`, in the order they are run. All parts use the
+calibrated contact factors of the config (`first_wave_input`, see
+`calibrate_first_wave`):
 
-- `:calibration`: contact factors and their samples for the band (needed by all later parts)
 - `:final`: runs with the calibrated factors until `RKI_LAST_DAY`
 - `:projections`: return to the contacts of earlier phases after `RKI_CUTOFF`
 - `:counterfactuals`: contacts of a phase kept from the next phase on
-- `:band`: runs with the factor samples
+- `:band`: runs with the factor samples of the calibration
 - `:seeds_robustness`: all RKI cases infected before the first phase change as seeds
 - `:figures`: figures of all parts whose results exist (counterfactuals: with `:final`)
-
-The part `:generation_time` (not run by default) measures the generation time
-of the model (`generation_time_file`), which `:calibration` needs.
 """
 const FIRST_WAVE_PARTS = (
-    :calibration,
     :final,
     :projections,
     :counterfactuals,
@@ -120,11 +118,25 @@ function first_wave_file(part, kind = "", basis = nothing; ext = "csv")
     return "sc_first_wave_" * join(filter(!isempty, [part, kind, name]), "_") * ".$ext"
 end
 
+"""
+    first_wave_input(kind, configfile)
+
+File in `inputs/` with the calibrated contact factors (`kind = "factors"`) or
+their samples for the band (`kind = "band_factors"`) of a config, written by
+`calibrate_first_wave`.
+"""
+function first_wave_input(kind, configfile)
+    name = splitext(basename(configfile))[1]
+    return joinpath("inputs", "first_wave_$(kind)_$name.csv")
+end
+
 # AGS as integers (for CSV files)
 _ags_ids(d::DataFrame) = transform(d, :ags => ByRow(a -> a.id) => :ags)
 
-# contact factors of the calibration
-_read_factors(folder) = CSV.read(joinpath(folder, first_wave_file("calibration")), DataFrame).factor
+# calibrated contact factors of the config
+function _read_factors(s::RKISettings)
+    return CSV.read(first_wave_input("factors", s.configfile), DataFrame).factor
+end
 
 # runs (`label => daily`) in one file with the column `scenario`, and back
 function _write_labelled(file, runs)
@@ -176,8 +188,9 @@ function _rki_generation_time(s::RKISettings)
 end
 
 
-# calibration on the RKI cases by onset up to `RKI_CUTOFF` (runs until `RKI_SHORT_LAST_DAY`), and
-# `band_size` samples of the factors
+# calibration on the RKI cases by onset up to `RKI_CUTOFF` (runs until `RKI_SHORT_LAST_DAY`):
+# writes the diagnostics and the factors to `folder` and returns the factors and `band_size`
+# samples of them
 function _rki_calibration(folder, s::RKISettings; seeds, band_size)
     generation_time = CSV.read(generation_time_file(s.configfile), DataFrame).w
     short = with_settings(s, days = simulation_days(s.startdate, RKI_SHORT_LAST_DAY))
@@ -187,9 +200,16 @@ function _rki_calibration(folder, s::RKISettings; seeds, band_size)
         weeks = RKI_FIT_WEEKS,
         seeds = seeds)
 
-    file(kind) = joinpath(folder, first_wave_file("calibration", kind))
     phases = 1:length(cal.factors)
     factors = DataFrame(phase = phases, factor = cal.factors, converged = cal.converged)
+
+    # the band runs get seeds different from those of the other runs
+    S = curve_factor_samples(cal, n = band_size)
+    band_factors = hcat(
+        DataFrame(seed = 1000 .+ (1:size(S, 1))),
+        DataFrame(S, ["f$k" for k in 1:size(S, 2)]))
+
+    file(kind) = joinpath(folder, first_wave_file("calibration", kind))
     CSV.write(file(""), factors)
     CSV.write(file("rt"), cal.rt)
     CSV.write(file("targets"), cal.targets)
@@ -197,17 +217,14 @@ function _rki_calibration(folder, s::RKISettings; seeds, band_size)
     CSV.write(file("history"), cal.history)
     CSV.write(file("runs"), cal.runs)
     CSV.write(file("jacobian"), cal.jacobian)
-
-    # the band runs get seeds different from those of the other runs
-    S = curve_factor_samples(cal, n = band_size)
-    CSV.write(joinpath(folder, first_wave_file("band", "factors")),
-        hcat(DataFrame(seed = 1000 .+ (1:size(S, 1))), DataFrame(S, ["f$k" for k in 1:size(S, 2)])))
+    CSV.write(joinpath(folder, first_wave_file("band", "factors")), band_factors)
+    return (factors = factors, band_factors = band_factors)
 end
 
 
 # runs with the calibrated factors, and the expected seeded infections
 function _rki_final(folder, s::RKISettings; seeds)
-    f = _read_factors(folder)
+    f = _read_factors(s)
     out = run_rki_phase_sims(s, fill(f, length(seeds)), seeds,
         map_weeks = RKI_WEEKS,
         stage = "final")
@@ -219,7 +236,7 @@ end
 # returns to the contacts of the `phases` after `RKI_CUTOFF`, and to the contacts before the
 # measures (phase 1, until `RKI_SHORT_LAST_DAY` only)
 function _rki_projections(folder, s::RKISettings; seeds, phases)
-    f = _read_factors(folder)
+    f = _read_factors(s)
     short = with_settings(s, days = simulation_days(s.startdate, RKI_SHORT_LAST_DAY))
     none = run_rki_projections(short, f, seeds,
         start = RKI_CUTOFF,
@@ -238,7 +255,7 @@ end
 
 # contacts of phase k kept from the start of phase k + 1 on, for each k in `phases`
 function _rki_counterfactuals(folder, s::RKISettings; seeds, phases)
-    variants = phase_counterfactuals(_read_factors(folder),
+    variants = phase_counterfactuals(_read_factors(s),
         dates = s.dates,
         school_closure = s.school_closure,
         phases = phases)
@@ -260,7 +277,7 @@ end
 # runs with the factor samples (the first `runs`, all if `nothing`) and their 5-95% band; each run
 # is written to its own folder, so a restart skips the finished runs
 function _rki_band(folder, s::RKISettings; runs = nothing)
-    samples = CSV.read(joinpath(folder, first_wave_file("band", "factors")), DataFrame)
+    samples = CSV.read(first_wave_input("band_factors", s.configfile), DataFrame)
     if !isnothing(runs)
         samples = samples[1:runs, :]
     end
@@ -309,7 +326,7 @@ function _rki_seeds_robustness(folder, s::RKISettings; seeds)
     sched.count = round.(Int, sched.count .* scale)
     CSV.write(joinpath(folder, first_wave_file("seeds_robustness", "seeds")), _ags_ids(sched))
 
-    out = run_rki_phase_sims(s, fill(_read_factors(folder), length(seeds)), seeds,
+    out = run_rki_phase_sims(s, fill(_read_factors(s), length(seeds)), seeds,
         map_weeks = RKI_WEEKS,
         stage = "seeds until $(ddmm(switch))",
         heinsberg = false,
@@ -424,6 +441,63 @@ end
 ### SCENARIO
 ###
 
+# seeds of n runs (test: one run)
+_seeds(n, test) = test ? [0] : collect(0:(n - 1))
+
+# settings of the scenario; onsets more than the 99% quantile of the model's incubation period
+# after the report are treated as unknown
+function _first_wave_settings(configfile, population)
+    rki = load_rki_cases(max_onset_lag = model_incubation(configfile).max_lag)
+    return RKISettings(
+        rki = rki,
+        days = simulation_days(config_startdate(configfile), RKI_LAST_DAY),
+        configfile = configfile,
+        population = population)
+end
+
+
+"""
+    calibrate_first_wave(;
+        configfile = "models/DE_model_RKI_2020_short_gt.toml",
+        population = "DE",
+        folder = nothing,
+        generation_time = true,
+        test = false)
+
+Calibrates the contact factors of `scenario_first_wave` on the RKI cases by
+symptom onset up to `RKI_CUTOFF` (after measuring the generation time of the
+model, if `generation_time`). Writes the results to `folder`, and the factors for
+the scenario to `inputs/` (`first_wave_input`) if calibrated on Germany and not
+as a `test` (one run per evaluation).
+"""
+function calibrate_first_wave(;
+    configfile = "models/DE_model_RKI_2020_short_gt.toml",
+    population = "DE",
+    folder = nothing,
+    generation_time = true,
+    test = false)
+
+    # create result folder if not passed
+    isnothing(folder) ? folder = result_folder() : mkpath(folder)
+
+    s = _first_wave_settings(configfile, population)
+    if generation_time
+        _rki_generation_time(s)
+    end
+    cal = _rki_calibration(folder, s,
+        seeds = _seeds(2, test),
+        band_size = test ? 1 : RKI_BAND_SIZE)
+
+    # only a full calibration on Germany replaces the factors of the scenario
+    if population == "DE" && !test
+        CSV.write(first_wave_input("factors", configfile), cal.factors)
+        CSV.write(first_wave_input("band_factors", configfile), cal.band_factors)
+        printinfo("Contact factors written to $(first_wave_input("factors", configfile))")
+    end
+    return folder
+end
+
+
 """
     scenario_first_wave(;
         configfile = "models/DE_model_RKI_2020_short_gt.toml",
@@ -432,17 +506,16 @@ end
         parts = FIRST_WAVE_PARTS,
         test = false)
 
-Validation against the RKI cases of the first wave 2020: calibration of the
-contact phases on the cases by symptom onset up to `RKI_CUTOFF`, runs until
-`RKI_LAST_DAY`, phase projections, counterfactuals, a band of the calibration
-uncertainty, a robustness run, and all figures (see `FIRST_WAVE_PARTS`).
+First wave 2020 in Germany compared with the RKI cases: runs with the contact
+factors calibrated on the cases by symptom onset up to `RKI_CUTOFF` (see
+`calibrate_first_wave`) until `RKI_LAST_DAY`, phase projections,
+counterfactuals, a band of the calibration uncertainty, a robustness run, and
+all figures (see `FIRST_WAVE_PARTS`).
 
-All parts after the calibration read the factors from `folder`, so single
-`parts` can be run in a folder of an earlier run. For a state population (e.g.
-"SL"), all data are restricted to its counties. With `test`, every part runs
-only once (one seed, one variant).
-
-Needs the RKI case data at `RKI_CASES_FILE` (`data/` is not in the repository).
+Single `parts` can be run in a folder of an earlier run. For a state population
+(e.g. "SL"), all data are restricted to its counties. With `test`, every part
+runs only once (one seed, one variant). The RKI case data are downloaded on the
+first run (`obtain_rki_cases`).
 """
 function scenario_first_wave(;
     configfile = "models/DE_model_RKI_2020_short_gt.toml",
@@ -451,36 +524,21 @@ function scenario_first_wave(;
     parts = FIRST_WAVE_PARTS,
     test = false)
 
-    unknown = setdiff(parts, (:generation_time, FIRST_WAVE_PARTS...))
+    unknown = setdiff(parts, FIRST_WAVE_PARTS)
     isempty(unknown) || throw(ArgumentError("Unknown parts $unknown, see FIRST_WAVE_PARTS."))
 
     # create result folder if not passed
     isnothing(folder) ? folder = result_folder() : mkpath(folder)
 
-    # onsets more than the 99% quantile of the model's incubation period after the report are
-    # treated as unknown
-    rki = load_rki_cases(max_onset_lag = model_incubation(configfile).max_lag)
-    s = RKISettings(
-        rki = rki,
-        days = simulation_days(config_startdate(configfile), RKI_LAST_DAY),
-        configfile = configfile,
-        population = population)
+    s = _first_wave_settings(configfile, population)
 
-    # seeds of the runs (test: one run each)
-    seeds(n) = test ? [0] : collect(0:(n - 1))
     K = length(s.dates) + 1
 
-    if :generation_time in parts
-        _rki_generation_time(s)
-    end
-    if :calibration in parts
-        _rki_calibration(folder, s, seeds = seeds(2), band_size = test ? 1 : RKI_BAND_SIZE)
-    end
     if :final in parts
-        _rki_final(folder, s, seeds = seeds(3))
+        _rki_final(folder, s, seeds = _seeds(3, test))
     end
     if :projections in parts
-        _rki_projections(folder, s, seeds = seeds(2), phases = test ? [K] : 2:K)
+        _rki_projections(folder, s, seeds = _seeds(2, test), phases = test ? [K] : 2:K)
     end
     if :counterfactuals in parts
         _rki_counterfactuals(folder, s, seeds = [0], phases = test ? [K - 1] : 1:(K - 1))
@@ -489,7 +547,7 @@ function scenario_first_wave(;
         _rki_band(folder, s, runs = test ? 1 : nothing)
     end
     if :seeds_robustness in parts
-        _rki_seeds_robustness(folder, s, seeds = seeds(3))
+        _rki_seeds_robustness(folder, s, seeds = _seeds(3, test))
     end
     if :figures in parts
         _rki_figures(folder, s)

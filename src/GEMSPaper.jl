@@ -11,8 +11,10 @@ using Statistics
 using StatsBase
 using Revise
 using Reexport
+import Downloads
 import LinearAlgebra
 import Random
+import SHA
 import TOML
 
 @reexport using GEMS
@@ -25,7 +27,6 @@ export map_dims
 export map_titlefontsize
 export map_legendfontsize
 export runall
-export run_first_wave
 
 # COMMON FUNCTIONS
 """
@@ -171,35 +172,10 @@ function runall(;
         folder = folder
     )
 
-end
-
-
-# RUN FIRST WAVE SCENARIO
-"""
-    run_first_wave(;
-        configfile = "models/DE_model_RKI_2020_short_gt.toml",
-        population = "DE",
-        folder = nothing,
-        parts = FIRST_WAVE_PARTS)
-
-Executes the first wave 2020 scenario, compared with the RKI data (not part
-of `runall`). To continue an earlier run or to run single `parts`, pass its `folder`.
-"""
-function run_first_wave(;
-        configfile = "models/DE_model_RKI_2020_short_gt.toml",
-        population = "DE",
-        folder = nothing,
-        parts = FIRST_WAVE_PARTS)
-
-    # create result folder
-    isnothing(folder) ? folder = result_folder() : nothing
-
     printinfo("### RUNNING FIRST WAVE SCENARIO")
     scenario_first_wave(
-        configfile = configfile,
         population = population,
-        folder = folder,
-        parts = parts
+        folder = folder
     )
 
 end

@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "ba261eb7bce8aac7f644694f0f492012a99f31ec"
+project_hash = "984c058d37339b2a6b309be7e837c067deda2d50"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -775,7 +775,7 @@ uuid = "be47d99e-7859-414d-a902-bf4cb6b83c8a"
 version = "1.0.1"
 
 [[deps.GEMSPaper]]
-deps = ["CSV", "DataFrames", "Dates", "GEMS", "JLD2", "Measures", "Plots", "Proj", "Reexport", "Revise", "Statistics", "StatsBase"]
+deps = ["CSV", "DataFrames", "Dates", "GEMS", "JLD2", "LinearAlgebra", "Measures", "Plots", "Proj", "Random", "Reexport", "Revise", "Statistics", "StatsBase", "TOML"]
 path = "."
 uuid = "9e58e00f-e0e9-44ea-ab73-cbbd8c14c821"
 version = "0.1.0"

@@ -8,10 +8,48 @@ export load_rki_cases
 """
     RKI_CASES_FILE
 
-Location of the RKI case data (`Aktuell_Deutschland_SarsCov2_Infektionen.csv` from
-https://github.com/robert-koch-institut/SARS-CoV-2-Infektionen_in_Deutschland).
+Location of the RKI case data (`Aktuell_Deutschland_SarsCov2_Infektionen.csv`).
+Downloaded from `RKI_CASES_URL` if it does not exist.
 """
 const RKI_CASES_FILE = joinpath("data", "Aktuell_Deutschland_SarsCov2_Infektionen.csv")
+
+"""
+    RKI_CASES_URL
+
+Version of the RKI case data used in the paper (14.10.2026): Robert Koch-Institut
+(2026). SARS-CoV-2 Infektionen in Deutschland [Data set]. Zenodo.
+https://doi.org/10.5281/zenodo.23357370. License: CC BY 4.0.
+"""
+const RKI_CASES_URL = "https://zenodo.org/records/23357370/files/" *
+    "Aktuell_Deutschland_SarsCov2_Infektionen.csv"
+
+"""
+    RKI_CASES_SHA256
+
+SHA-256 checksum of the file at `RKI_CASES_URL`.
+"""
+const RKI_CASES_SHA256 = "8ad25a5f0ac6ef5eaaac600a5b3a01140bca46752edb1bee4342b94bd961a3e4"
+
+
+"""
+    obtain_rki_cases(file = RKI_CASES_FILE)
+
+Downloads the RKI case data from `RKI_CASES_URL` (about 400 MB) if `file` does
+not exist, and checks that it is the version used in the paper.
+"""
+function obtain_rki_cases(file = RKI_CASES_FILE)
+    if !isfile(file)
+        printinfo("Downloading the RKI case data (about 400 MB) from $RKI_CASES_URL")
+        mkpath(dirname(file))
+        Downloads.download(RKI_CASES_URL, file)
+    end
+    checksum = bytes2hex(open(SHA.sha256, file))
+    if checksum != RKI_CASES_SHA256
+        @warn "$file is not the version of the RKI case data used in the paper " *
+            "($RKI_CASES_URL)."
+    end
+    return file
+end
 
 """
     HEINSBERG
@@ -73,7 +111,7 @@ end
         max_onset_lead = 21,
         max_onset_lag = nothing)
 
-Loads the RKI case data. Columns:
+Loads the RKI case data (downloaded if needed, see `obtain_rki_cases`). Columns:
 
 | Name      | Description                                        |
 | :-------- | :------------------------------------------------- |
@@ -95,7 +133,12 @@ function load_rki_cases(;
     max_onset_lead = 21,
     max_onset_lag = nothing)
 
-    isfile(file) || throw(ArgumentError("RKI case data not found at $file."))
+    # the default file is downloaded if needed and checked against the version of the paper
+    if file == RKI_CASES_FILE
+        obtain_rki_cases(file)
+    elseif !isfile(file)
+        throw(ArgumentError("RKI case data not found at $file."))
+    end
 
     df = CSV.read(file, DataFrame,
         select = [:IdLandkreis, :Meldedatum, :Refdatum, :IstErkrankungsbeginn,
