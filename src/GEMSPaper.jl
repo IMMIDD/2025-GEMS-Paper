@@ -11,6 +11,11 @@ using Statistics
 using StatsBase
 using Revise
 using Reexport
+import Downloads
+import LinearAlgebra
+import Random
+import SHA
+import TOML
 
 @reexport using GEMS
 
@@ -63,16 +68,24 @@ include("settings.jl")
 include("mobility.jl")
 include("contacts.jl")
 include("benchmarking.jl")
-include("rki_data.jl")
-include("rki_seeding.jl")
-include("rki_imports.jl")
+
+# INCLUDE RKI DATA AND MODEL (for the first wave scenario)
+include("first_wave/rki_data.jl")
+include("first_wave/rki_imports.jl")
+include("first_wave/rki_seeding.jl")
+include("first_wave/rki_phases.jl")
+include("first_wave/rki_reproduction.jl")
+include("first_wave/rki_simulation.jl")
+include("first_wave/rki_comparison.jl")
+include("first_wave/rki_calibration.jl")
+include("first_wave/rki_figures.jl")
 
 # INCLUDE SCENARIOS
 include("sc_outbreak.jl")
 include("sc_self_isolation.jl")
 include("sc_sweeping.jl")
 include("sc_testing.jl")
-include("sc_rki_validation.jl")
+include("sc_first_wave.jl")
 
 
 
@@ -156,6 +169,12 @@ function runall(;
 
     printinfo("### RUNNING PARAMETER SWEEPS")
     scenario_sweeping(
+        folder = folder
+    )
+
+    printinfo("### RUNNING FIRST WAVE SCENARIO")
+    scenario_first_wave(
+        population = population,
         folder = folder
     )
 
