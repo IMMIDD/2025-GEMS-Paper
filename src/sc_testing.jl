@@ -79,6 +79,8 @@ end
     run_testing_sims(;
         configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
         population = "DE",
+        start_condition = RegionalSeeds(seeds = Dict(05370008=>10)), # 10 infections in Heinsberg
+        stop_criterion = TimesUp(limit = 1095),
         isolation_duration = 14,
         sensitivity = .8,
         specificity = .99)
@@ -90,6 +92,9 @@ Returns the three `ResultData` objects and the last `Simulation` object (for any
 function run_testing_sims(;
     configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
     population = "DE",
+
+    start_condition = RegionalSeeds(seeds = Dict(05370008=>10)), # 10 infections in Heinsberg
+    stop_criterion = TimesUp(limit = 1095),
     
     isolation_duration = 14,
     sensitivity = .8,
@@ -100,7 +105,13 @@ function run_testing_sims(;
     ### ISOLATION ONLY SCENARIO
     ###
 
-    sim = Simulation(configfile=configfile, population=population, label = "Isolation Only", seed = 0)
+    sim = Simulation(
+        label = "Isolation Only",
+        configfile = configfile,
+        population = population, 
+        seed = 0,
+        start_condition = start_condition,
+        stop_criterion = stop_criterion)
 
     # STRATEGY & MEASURE DEFINITION
     isolation_only = IStrategy("Self Isolation", sim)
@@ -117,7 +128,13 @@ function run_testing_sims(;
     ### ISOLATION & TESTING SCENARIO
     ###
 
-    sim = Simulation(configfile=configfile, population=population, label = "Isolation & Testing", seed = 1)
+    sim = Simulation(
+        label = "Isolation & Testing",
+        configfile = configfile,
+        population=population, 
+        seed = 1,
+        start_condition = start_condition,
+        stop_criterion = stop_criterion)
 
 
     # test type definition
@@ -142,7 +159,13 @@ function run_testing_sims(;
     ### TRACING & TESTING SCENARIO
     ###
 
-    sim = Simulation(configfile=configfile, population=population, label = "Isolation, Testing & Tracing", seed = 2)
+    sim = Simulation(
+        label = "Isolation, Testing & Tracing",
+        configfile = configfile,
+        population = population, 
+        seed = 2,
+        start_condition = start_condition,
+        stop_criterion = stop_criterion)
 
     # test type definition
     antigen_test = TestType("Antigen Test", pathogen(sim), sim,
