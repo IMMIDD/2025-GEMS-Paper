@@ -1,28 +1,28 @@
-# COVID-19 (wild type, 2020) for the first wave scenario (sc_first_wave.jl).
-# Disease progression as in the README of the paper (Sec. 4.4, 4.5), except the
-# infectiousness: GEMS v1.0.1 keeps agents infectious from infectiousness onset to recovery;
+# COVID-19 (wild type, 2020).
+# Infectiousness: GEMS v1.0.1 keeps agents infectious from infectiousness onset to recovery;
 # the InfectiousnessProfile transmission function (src/infectiousness_profile.jl)
 # scales the transmission probability by an infectiousness profile over the days since
-# infectiousness onset. Recovery and the clinical durations only describe the course of
-# disease (recovery = RNA clearance), not how long agents transmit.
+# infectiousness onset; GEMS only lets agents transmit until recovery (= RNA clearance),
+# from severeness onset on only in their household, and not while hospitalized.
 #
-# Source tags (as in the README): [L] literature, [C] calibrated, [A] assumption,
+# Source tags: [L] literature, [C] calibrated, [A] assumption,
 # [D] GEMS default, [I] illustrative / scenario setting.
 # All durations are Poisson distributed (days); GEMS adds 1 day to the draw of
 # exposure -> infectiousness onset.
 #
-# References (* = values not yet verified against the source, see README V2-V4):
-# - Ashcroft et al. 2020*, Swiss Med Wkly 150:w20336, Table 1, doi:10.4414/smw.2020.20336
+# References:
+# - Ashcroft et al. 2020, Swiss Med Wkly 150:w20336, Table 1, doi:10.4414/smw.2020.20336
 # - Byambasuren et al. 2020, JAMMI 5(4):223-234, doi:10.3138/jammi-2020-0030
 # - Byrne et al. 2020, BMJ Open 10(8):e039856, doi:10.1136/bmjopen-2020-039856
-# - He et al. 2020*, Nat Med 26:672-675, doi:10.1038/s41591-020-0869-5; author correction
+# - He et al. 2020, Nat Med 26:672-675, doi:10.1038/s41591-020-0869-5; author correction
 #   Nat Med 26:1491-1493, doi:10.1038/s41591-020-1016-z
-# - Karagiannidis et al. 2020*, Lancet Respir Med 8(9):853-862, doi:10.1016/S2213-2600(20)30316-7
+# - Hu et al. 2020, Sci China Life Sci 63(5):706-711, doi:10.1007/s11427-020-1661-4
+# - Karagiannidis et al. 2020, Lancet Respir Med 8(9):853-862, doi:10.1016/S2213-2600(20)30316-7
 # - Liu et al. 2020, J Travel Med 27(2):taaa021, doi:10.1093/jtm/taaa021
-# - McAloon et al. 2020*, BMJ Open 10(8):e039652, doi:10.1136/bmjopen-2020-039652
+# - McAloon et al. 2020, BMJ Open 10(8):e039652, doi:10.1136/bmjopen-2020-039652
 # - Mossong et al. 2008, PLoS Med 5(3):e74, doi:10.1371/journal.pmed.0050074
-# - Schilling et al. 2020*, Journal of Health Monitoring 5(S11), doi:10.25646/7169
-# - Verity et al. 2020*, Lancet Infect Dis 20(6):669-677, doi:10.1016/S1473-3099(20)30243-7
+# - Schilling et al. 2020, Journal of Health Monitoring 5(S11), doi:10.25646/7169
+# - Verity et al. 2020, Lancet Infect Dis 20(6):669-677, doi:10.1016/S1473-3099(20)30243-7
 [Simulation]
 
     # [D] daily ticks
@@ -86,11 +86,10 @@
                 [Pathogens.Covid19.progressions.Asymptomatic.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
                     parameters = [0.8]
-                # [A] as symptomatic: pre-symptomatic period + symptom onset -> first of two
-                # negative RT-PCR tests = 4.0 + 13.4 (Byrne et al. 2020)
+                # [L] Hu et al. 2020: communicable period of asymptomatic cases, median 9.5 d
                 [Pathogens.Covid19.progressions.Asymptomatic.infectiousness_onset_to_recovery]
                     distribution = "Poisson"
-                    parameters = [17.4]
+                    parameters = [9.5]
 
             # SYMPTOMATIC PROGRESSION
             [Pathogens.Covid19.progressions.Symptomatic]
@@ -100,8 +99,7 @@
                     distribution = "Poisson"
                     parameters = [0.8]
                 # [L] adapted: 5% quantile of the infectiousness profile, 3.7 d before symptom onset
-                # (He et al. 2020, corrected by Ashcroft et al. 2020), rounded up to whole days;
-                # within "approximately 2 days (range <1-4)" (Byrne et al. 2020)
+                # (He et al. 2020, corrected by Ashcroft et al. 2020), rounded up to whole days
                 [Pathogens.Covid19.progressions.Symptomatic.infectiousness_onset_to_symptom_onset]
                     distribution = "Poisson"
                     parameters = [4.0]
@@ -144,16 +142,16 @@
                 [Pathogens.Covid19.progressions.Hospitalized.infectiousness_onset_to_symptom_onset]
                     distribution = "Poisson"
                     parameters = [4.0]
-                # [A] bedridden 2 d after symptom onset
+                # [A] bedridden 2 d after symptom onset, half of the time to hospital admission
                 [Pathogens.Covid19.progressions.Hospitalized.symptom_onset_to_severeness_onset]
                     distribution = "Poisson"
                     parameters = [2.0]
-                # [L] adapted: symptom onset -> hospital admission, median 4 d (Schilling et al. 2020*),
+                # [L] adapted: symptom onset -> hospital admission, median 4 d (Schilling et al. 2020),
                 # minus 2 d at home (Poisson(2) + Poisson(2) = Poisson(4))
                 [Pathogens.Covid19.progressions.Hospitalized.severeness_onset_to_hospital_admission]
                     distribution = "Poisson"
                     parameters = [2.0]
-                # [L] Schilling et al. 2020*: hospital stay without ICU, median 8 d
+                # [L] Schilling et al. 2020: hospital stay without ICU, median 8 d
                 [Pathogens.Covid19.progressions.Hospitalized.hospital_admission_to_hospital_discharge]
                     distribution = "Poisson"
                     parameters = [8.0]
@@ -161,14 +159,14 @@
                 [Pathogens.Covid19.progressions.Hospitalized.hospital_discharge_to_severeness_offset]
                     distribution = "Poisson"
                     parameters = [3.0]
-                # [A] 4-day convalescence
+                # [A] 4-day convalescence between the end of severe illness and recovery
                 [Pathogens.Covid19.progressions.Hospitalized.severeness_offset_to_recovery]
                     distribution = "Poisson"
                     parameters = [4.0]
 
             # CRITICAL PROGRESSION
             [Pathogens.Covid19.progressions.Critical]
-                # [L] adapted: mortality of invasively ventilated patients (Karagiannidis et al. 2020*)
+                # [L] adapted: mortality of invasively ventilated patients (Karagiannidis et al. 2020)
                 death_probability = 0.53
 
                 # [L] adapted: as symptomatic
@@ -184,35 +182,35 @@
                     distribution = "Poisson"
                     parameters = [2.0]
                 # [L] adapted: symptom onset -> hospital admission of ICU patients, median 5 d
-                # (Schilling et al. 2020*), minus 2 d at home (Poisson(2) + Poisson(3) = Poisson(5))
+                # (Schilling et al. 2020), minus 2 d at home (Poisson(2) + Poisson(3) = Poisson(5))
                 [Pathogens.Covid19.progressions.Critical.severeness_onset_to_hospital_admission]
                     distribution = "Poisson"
                     parameters = [3.0]
-                # [L] Schilling et al. 2020*: hospital -> ICU admission, median 0 d
+                # [L] Schilling et al. 2020: hospital -> ICU admission, median 0 d
                 [Pathogens.Covid19.progressions.Critical.hospital_admission_to_icu_admission]
                     distribution = "Poisson"
                     parameters = [0.0]
 
                 # RECOVERY PATHWAY
-                # [L] Schilling et al. 2020*: ICU stay of survivors, median 11 d
+                # [L] Schilling et al. 2020: ICU stay of survivors, median 11 d
                 [Pathogens.Covid19.progressions.Critical.icu_admission_to_icu_discharge]
                     distribution = "Poisson"
                     parameters = [11.0]
-                # [L] adapted: hospital stay of ICU patients 14 d - ICU stay 11 d (Schilling et al. 2020*)
+                # [L] adapted: hospital stay of ICU patients 14 d - ICU stay 11 d (Schilling et al. 2020)
                 [Pathogens.Covid19.progressions.Critical.icu_discharge_to_hospital_discharge]
                     distribution = "Poisson"
                     parameters = [3.0]
-                # [A] severely ill at home for 3 days after discharge
+                # [A] discharged before the severe phase is over, severely ill at home for 3 days
                 [Pathogens.Covid19.progressions.Critical.hospital_discharge_to_severeness_offset]
                     distribution = "Poisson"
                     parameters = [3.0]
-                # [A] 4-day convalescence
+                # [A] 4-day convalescence between the end of severe illness and recovery
                 [Pathogens.Covid19.progressions.Critical.severeness_offset_to_recovery]
                     distribution = "Poisson"
                     parameters = [4.0]
 
                 # DEATH PATHWAY
-                # [L] Schilling et al. 2020*: ICU stay of deceased, median 8 d
+                # [L] Schilling et al. 2020: ICU stay of deceased, median 8 d
                 [Pathogens.Covid19.progressions.Critical.icu_admission_to_death]
                     distribution = "Poisson"
                     parameters = [8.0]
@@ -224,14 +222,37 @@
             [Pathogens.Covid19.progression_assignment.parameters]
                 age_groups = ["-39", "40-59", "60-79", "80-"]
                 progression_categories = ["Asymptomatic", "Symptomatic", "Severe", "Hospitalized", "Critical"]
-                # Asymptomatic: [L] Byambasuren et al. 2020 (0.17)
-                # Severe = IHR, Critical = IFR / 0.53, Hospitalized = IHR - Critical:
-                # [L] adapted: Verity et al. 2020* (IHR, IFR), population-weighted means of the
-                # 10-year bins per age group (README, Sec. 4.4); Symptomatic: remainder
+                # 1) IHR, IFR per age group: [L] adapted: Verity et al. 2020 (IHR: Table 3,
+                # IFR: Table 1), means of the 10-year bins weighted by the GEMS DE population (n),
+                # weight = n / sum of n in the group (rounded); sum: weighted sum of IHR, IFR
+                #   group  bin    IHR %    IFR %     n (GEMS DE)  weight
+                #   -39    0-9     0.00    0.00161    8,615,732   0.2289
+                #          10-19   0.0408  0.00695    7,215,600   0.1917
+                #          20-29   1.04    0.0309    10,607,181   0.2819
+                #          30-39   3.43    0.0844    11,194,255   0.2975
+                #          sum     1.3212  0.0355    37,632,768   1
+                #   40-59  40-49   4.25    0.161     10,601,426   0.4434
+                #          50-59   8.16    0.595     13,308,631   0.5566
+                #          sum     6.4264  0.4026    23,910,057   1
+                #   60-79  60-69  11.8     1.93      10,119,814   0.5716
+                #          70-79  16.6     4.28       7,584,813   0.4284
+                #          sum    13.8564  2.9368    17,704,627   1
+                #   80-    80-    18.4     7.80       5,316,274   1
+                # 2) matrix columns (rounded to 6 decimals):
+                #   Asymptomatic = 0.17: [L] Byambasuren et al. 2020
+                #   Symptomatic  = 1 - Asymptomatic - Severe - Hospitalized - Critical
+                #   Severe       = IHR: [A] as many severely ill at home as in hospital
+                #   Hospitalized = IHR - Critical
+                #   Critical     = IFR / 0.53 (death probability of Critical)
+                #   group  IHR       IFR       Asympt.  Sympt.    Severe    Hosp.     Critical
+                #   -39    0.013212  0.000355  0.17     0.803576  0.013212  0.012542  0.000670
+                #   40-59  0.064264  0.004026  0.17     0.701472  0.064264  0.056668  0.007596
+                #   60-79  0.138564  0.029368  0.17     0.552872  0.138564  0.083153  0.055411
+                #   80-    0.184000  0.078000  0.17     0.462000  0.184000  0.036830  0.147170
                 stratification_matrix = [
-                    [0.17, 0.803818, 0.013091, 0.012426, 0.000665],
-                    [0.17, 0.700496, 0.064752, 0.057054, 0.007698],
-                    [0.17, 0.554284, 0.137858, 0.083099, 0.054759],
+                    [0.17, 0.803576, 0.013212, 0.012542, 0.000670],
+                    [0.17, 0.701472, 0.064264, 0.056668, 0.007596],
+                    [0.17, 0.552872, 0.138564, 0.083153, 0.055411],
                     [0.17, 0.462000, 0.184000, 0.036830, 0.147170]
                 ]
 
@@ -239,7 +260,12 @@
 
     # daily contacts, drawn uniformly from the members of the setting:
     # household, office/workplace total 2.8, school total 1.8, municipality: [L] Mossong et al. 2008;
-    # split of work and school contacts over the levels 1/2, 1/4, 1/8, 1/8: [A]
+    # [A] work and school contacts split over the setting levels, weighted towards the most
+    # immediate level (most contacts with the own class / office); each level gets half of
+    # the one below, the two outermost levels the same:
+    #   work:   Office 1/2 (1.4), Department 1/4 (0.7), Workplace 1/8 (0.35), WorkplaceSite 1/8 (0.35)
+    #   school: SchoolClass 1/2 (0.9), SchoolYear 1/4 (0.45), School 1/8 (0.225),
+    #           SchoolComplex 1/8 (0.225)
     [Settings.Household]
         [Settings.Household.contact_sampling_method]
                 type = "ContactparameterSampling"
