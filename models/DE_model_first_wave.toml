@@ -1,8 +1,10 @@
 # COVID-19 (wild type, 2020) for the first wave scenario (sc_first_wave.jl).
 # Disease progression as in the README of the paper (Sec. 4.4, 4.5), except the
-# infectious periods: GEMS v1.0.1 has constant infectiousness until recovery, so
-# infectiousness ends with the end of culturable virus shedding instead of RNA
-# clearance (Byrne et al. 2020: 13.4 d from onset to two negative RT-PCR tests).
+# infectiousness: GEMS v1.0.1 keeps agents infectious from infectiousness onset to recovery;
+# the InfectiousnessProfile transmission function (src/infectiousness_profile.jl)
+# scales the transmission probability by an infectiousness profile over the days since
+# infectiousness onset. Recovery and the clinical durations only describe the course of
+# disease (recovery = RNA clearance), not how long agents transmit.
 #
 # Source tags (as in the README): [L] literature, [C] calibrated, [A] assumption,
 # [D] GEMS default, [I] illustrative / scenario setting.
@@ -10,17 +12,17 @@
 # exposure -> infectiousness onset.
 #
 # References (* = values not yet verified against the source, see README V2-V4):
+# - Ashcroft et al. 2020*, Swiss Med Wkly 150:w20336, Table 1, doi:10.4414/smw.2020.20336
 # - Byambasuren et al. 2020, JAMMI 5(4):223-234, doi:10.3138/jammi-2020-0030
 # - Byrne et al. 2020, BMJ Open 10(8):e039856, doi:10.1136/bmjopen-2020-039856
-# - Cheng et al. 2020, JAMA Intern Med 180(9):1156-1163, doi:10.1001/jamainternmed.2020.2020
+# - He et al. 2020*, Nat Med 26:672-675, doi:10.1038/s41591-020-0869-5; author correction
+#   Nat Med 26:1491-1493, doi:10.1038/s41591-020-1016-z
 # - Karagiannidis et al. 2020*, Lancet Respir Med 8(9):853-862, doi:10.1016/S2213-2600(20)30316-7
 # - Liu et al. 2020, J Travel Med 27(2):taaa021, doi:10.1093/jtm/taaa021
+# - McAloon et al. 2020*, BMJ Open 10(8):e039652, doi:10.1136/bmjopen-2020-039652
 # - Mossong et al. 2008, PLoS Med 5(3):e74, doi:10.1371/journal.pmed.0050074
-# - Puhach, Meyer & Eckerle 2023, Nat Rev Microbiol 21:147-161, doi:10.1038/s41579-022-00822-w
-# - Schilling et al. 2020*, Journal of Health Monitoring 5(S11), Table 5, doi:10.25646/7169
-# - Verity et al. 2020*, Lancet Infect Dis 20(6):669-677, Tables 1 and 3, doi:10.1016/S1473-3099(20)30243-7
-# - Woelfel et al. 2020, Nature 581:465-469, doi:10.1038/s41586-020-2196-x
-# - Wu et al. 2022, JAMA Netw Open 5(8):e2228008, doi:10.1001/jamanetworkopen.2022.28008
+# - Schilling et al. 2020*, Journal of Health Monitoring 5(S11), doi:10.25646/7169
+# - Verity et al. 2020*, Lancet Infect Dis 20(6):669-677, doi:10.1016/S1473-3099(20)30243-7
 [Simulation]
 
     # [D] daily ticks
@@ -57,59 +59,72 @@
 
     [Pathogens.Covid19]
         [Pathogens.Covid19.transmission_function]
-            # [D] constant per-contact transmission probability
-            type = "ConstantTransmissionRate"
+            # per-contact transmission probability on day tau since infectiousness onset
+            # = transmission_scale * profile mass on day tau
+            type = "InfectiousnessProfile"
             [Pathogens.Covid19.transmission_function.parameters]
-                # [C] fitted to R0 = 3.28 [L] Liu et al. 2020, as in fit_r0.jl (mean effective R
-                # of ticks 1-10, 10 runs), on Rhineland-Palatinate (contact structure closest to DE)
-                transmission_rate = 0.06541
+                # [C] sum of the daily per-contact transmission probabilities over the infection
+                # (the profile sums to 1); fitted to R0 = 3.28 [L] Liu et al. 2020 in
+                # calibrate_first_wave.jl, as in fit_r0.jl (mean effective R of ticks 1-10,
+                # 10 runs), on Rhineland-Palatinate (contact structure closest to DE);
+                # start value 7 x 0.06541 (fitted rate of the constant 7-day infectious period)
+                transmission_scale = 0.46
+                # [L] adapted: infectiousness profile relative to symptom onset, shifted gamma with
+                # shape 97.1875, rate 3.71875, shift 25.625 d (He et al. 2020, corrected by
+                # Ashcroft et al. 2020, Table 1); parameters = shape, scale = 1 / rate;
+                # offset = shift - pre-symptomatic period = 25.625 - 4.0; profile mass before
+                # infectiousness onset (4%) dropped, rest normalized to 1
+                distribution = "Gamma"
+                parameters = [97.1875, 0.26891]
+                offset = 21.625
 
         [Pathogens.Covid19.progressions]
 
             # ASYMPTOMATIC PROGRESSION
             [Pathogens.Covid19.progressions.Asymptomatic]
-                # [L] adapted: incubation 6.65 (Wu et al. 2022, wild type) - presymptomatic 2.0
-                # (Byrne et al. 2020) - 1 (GEMS offset)
+                # [L] adapted: as symptomatic
                 [Pathogens.Covid19.progressions.Asymptomatic.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
-                    parameters = [3.65]
-                # [A] same infectious period as symptomatic cases (2.0 + 5)
+                    parameters = [0.8]
+                # [A] as symptomatic: pre-symptomatic period + symptom onset -> first of two
+                # negative RT-PCR tests = 4.0 + 13.4 (Byrne et al. 2020)
                 [Pathogens.Covid19.progressions.Asymptomatic.infectiousness_onset_to_recovery]
                     distribution = "Poisson"
-                    parameters = [7.0]
+                    parameters = [17.4]
 
             # SYMPTOMATIC PROGRESSION
             [Pathogens.Covid19.progressions.Symptomatic]
-                # [L] adapted: incubation 6.65 (Wu et al. 2022) - 2.0 (Byrne et al. 2020) - 1
+                # [L] adapted: incubation - pre-symptomatic period - GEMS offset
+                # = 5.8 (McAloon et al. 2020, mean) - 4.0 - 1.0
                 [Pathogens.Covid19.progressions.Symptomatic.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
-                    parameters = [3.65]
-                # [L] Byrne et al. 2020: infectious period before symptom onset
+                    parameters = [0.8]
+                # [L] adapted: 5% quantile of the infectiousness profile, 3.7 d before symptom onset
+                # (He et al. 2020, corrected by Ashcroft et al. 2020), rounded up to whole days;
+                # within "approximately 2 days (range <1-4)" (Byrne et al. 2020)
                 [Pathogens.Covid19.progressions.Symptomatic.infectiousness_onset_to_symptom_onset]
                     distribution = "Poisson"
-                    parameters = [2.0]
-                # [L] adapted: 95% quantile of Poisson(5) is 9 d = isolation success < 5% at 9.8 d
-                # after onset (Woelfel et al. 2020, Fig. 1f), 8-10 d limit of virus isolation
-                # (Puhach et al. 2023, Fig. 2); no secondary cases among contacts first exposed
-                # >= 6 d after onset (Cheng et al. 2020)
+                    parameters = [4.0]
+                # [L] Byrne et al. 2020: symptom onset -> first of two negative RT-PCR tests,
+                # mean 13.4 d (meta-analysis of 15 studies)
                 [Pathogens.Covid19.progressions.Symptomatic.symptom_onset_to_recovery]
                     distribution = "Poisson"
-                    parameters = [5.0]
+                    parameters = [13.4]
 
             # SEVERE PROGRESSION
             [Pathogens.Covid19.progressions.Severe]
                 # [L] adapted: as symptomatic
                 [Pathogens.Covid19.progressions.Severe.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
-                    parameters = [3.65]
-                # [L] Byrne et al. 2020
+                    parameters = [0.8]
+                # [L] adapted: as symptomatic
                 [Pathogens.Covid19.progressions.Severe.infectiousness_onset_to_symptom_onset]
                     distribution = "Poisson"
-                    parameters = [2.0]
-                # [L] Schilling et al. 2020*: symptom onset -> hospital admission, median 4 d
+                    parameters = [4.0]
+                # [A] as hospitalized: bedridden 2 d after symptom onset
                 [Pathogens.Covid19.progressions.Severe.symptom_onset_to_severeness_onset]
                     distribution = "Poisson"
-                    parameters = [4.0]
+                    parameters = [2.0]
                 # [A] same as hospital stay without ICU
                 [Pathogens.Covid19.progressions.Severe.severeness_onset_to_severeness_offset]
                     distribution = "Poisson"
@@ -124,19 +139,20 @@
                 # [L] adapted: as symptomatic
                 [Pathogens.Covid19.progressions.Hospitalized.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
-                    parameters = [3.65]
-                # [L] Byrne et al. 2020
+                    parameters = [0.8]
+                # [L] adapted: as symptomatic
                 [Pathogens.Covid19.progressions.Hospitalized.infectiousness_onset_to_symptom_onset]
                     distribution = "Poisson"
-                    parameters = [2.0]
-                # [L] Schilling et al. 2020*: symptom onset -> hospital admission, median 4 d
+                    parameters = [4.0]
+                # [A] bedridden 2 d after symptom onset
                 [Pathogens.Covid19.progressions.Hospitalized.symptom_onset_to_severeness_onset]
                     distribution = "Poisson"
-                    parameters = [4.0]
-                # [A] admission at the onset of severe illness
+                    parameters = [2.0]
+                # [L] adapted: symptom onset -> hospital admission, median 4 d (Schilling et al. 2020*),
+                # minus 2 d at home (Poisson(2) + Poisson(2) = Poisson(4))
                 [Pathogens.Covid19.progressions.Hospitalized.severeness_onset_to_hospital_admission]
                     distribution = "Poisson"
-                    parameters = [0.0]
+                    parameters = [2.0]
                 # [L] Schilling et al. 2020*: hospital stay without ICU, median 8 d
                 [Pathogens.Covid19.progressions.Hospitalized.hospital_admission_to_hospital_discharge]
                     distribution = "Poisson"
@@ -158,20 +174,20 @@
                 # [L] adapted: as symptomatic
                 [Pathogens.Covid19.progressions.Critical.exposure_to_infectiousness_onset]
                     distribution = "Poisson"
-                    parameters = [3.65]
-                # [L] Byrne et al. 2020
+                    parameters = [0.8]
+                # [L] adapted: as symptomatic
                 [Pathogens.Covid19.progressions.Critical.infectiousness_onset_to_symptom_onset]
                     distribution = "Poisson"
-                    parameters = [2.0]
-                # [L] Schilling et al. 2020*: symptom onset -> hospital admission of ICU patients,
-                # median 5 d
+                    parameters = [4.0]
+                # [A] bedridden 2 d after symptom onset
                 [Pathogens.Covid19.progressions.Critical.symptom_onset_to_severeness_onset]
                     distribution = "Poisson"
-                    parameters = [5.0]
-                # [A] admission at the onset of severe illness
+                    parameters = [2.0]
+                # [L] adapted: symptom onset -> hospital admission of ICU patients, median 5 d
+                # (Schilling et al. 2020*), minus 2 d at home (Poisson(2) + Poisson(3) = Poisson(5))
                 [Pathogens.Covid19.progressions.Critical.severeness_onset_to_hospital_admission]
                     distribution = "Poisson"
-                    parameters = [0.0]
+                    parameters = [3.0]
                 # [L] Schilling et al. 2020*: hospital -> ICU admission, median 0 d
                 [Pathogens.Covid19.progressions.Critical.hospital_admission_to_icu_admission]
                     distribution = "Poisson"

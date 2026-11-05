@@ -1,7 +1,7 @@
 using GEMSPaper, DataFrames, Statistics, TOML
 
 # Calibration of the first wave scenario (not part of runall()):
-# 1. transmission rate for R0 = 3.28, as in fit_r0.jl
+# 1. transmission rate (or scale) for R0 = 3.28, as in fit_r0.jl
 # 2. generation time of the model and contact factors of the phases (written to inputs/)
 
 # Global settings
@@ -29,7 +29,7 @@ function get_avg_r0(configfile, tr, runs)
     for _ in 1:runs
         sim = Simulation(configfile = fit_configfile, population = population)
         sim.label = "TR: $tr"
-        pathogen(sim).transmission_function = ConstantTransmissionRate(transmission_rate = tr)
+        pathogen(sim).transmission_function = with_transmission_scale(pathogen(sim).transmission_function, tr)
         sim.stop_criterion = TimesUp(limit = days)
         run!(sim)
 
@@ -64,16 +64,17 @@ end
 
 # Main execution
 
-# 1. transmission rate
-pathogen_config = TOML.parsefile(configfile)["Pathogens"]["Covid19"]
-config_tr = pathogen_config["transmission_function"]["parameters"]["transmission_rate"]
+# 1. transmission rate (transmission_scale of an InfectiousnessProfile)
+tf_parameters = TOML.parsefile(configfile)["Pathogens"]["Covid19"]["transmission_function"]["parameters"]
+tr_name = haskey(tf_parameters, "transmission_scale") ? "transmission_scale" : "transmission_rate"
+config_tr = tf_parameters[tr_name]
 best_tr = fit_transmission_rate(configfile, target_r0_value, tr_start = config_tr)
-println("\nTransmission rate for R0 = $target_r0_value: $(round(best_tr, digits = 5)) " *
+println("\n$tr_name for R0 = $target_r0_value: $(round(best_tr, digits = 5)) " *
     "(config: $config_tr)")
 
 # the calibration needs the fitted rate in the config
 if abs(best_tr / config_tr - 1) > 0.01
-    error("Enter transmission_rate = $(round(best_tr, digits = 5)) in $configfile and run again.")
+    error("Enter $tr_name = $(round(best_tr, digits = 5)) in $configfile and run again.")
 end
 
 # 2. generation time and contact factors (on Germany)

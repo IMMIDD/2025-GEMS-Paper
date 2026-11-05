@@ -144,8 +144,8 @@ before the run (e.g. `phase_setup`).
 
 Variants: `heinsberg = false` drops the Heinsberg cluster, `imports_from` drops
 the imports infected before that date, `extra_seeds` is an additional seeding
-schedule, `transmission_rate` replaces the rate of the config, and `switches`
-(`date => rate`) change it during the run.
+schedule, `transmission_rate` replaces the rate of the config (the `transmission_scale`
+of an `InfectiousnessProfile`), and `switches` (`date => rate`) change it during the run.
 
 Returns `sim`, the post processor `pp`, the seeding `schedule`, the RKI cases
 in the counties of the model (`rki`), the population per county (`pop`), the
@@ -164,9 +164,13 @@ function run_rki_sim(s::RKISettings;
     sim = Simulation(
         configfile = s.configfile,
         population = s.population,
-        transmission_rate = transmission_rate,
         stop_criterion = TimesUp(limit = s.days),
         seed = seed)
+    # keeps the transmission function of the config (Simulation(transmission_rate = ...) would
+    # replace it by a ConstantTransmissionRate)
+    if !isnothing(transmission_rate)
+        pathogen(sim).transmission_function = with_transmission_scale(pathogen(sim).transmission_function, transmission_rate)
+    end
     if sim.startdate != s.startdate
         throw(ArgumentError("The config starts on $(sim.startdate), not on $(s.startdate)."))
     end
@@ -252,7 +256,7 @@ function _add_rate_switches!(sim, switches)
         inner(s)
         r = get(rate_at, Int(tick(s)), nothing)
         if !isnothing(r)
-            pathogen(s).transmission_function = ConstantTransmissionRate(transmission_rate = r)
+            pathogen(s).transmission_function = with_transmission_scale(pathogen(s).transmission_function, r)
         end
         s
     end

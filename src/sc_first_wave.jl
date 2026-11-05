@@ -168,9 +168,11 @@ end
 ###
 
 # forward generation time of the model: Saarland run with a constant transmission rate and 20 extra
-# seeds per day in Regionalverband Saarbruecken (ticks 7-27) for a large early cohort
+# seeds per day in Regionalverband Saarbruecken (ticks 7-27) for a large early cohort; the rate is
+# 0.05 per contact and day, i.e. a scale of 0.35 (0.05 over 7 days) for an infectiousness profile
 function _rki_generation_time(s::RKISettings)
     seeds = DataFrame(tick = 7:27, ags = AGS(10041000), count = 20)
+    rate = config_transmission_type(s.configfile) == "InfectiousnessProfile" ? 0.35 : 0.05
     saarland = RKISettings(
         rki = s.rki,
         days = 70,
@@ -181,7 +183,7 @@ function _rki_generation_time(s::RKISettings)
         seed = 2,
         heinsberg = false,
         extra_seeds = seeds,
-        transmission_rate = 0.05)
+        transmission_rate = rate)
     w = gems_generation_time(res.pp)
     printinfo("Forward generation time: mean $(round(sum((1:length(w)) .* w), digits = 2)) days")
     CSV.write(generation_time_file(s.configfile), DataFrame(s = 1:length(w), w = w))

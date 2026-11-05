@@ -291,9 +291,18 @@ config_startdate(configfile) = Date(TOML.parsefile(configfile)["Simulation"]["st
 """
     config_transmission_rate(configfile)
 
-Transmission rate in a GEMS config.
+Transmission rate in a GEMS config (`transmission_rate` of a `ConstantTransmissionRate`,
+`transmission_scale` of an `InfectiousnessProfile`).
 """
 function config_transmission_rate(configfile)
-    p = TOML.parsefile(configfile)["Pathogens"][PATHOGEN]
-    return p["transmission_function"]["parameters"]["transmission_rate"]
+    p = TOML.parsefile(configfile)["Pathogens"][PATHOGEN]["transmission_function"]["parameters"]
+    return haskey(p, "transmission_scale") ? p["transmission_scale"] : p["transmission_rate"]
 end
+
+"""
+    config_transmission_type(configfile)
+
+Type of the transmission function in a GEMS config (e.g. `"ConstantTransmissionRate"`).
+"""
+config_transmission_type(configfile) =
+    TOML.parsefile(configfile)["Pathogens"][PATHOGEN]["transmission_function"]["type"]

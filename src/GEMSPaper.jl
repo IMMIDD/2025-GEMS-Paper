@@ -62,6 +62,9 @@ map_legendfontsize() = 24
 # INCLUDE STYLES
 include("styles/rd_contacts_only.jl")
 
+# INCLUDE MODEL EXTENSIONS
+include("infectiousness_profile.jl")
+
 # INCLUDE ANALYSES
 include("demographics.jl")
 include("settings.jl")
