@@ -8,6 +8,8 @@ export scenario_self_isolation
 """
     run_self_isolation_sims(;
         configfile = "models/DE_model_R0_3.28.toml",
+        infected_fraction = 0.001,
+        stop_criterion = TimesUp(limit = 365),
         population = "DE")
 
 Runs the self-isolation scenario simulations and returns 
@@ -16,17 +18,29 @@ And also returns last simulation object for further data extraction.
 """
 function run_self_isolation_sims(;
     configfile = "models/DE_model_R0_3.28.toml",
+    infected_fraction = 0.001,
+    stop_criterion = TimesUp(limit = 365),
     population = "DE")
 
     # baseline simultion
-    sim = Simulation(configfile=configfile, population = population, seed = 0)
+    sim = Simulation(
+        configfile = configfile,
+        population = population,
+        seed = 0,
+        infected_fraction = infected_fraction,
+        stop_criterion = stop_criterion)
     sim.label = "Baseline"
     run!(sim)
     rd_b = ResultData(sim, style = "LightRD")
 
 
     # simulation with 14-day isolation (at home) upon experiencing symptoms
-    sim = Simulation(configfile=configfile, population = population, seed = 0)
+    sim = Simulation(
+        configfile = configfile,
+        population = population,
+        seed = 0,
+        infected_fraction = infected_fraction,
+        stop_criterion = stop_criterion)
     sim.label = "Scenario"
     self_isolation = IStrategy("Self Isolation", sim)
     add_measure!(self_isolation, SelfIsolation(14))
