@@ -81,11 +81,15 @@ end
         population = "DE",
         start_condition = RegionalSeeds(seeds = Dict(05370008=>10)), # 10 infections in Heinsberg
         stop_criterion = TimesUp(limit = 1095),
+        transmission_reduction::Float64 = 0.67,
         isolation_duration = 14,
         sensitivity = .8,
         specificity = .99)
 
 Runs three simulation scenarios (isolation-only, isolation-and-test, and isolation-testing-and-tracing).
+All scenarios assume that other measures already prevent a share of all
+transmissions (`transmission_reduction`), which reduces the transmission rate
+(`ConstantTransmissionRate`) or `transmission_scale` (`InfectiousnessProfile`) of the pathogen accordingly.
 Returns the three `ResultData` objects and the last `Simulation` object (for any required plotting):
 `rd_isolation_only`, `rd_isolation_and_test`, `rd_testing_and_tracing`, `sim`.
 """
@@ -95,11 +99,21 @@ function run_testing_sims(;
 
     start_condition = RegionalSeeds(seeds = Dict(05370008=>10)), # 10 infections in Heinsberg
     stop_criterion = TimesUp(limit = 1095),
-    
+
+    transmission_reduction::Float64 = 0.67,
     isolation_duration = 14,
     sensitivity = .8,
     specificity = .99)
 
+    0.0 <= transmission_reduction <= 1.0 || throw(ArgumentError("Transmission reduction must be between 0 and 1. Got $transmission_reduction."))
+
+    # assume that other measures already prevent a share of all transmissions
+    # (scales the transmission rate or transmission_scale of the config's transmission function)
+    function reduce_transmission!(sim)
+        tf = transmission_function(pathogen(sim))
+        scale = tf isa InfectiousnessProfile ? tf.transmission_scale : tf.transmission_rate
+        pathogen(sim).transmission_function = with_transmission_scale(tf, scale * (1.0 - transmission_reduction))
+    end
 
     ###
     ### ISOLATION ONLY SCENARIO
@@ -112,6 +126,8 @@ function run_testing_sims(;
         seed = 0,
         start_condition = start_condition,
         stop_criterion = stop_criterion)
+
+    reduce_transmission!(sim)
 
     # STRATEGY & MEASURE DEFINITION
     isolation_only = IStrategy("Self Isolation", sim)
@@ -136,6 +152,7 @@ function run_testing_sims(;
         start_condition = start_condition,
         stop_criterion = stop_criterion)
 
+    reduce_transmission!(sim)
 
     # test type definition
     antigen_test = TestType("Antigen Test", pathogen(sim), sim,
@@ -166,6 +183,8 @@ function run_testing_sims(;
         seed = 2,
         start_condition = start_condition,
         stop_criterion = stop_criterion)
+
+    reduce_transmission!(sim)
 
     # test type definition
     antigen_test = TestType("Antigen Test", pathogen(sim), sim,
@@ -472,6 +491,7 @@ end
     scenario_testing(;
         configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
         population = "DE",
+        transmission_reduction::Float64 = 0.67,
         folder = nothing)
 
 Runs the testing-scenario and all analyses.
@@ -479,6 +499,7 @@ Runs the testing-scenario and all analyses.
 function scenario_testing(;
     configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
     population = "DE",
+    transmission_reduction::Float64 = 0.67,
     folder = nothing)
 
     # create result folder
@@ -487,7 +508,8 @@ function scenario_testing(;
     # run simulations and get result data objects
     rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing, sim = run_testing_sims(
         configfile = configfile,
-        population = population)
+        population = population,
+        transmission_reduction = transmission_reduction)
 
     # plot results
     p_testing = plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing, sim)
