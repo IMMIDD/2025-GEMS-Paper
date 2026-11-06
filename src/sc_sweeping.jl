@@ -46,27 +46,27 @@ end
 
 """
     run_sweeps(;
-        configfile = "models/DE_model_RKI_2020.toml",
+        configfile = "models/DE_model_first_wave.toml",
         population = "SL",
         infected_fraction = 0.001,
         stop_criterion = TimesUp(limit = 365),
-        transmission_reduction::Float64 = 0.6,
+        transmission_reduction::Float64 = 0.67,
         rep::Int64 = 3,
         step_size::Float64 = 0.025)
 
 Runs the simulations to sweep parameter space (share of asymptomatic
 progressions and self-isolation adherence).
 The scenario assumes that other measures already prevent a share of all
-transmissions (`transmission_reduction`), which reduces the pathogen's
-transmission rate accordingly.
+transmissions (`transmission_reduction`), which reduces the `transmission_scale`
+of the pathogen's `InfectiousnessProfile` accordingly.
 Returns a dataframe with xvals, yvals, and outvals.
 """
 function run_sweeps(;
-    configfile = "models/DE_model_RKI_2020.toml",
+    configfile = "models/DE_model_first_wave.toml",
     population = "SL",
     infected_fraction = 0.001,
     stop_criterion = TimesUp(limit = 365),
-    transmission_reduction::Float64 = 0.6,
+    transmission_reduction::Float64 = 0.67,
     rep::Int64 = 3,
     step_size::Float64 = 0.025)
 
@@ -100,7 +100,9 @@ function run_sweeps(;
                 set_asymptomatic_share!(sim, asymp)
 
                 # assume that other measures already prevent a share of all transmissions
-                transmission_function(pathogen(sim)).transmission_rate *= (1.0 - transmission_reduction)
+                # (scales the transmission_scale of the config's InfectiousnessProfile)
+                tf = transmission_function(pathogen(sim))
+                pathogen(sim).transmission_function = with_transmission_scale(tf, tf.transmission_scale * (1.0 - transmission_reduction))
 
                 # re-apply the start condition, as the initial infections were
                 # already assigned their progressions when the simulation was created
@@ -142,8 +144,8 @@ function plot_sweeps(df)
 
     return gemsheatmap(df.xvals, df.yvals, df.outvals,
         xlabel = "Fraction of Asymptomatic Cases",
-        ylabel = "Chance of Adherence",
-        colorbar_title = "\nEffective Reproduction Number",
+        ylabel = "Probability of Adherence",
+        colorbar_title = "\nInitial Effective Reproduction Number",
         xrev = false,
         yrev = true,
         xformatter = formattick,
@@ -162,11 +164,11 @@ end
 
 """
     scenario_sweeping(;
-        configfile = "models/DE_model_RKI_2020.toml",
+        configfile = "models/DE_model_first_wave.toml",
         population = "SL",
         infected_fraction = 0.001,
         stop_criterion = TimesUp(limit = 365),
-        transmission_reduction::Float64 = 0.6,
+        transmission_reduction::Float64 = 0.67,
         rep = 3,
         step_size::Float64 = 0.025,
         folder = nothing)
@@ -174,11 +176,11 @@ end
 Runs the parameter sweep scenario and all analyses.
 """
 function scenario_sweeping(;
-    configfile = "models/DE_model_RKI_2020.toml",
+    configfile = "models/DE_model_first_wave.toml",
     population = "SL",
     infected_fraction = 0.001,
     stop_criterion = TimesUp(limit = 365),
-    transmission_reduction::Float64 = 0.6, # share of transmissions prevented by other measures
+    transmission_reduction::Float64 = 0.67, # share of transmissions prevented by other measures
     rep = 3, # repetitions per combination
     step_size::Float64 = 0.025,
     folder = nothing)

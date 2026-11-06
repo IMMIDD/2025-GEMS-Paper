@@ -261,11 +261,11 @@ Code: [sc_sweeping.jl](src/sc_sweeping.jl). Config: reference model.
 | Population | – | Saarland |
 | Initial infections | none | 0.1 % of the population, random |
 | Duration | 112 days | 365 days |
-| Transmission scale | 0.50486 | × (1 − 0.6): 60 % of transmissions prevented by other measures [I] |
+| Transmission scale | 0.50486 | × (1 − 0.67): 67 % of transmissions prevented by other measures [I] |
 | Asymptomatic share (x-axis) | 0.17 | 0 to 1, step 0.025, set in all age groups; the other categories rescaled proportionally |
 | Adherence (y-axis) | – | 0 to 1, step 0.025 |
 | Repetitions | – | 3 per combination; random seeds 1–5043 (one per run) |
-| Outcome | – | R_init per run (`r0(PostProcessor(sim))`) |
+| Outcome | – | R_init per run (`r0(PostProcessor(sim))`: infections caused by the first 5 % of all infections, divided by their number) |
 
 | Trigger | Strategy (condition) | Measures |
 |---|---|---|
