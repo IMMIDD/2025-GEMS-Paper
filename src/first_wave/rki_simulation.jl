@@ -44,7 +44,7 @@ end
     RKISettings(;
         rki,
         days,
-        configfile = "models/DE_model_RKI_2020_short_gt.toml",
+        configfile = "models/DE_model_first_wave.toml",
         population = "DE",
         counties = population_counties(population),
         onset_share = rki_onset_share(rki, counties = counties),
@@ -66,7 +66,7 @@ window of the R per phase, and the start date of the config.
 function RKISettings(;
     rki,
     days,
-    configfile = "models/DE_model_RKI_2020_short_gt.toml",
+    configfile = "models/DE_model_first_wave.toml",
     population = "DE",
     counties = population_counties(population),
     onset_share = rki_onset_share(rki, counties = counties),

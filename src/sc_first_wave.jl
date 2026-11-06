@@ -460,7 +460,7 @@ end
 
 """
     calibrate_first_wave(;
-        configfile = "models/DE_model_RKI_2020_short_gt.toml",
+        configfile = "models/DE_model_first_wave.toml",
         population = "DE",
         folder = nothing,
         generation_time = true,
@@ -473,7 +473,7 @@ the scenario to `inputs/` (`first_wave_input`) if calibrated on Germany and not
 as a `test` (one run per evaluation).
 """
 function calibrate_first_wave(;
-    configfile = "models/DE_model_RKI_2020_short_gt.toml",
+    configfile = "models/DE_model_first_wave.toml",
     population = "DE",
     folder = nothing,
     generation_time = true,
@@ -502,7 +502,7 @@ end
 
 """
     scenario_first_wave(;
-        configfile = "models/DE_model_RKI_2020_short_gt.toml",
+        configfile = "models/DE_model_first_wave.toml",
         population = "DE",
         folder = nothing,
         parts = FIRST_WAVE_PARTS,
@@ -520,7 +520,7 @@ runs only once (one seed, one variant). The RKI case data are downloaded on the
 first run (`obtain_rki_cases`).
 """
 function scenario_first_wave(;
-    configfile = "models/DE_model_RKI_2020_short_gt.toml",
+    configfile = "models/DE_model_first_wave.toml",
     population = "DE",
     folder = nothing,
     parts = FIRST_WAVE_PARTS,

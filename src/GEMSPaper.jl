@@ -41,11 +41,11 @@ function result_folder()
 end
 
 """
-    DE_sim(;configfile = "models/DE_model_R0_3.28.toml")
+    DE_sim(;configfile = "models/DE_model_first_wave.toml")
 
 Wrapper for German simulation model.
 """
-DE_sim(;configfile = "models/DE_model_R0_3.28.toml") = Simulation(
+DE_sim(;configfile = "models/DE_model_first_wave.toml") = Simulation(
     configfile=configfile,
     population="DE",
     seed = 0)
@@ -96,14 +96,14 @@ include("sc_first_wave.jl")
 """
     runall(;
         sim_obj = nothing,
-        configfile = "models/DE_model_R0_3.28.toml",
+        configfile = "models/DE_model_first_wave.toml",
         population = "DE")
 
 Executes all model analyses.
 """
 function runall(;
         sim_obj = nothing,
-        configfile = "models/DE_model_R0_3.28.toml",
+        configfile = "models/DE_model_first_wave.toml",
         population = "DE")
 
     # create result folder
@@ -146,12 +146,6 @@ function runall(;
         @warn "If you pass a sim-object to runall(), it will not perform the simulation scenarios."
         return;
     end
-
-    printinfo("### RUNNING OUTBREAK SCENARIO")
-    scenario_outbreak(
-        population = population,
-        folder = folder
-    )
 
     printinfo("### RUNNING SIMPLE INTERVENTION SCENARIO")
     scenario_household_isolation(

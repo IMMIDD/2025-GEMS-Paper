@@ -1,7 +1,7 @@
 using GEMSPaper, DataFrames, Statistics, TOML
 
 # Calibration of the first wave scenario (not part of runall()):
-# 1. transmission rate (or scale) for R0 = 3.28, as in fit_r0.jl
+# 1. transmission rate (or scale) for R0 = 3.28
 # 2. generation time of the model and contact factors of the phases (written to inputs/)
 
 # Global settings
@@ -40,7 +40,7 @@ function get_avg_r0(configfile, tr, runs)
     return r0_sum / runs
 end
 
-# Linear search for the transmission rate (as in fit_r0.jl)
+# Linear search for the transmission rate
 function fit_transmission_rate(configfile, target_r0;
         tr_start,
         tolerance = 0.02,
