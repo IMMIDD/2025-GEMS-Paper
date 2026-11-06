@@ -9,7 +9,7 @@ export scenario_household_isolation
     run_household_isolation_sims(;
         configfile = "models/DE_model_first_wave.toml",
         infected_fraction = 0.0001,
-        stop_criterion = TimesUp(limit = 100),
+        stop_criterion = TimesUp(limit = 180),
         population = "DE")
 
 Runs the household isolation scenario simulations and returns
@@ -19,7 +19,7 @@ And also returns last simulation object for further data extraction.
 function run_household_isolation_sims(;
     configfile = "models/DE_model_first_wave.toml",
     infected_fraction = 0.0001,
-    stop_criterion = TimesUp(limit = 100),
+    stop_criterion = TimesUp(limit = 180),
     population = "DE")
 
     # baseline simulation
@@ -147,7 +147,7 @@ end
     scenario_household_isolation(;
         configfile = "models/DE_model_first_wave.toml",
         infected_fraction = 0.0001,
-        stop_criterion = TimesUp(limit = 100),
+        stop_criterion = TimesUp(limit = 180),
         population = "DE",
         folder = nothing)
 
@@ -156,7 +156,7 @@ Runs the household isolation scenario and all analyses.
 function scenario_household_isolation(;
     configfile = "models/DE_model_first_wave.toml",
     infected_fraction = 0.0001,
-    stop_criterion = TimesUp(limit = 100),
+    stop_criterion = TimesUp(limit = 180),
     population = "DE",
     folder = nothing)
 

@@ -54,7 +54,7 @@ All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-an
 | Fig 4–6 (population, demographics, commuting) | `demographics.jl`, `settings.jl`, `mobility.jl` | none | DE | – | – |
 | Fig 7 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | GEMS defaults | SL | – | 0 |
 | Sec. 3.1.1 First wave 2020 | [sc_first_wave.jl](src/sc_first_wave.jl) → `scenario_first_wave()` | reference model | DE | 10.02.–31.05.2020 | see [5.1](#51-first-wave-2020-sec-311) |
-| Sec. 3.1.2 Scenario modeling (Fig 12A) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 100 d | 1 per scenario / 0 |
+| Sec. 3.1.2 Scenario modeling (Fig 12A) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 180 d | 1 per scenario / 0 |
 | Fig 12B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
 | Sec. 3.1.3 Parameter sweep (Fig 13) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 3 / 1–5043 |
 | Sec. 3.1.4 Multi-criteria evaluation (Fig 14, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | DE | 365 d | 1 per scenario / 0, 1, 2 |
@@ -239,7 +239,7 @@ Code: [sc_household_isolation.jl](src/sc_household_isolation.jl). Config: refere
 | Parameter | Reference model | This example |
 |---|---|---|
 | Initial infections | none | 0.01 % of the population, random (`infected_fraction = 0.0001`) |
-| Duration | 112 days | 100 days |
+| Duration | 112 days | 180 days |
 | Random seed | – | 0 (both scenarios) |
 
 | Scenario | Trigger | Strategy (condition) | Measures (offset) → follow-up |
@@ -276,6 +276,8 @@ To focus on the regime where self-isolation can be decisive, we assume that othe
 ### 5.4 Multi-criteria strategy evaluation (Sec. 3.1.4, Fig 14, Tab 2)
 
 Code: [sc_testing.jl](src/sc_testing.jl). Config: reference model.
+
+To focus on the regime where tracing can be decisive, we assume that other measures (for example, limits on gatherings or closed restaurants and leisure venues) already prevent half of the community contacts outside households, workplaces, and schools.
 
 | Parameter | Reference model | This example |
 |---|---|---|
