@@ -6,7 +6,7 @@ This repository contains the code and model configurations behind the example ap
 
 All simulations use [GEMS](https://github.com/IMMIDD/GEMS) **v1.0.1** (pinned in [Manifest.toml](Manifest.toml)).
 This README documents the parameterization of every example: population, contacts, transmission, disease progression, and interventions.
-All disease examples share one **reference model**, [models/DE_model_first_wave.toml](models/DE_model_first_wave.toml) ([Section 4](#4-reference-model-covid-19-wild-type-first-wave-2020)). Each example sets its own seeding, horizon, and interventions in code, via the `Simulation` constructor or the scenario function's keyword arguments; [Section 5](#5-example-specific-parameterization) lists only these deviations.
+All disease examples share one **reference model**, [models/DE_model_first_wave.toml](models/DE_model_first_wave.toml) ([Section 4](#4-reference-model-covid-19-wild-type-first-wave-2020)). Each example sets its own initial infections, horizon, and interventions in code, via the `Simulation` constructor or the scenario function's keyword arguments; [Section 5](#5-example-specific-parameterization) lists only these deviations.
 
 ---
 
@@ -18,7 +18,7 @@ All disease examples share one **reference model**, [models/DE_model_first_wave.
 | [src/GEMSPaper.jl](src/GEMSPaper.jl) | Package entry point and `runall()` |
 | [src/infectiousness_profile.jl](src/infectiousness_profile.jl) | `InfectiousnessProfile` transmission function |
 | `src/sc_*.jl` | One file per example scenario |
-| [src/first_wave/](src/first_wave/) | RKI data, imports, seeding,  intervention phases of March 2020 (fitted contact reductions), calibration, and figures of the first wave example |
+| [src/first_wave/](src/first_wave/) | RKI data, imported and introduced infections, intervention phases of March 2020 (fitted contact reductions), calibration, and figures of the first wave example |
 | [src/demographics.jl](src/demographics.jl), [src/settings.jl](src/settings.jl), [src/mobility.jl](src/mobility.jl), [src/contacts.jl](src/contacts.jl) | Population analyses (Fig 4–7) |
 | [src/benchmarking.jl](src/benchmarking.jl) | Performance benchmark (Fig 15) |
 | [calibrate_first_wave.jl](calibrate_first_wave.jl) | Calibration of the reference model (transmission scale, generation time, contact factors); not part of `runall()` |
@@ -43,20 +43,22 @@ Each example can also be run on its own: `scenario_first_wave()`, `scenario_hous
 
 The first wave example downloads the RKI case data (about 400 MB, checked against a SHA-256 checksum) to `data/` on its first run. Its calibrated contact factors are read from `inputs/`; to recalibrate, run [calibrate_first_wave.jl](calibrate_first_wave.jl).
 
-All simulations use fixed seeds ([Section 3](#3-overview-examples-code-and-configuration)). Bit-identical results require the same number of Julia threads.
+All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-and-configuration)). Bit-identical results require the same number of Julia threads.
+
+*Terminology:* a *random seed* initializes the random number generator of a simulation; infections that start an epidemic are called *initial infections* (at tick 0) or *introduced infections* (added during the run).
 
 ## 3. Overview: examples, code, and configuration
 
-| Paper element | Script → function | Config | Population | Horizon | Runs / seeds |
+| Paper element | Script → function | Config | Population | Horizon | Runs / random seeds |
 |---|---|---|---|---|---|
 | Fig 4–6 (population, demographics, commuting) | `demographics.jl`, `settings.jl`, `mobility.jl` | none | DE | – | – |
-| Fig 7 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | GEMS defaults | SL | – | seed 0 |
+| Fig 7 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | GEMS defaults | SL | – | 0 |
 | Sec. 3.1.1 First wave 2020 | [sc_first_wave.jl](src/sc_first_wave.jl) → `scenario_first_wave()` | reference model | DE | 10.02.–31.05.2020 | see [5.1](#51-first-wave-2020-sec-311) |
-| Sec. 3.1.2 Scenario modeling (Fig 12A) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 100 d | 1 per scenario / seed 0 |
-| Fig 12B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | no seed |
-| Sec. 3.1.3 Parameter sweep (Fig 13) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 3 / seeds 1–5043 |
-| Sec. 3.1.4 Multi-criteria evaluation (Fig 14, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | DE | 1095 d | 1 per scenario / seeds 0, 1, 2 |
-| Sec. 3.2 Performance (Fig 15) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | GEMS defaults | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / seeds 1–11 |
+| Sec. 3.1.2 Scenario modeling (Fig 12A) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 100 d | 1 per scenario / 0 |
+| Fig 12B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
+| Sec. 3.1.3 Parameter sweep (Fig 13) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 3 / 1–5043 |
+| Sec. 3.1.4 Multi-criteria evaluation (Fig 14, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | DE | 1095 d | 1 per scenario / 0, 1, 2 |
+| Sec. 3.2 Performance (Fig 15) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | GEMS defaults | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / 1–11 |
 
 ## 4. Reference model (COVID-19, wild type, first wave 2020)
 
@@ -64,13 +66,13 @@ Config: [models/DE_model_first_wave.toml](models/DE_model_first_wave.toml). The 
 
 **Source tags:** `[L]` literature · `[C]` calibrated · `[A]` assumption · `[D]` GEMS default · `[I]` illustrative / scenario setting
 
-### 4.1 Simulation and seeding
+### 4.1 Simulation and initial infections
 
 | Parameter | Value | Source |
 |---|---|---|
 | Time step | 1 day | [D] |
 | Start / end date | 2020-02-10 / 2020-05-31 | [I] before the first imported infections of the first wave (reported from week 9 on); end of the forecast |
-| Initial infections | none (`InfectedFraction`, fraction 0.0) | [I] the scenarios set their own seeding |
+| Initial infections | none (`InfectedFraction`, fraction 0.0) | [I] the scenarios set their own initial infections |
 | Duration | 112 days (`TimesUp`) | [I] the scenarios set their own horizon |
 | Global setting | none | [D] |
 | `[Population]` | n = 100,000, household size 3, office size 5, school size 100 | [D] only used for generated populations; all examples use the GEMS population models |
@@ -181,7 +183,7 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 | Counties | Berlin districts merged into 11000; Eisenach (16056) merged into the Wartburgkreis (16063) | data structure |
 | Reporting delays | RKI onset → report delays per onset week (all of Germany) | RKI cases |
 
-**Seeding** (via `stepmod`, as `RegionalSeeds` in GEMS v1.0.1 only seeds at tick 0)
+**Introduced infections** (added via `stepmod`, as `RegionalSeeds` in GEMS v1.0.1 only infects at tick 0)
 
 | Item | Value | Source |
 |---|---|---|
@@ -194,7 +196,7 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 | Allocation: other countries | population × income | [A] |
 | School holidays (mid-February–March 2020) | BY, BW 22.02.–01.03.; HH 29.02.–15.03.; RP 15.–23.02.; SL 15.–25.02.; SN, MV 08.–23.02.; BW: 50 % of the schools | [L] school holiday calendars; [A] BW coverage 0.5 |
 | County income | disposable income of private households per inhabitant 2019 | [L] VGR der Länder, Reihe 2 Band 3, Tab. 2.4 ([inputs/county_income_2019.csv](inputs/county_income_2019.csv)) |
-| Heinsberg cluster | RKI cases of Kreis Heinsberg with onset (or, if unknown, reporting date) up to 29.02. and reported by 07.03., seeded 1:1 at onset − 6 d (rounded mean incubation 1 + 0.8 + 4.0), or report − 11 d (+ median reporting delay 5 d) if the onset is unknown | [A] |
+| Heinsberg cluster | RKI cases of Kreis Heinsberg with onset (or, if unknown, reporting date) up to 29.02. and reported by 07.03., infected 1:1 at onset − 6 d (rounded mean incubation 1 + 0.8 + 4.0), or report − 11 d (+ median reporting delay 5 d) if the onset is unknown | [A] |
 
 **Contact phases and testing**
 
@@ -215,19 +217,19 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 | Step | Setup |
 |---|---|
 | 1. Transmission scale | [Section 4.3](#43-transmission) |
-| 2a. Generation time of the model | Saarland, 70 days, scale 0.35, 20 extra seeds per day in the Regionalverband Saarbrücken (ticks 7–27), ascertainment 1.0, seed 2; cohort of ticks 10–22; mean 5.77 d ([inputs/generation_time_DE_model_first_wave.csv](inputs/generation_time_DE_model_first_wave.csv)) |
-| 2b. Contact factors | fitted to the weekly RKI cases by onset, weeks 10–16 (up to 19.04., weight 0.5 for week 10), with the R per phase of GEMS kept inside the 95 % interval of the RKI R per phase (R(t) back-calculated from 01.02., infections 01.03.–12.04., block bootstrap with 1,000 samples, block length 7 d); surrogate fit, then damped Gauss–Newton steps, at most 7 evaluations with 2 runs each (seeds 0, 1); runs until 17.05. |
-| 2c. Band | 20 factor samples from the calibration uncertainty (seeds 1001–1020) ([inputs/first_wave_band_factors_DE_model_first_wave.csv](inputs/first_wave_band_factors_DE_model_first_wave.csv)) |
+| 2a. Generation time of the model | Saarland, 70 days, scale 0.35, 20 extra infections per day in the Regionalverband Saarbrücken (ticks 7–27), ascertainment 1.0, random seed 2; cohort of ticks 10–22; mean 5.77 d ([inputs/generation_time_DE_model_first_wave.csv](inputs/generation_time_DE_model_first_wave.csv)) |
+| 2b. Contact factors | fitted to the weekly RKI cases by onset, weeks 10–16 (up to 19.04., weight 0.5 for week 10), with the R per phase of GEMS kept inside the 95 % interval of the RKI R per phase (R(t) back-calculated from 01.02., infections 01.03.–12.04., block bootstrap with 1,000 samples, block length 7 d); surrogate fit, then damped Gauss–Newton steps, at most 7 evaluations with 2 runs each (random seeds 0, 1); runs until 17.05. |
+| 2c. Band | 20 factor samples from the calibration uncertainty (random seeds 1001–1020) ([inputs/first_wave_band_factors_DE_model_first_wave.csv](inputs/first_wave_band_factors_DE_model_first_wave.csv)) |
 
 **Parts of the scenario** (`FIRST_WAVE_PARTS`)
 
-| Part | Setup | Runs / seeds |
+| Part | Setup | Runs / random seeds |
 |---|---|---|
-| `:final` | calibrated factors until 31.05. (six weeks of forecast after 19.04.) | 3 / seeds 0–2 |
-| `:projections` | from 20.04. on, the contacts of phase 2, 3, or 4, or of phase 1 (until 17.05.); schools reopen in the projections to phase 1 and 2 | 2 per variant / seeds 0, 1 |
-| `:counterfactuals` | contacts of phase k kept from the start of phase k + 1 on (k = 1–3) | 1 per variant / seed 0 |
-| `:band` | factor samples of the calibration, 5–95 % band | 20 / seeds 1001–1020 |
-| `:seeds_robustness` | all RKI cases infected before 09.03. as seeds (divided by the ascertainment, Heinsberg 1:1), no transmission before 09.03. | 3 / seeds 0–2 |
+| `:final` | calibrated factors until 31.05. (six weeks of forecast after 19.04.) | 3 / 0–2 |
+| `:projections` | from 20.04. on, the contacts of phase 2, 3, or 4, or of phase 1 (until 17.05.); schools reopen in the projections to phase 1 and 2 | 2 per variant / 0, 1 |
+| `:counterfactuals` | contacts of phase k kept from the start of phase k + 1 on (k = 1–3) | 1 per variant / 0 |
+| `:band` | factor samples of the calibration, 5–95 % band | 20 / 1001–1020 |
+| `:seeds_robustness` | all RKI cases infected before 09.03. as introduced infections (divided by the ascertainment, Heinsberg 1:1), no transmission before 09.03. | 3 / 0–2 |
 | `:figures` | figures of all parts whose results exist | – |
 
 ### 5.2 Scenario modeling (Sec. 3.1.2, Fig 12)
@@ -238,7 +240,7 @@ Code: [sc_household_isolation.jl](src/sc_household_isolation.jl). Config: refere
 |---|---|---|
 | Initial infections | none | 0.01 % of the population, random (`infected_fraction = 0.0001`) |
 | Duration | 112 days | 100 days |
-| Seed | – | 0 (both scenarios) |
+| Random seed | – | 0 (both scenarios) |
 
 | Scenario | Trigger | Strategy (condition) | Measures (offset) → follow-up |
 |---|---|---|---|
@@ -248,7 +250,7 @@ Code: [sc_household_isolation.jl](src/sc_household_isolation.jl). Config: refere
 
 All household members, including the symptomatic individual, isolate at home for 14 days. Each new symptomatic household member triggers the strategy again and restarts the 14 days for the whole household.
 
-The Fig 12B listing ([sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl)) uses the same intervention with GEMS defaults ([Section 5.5](#55-performance-benchmark-sec-32-fig-15)) on 100,000 agents, without a seed.
+The Fig 12B listing ([sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl)) uses the same intervention with GEMS defaults ([Section 5.5](#55-performance-benchmark-sec-32-fig-15)) on 100,000 agents, without a fixed random seed.
 
 ### 5.3 Parameter sweep (Sec. 3.1.3, Fig 13)
 
@@ -262,7 +264,7 @@ Code: [sc_sweeping.jl](src/sc_sweeping.jl). Config: reference model.
 | Transmission scale | 0.50486 | × (1 − 0.6): 60 % of transmissions prevented by other measures [I] |
 | Asymptomatic share (x-axis) | 0.17 | 0 to 1, step 0.025, set in all age groups; the other categories rescaled proportionally |
 | Adherence (y-axis) | – | 0 to 1, step 0.025 |
-| Repetitions | – | 3 per combination; seeds 1–5043 (one per run) |
+| Repetitions | – | 3 per combination; random seeds 1–5043 (one per run) |
 | Outcome | – | R_init per run (`r0(PostProcessor(sim))`) |
 
 | Trigger | Strategy (condition) | Measures |
@@ -277,7 +279,7 @@ Code: [sc_testing.jl](src/sc_testing.jl). Config: reference model.
 |---|---|---|
 | Initial infections | none | 10 infections in Gangelt (municipality key 05370008, county Heinsberg) |
 | Duration | 112 days | 1095 days |
-| Seeds | – | 0 (Isolation Only), 1 (Isolation & Testing), 2 (Isolation, Testing & Tracing) |
+| Random seeds | – | 0 (Isolation Only), 1 (Isolation & Testing), 2 (Isolation, Testing & Tracing) |
 
 **Test type** "Antigen Test" [I]: positive ~ Bernoulli(p = 0.80) if infected (sensitivity), Bernoulli(p = 0.01) if not (specificity 0.99).
 
@@ -307,7 +309,7 @@ GEMS default parameterization ([data/DefaultConf.toml @ v1.0.1](https://github.c
 | Death (Critical) | Bernoulli(p = 0.3) |
 | On-the-fly population | 100,000 agents, mean household size 3, office size 5, school size 100 |
 
-Protocol: one warm-up run, then 11 runs per population (seeds 1–11), medians reported. Populations: 16 German states and Germany, plus on-the-fly populations of 0.1, 1, 5, 10, 20, and 50 million agents.
+Protocol: one warm-up run, then 11 runs per population (random seeds 1–11), medians reported. Populations: 16 German states and Germany, plus on-the-fly populations of 0.1, 1, 5, 10, 20, and 50 million agents.
 
 ## 6. Population analyses (Fig 4–7)
 
