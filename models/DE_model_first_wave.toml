@@ -68,7 +68,7 @@
                 # calibrate_first_wave.jl, as in fit_r0.jl (mean effective R of ticks 1-10,
                 # 10 runs), on Rhineland-Palatinate (contact structure closest to DE);
                 # start value 7 x 0.06541 (fitted rate of the constant 7-day infectious period)
-                transmission_scale = 0.49088
+                transmission_scale = 0.50486
                 # [L] adapted: infectiousness profile relative to symptom onset, shifted gamma with
                 # shape 97.1875, rate 3.71875, shift 25.625 d (He et al. 2020, corrected by
                 # Ashcroft et al. 2020, Table 1); parameters = shape, scale = 1 / rate;
