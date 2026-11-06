@@ -39,7 +39,7 @@ using GEMSPaper
 runall()                  # all analyses and scenarios, written to results/<timestamp>/
 ```
 
-Each example can also be run on its own: `scenario_first_wave()`, `scenario_self_isolation()`, `scenario_sweeping()`, `scenario_testing()`, `benchmark()`, `contacts()`, `demographics()`, `mobility()`, `settinganalyses()`.
+Each example can also be run on its own: `scenario_first_wave()`, `scenario_household_isolation()`, `scenario_sweeping()`, `scenario_testing()`, `benchmark()`, `contacts()`, `demographics()`, `mobility()`, `settinganalyses()`.
 
 The first wave example downloads the RKI case data (about 400 MB, checked against a SHA-256 checksum) to `data/` on its first run. Its calibrated contact factors are read from `inputs/`; to recalibrate, run [calibrate_first_wave.jl](calibrate_first_wave.jl).
 
@@ -52,8 +52,8 @@ All simulations use fixed seeds ([Section 3](#3-overview-examples-code-and-confi
 | Fig 4–6 (population, demographics, commuting) | `demographics.jl`, `settings.jl`, `mobility.jl` | none | DE | – | – |
 | Fig 7 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | GEMS defaults | SL | – | seed 0 |
 | Sec. 3.1.1 First wave 2020 | [sc_first_wave.jl](src/sc_first_wave.jl) → `scenario_first_wave()` | reference model | DE | 10.02.–31.05.2020 | see [5.1](#51-first-wave-2020-sec-311) |
-| Sec. 3.1.2 Scenario modeling (Fig 12A) | [sc_self_isolation.jl](src/sc_self_isolation.jl) → `scenario_self_isolation()` | reference model | DE | 100 d | 1 per scenario / seed 0 |
-| Fig 12B (code listing) | [sc_self_isolation_screenshot_file.jl](src/sc_self_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | seed 0 |
+| Sec. 3.1.2 Scenario modeling (Fig 12A) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 100 d | 1 per scenario / seed 0 |
+| Fig 12B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | no seed |
 | Sec. 3.1.3 Parameter sweep (Fig 13) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 3 / seeds 1–5043 |
 | Sec. 3.1.4 Multi-criteria evaluation (Fig 14, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | DE | 1095 d | 1 per scenario / seeds 0, 1, 2 |
 | Sec. 3.2 Performance (Fig 15) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | GEMS defaults | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / seeds 1–11 |
@@ -232,7 +232,7 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 
 ### 5.2 Scenario modeling (Sec. 3.1.2, Fig 12)
 
-Code: [sc_self_isolation.jl](src/sc_self_isolation.jl). Config: reference model.
+Code: [sc_household_isolation.jl](src/sc_household_isolation.jl). Config: reference model.
 
 | Parameter | Reference model | This example |
 |---|---|---|
@@ -240,12 +240,15 @@ Code: [sc_self_isolation.jl](src/sc_self_isolation.jl). Config: reference model.
 | Duration | 112 days | 100 days |
 | Seed | – | 0 (both scenarios) |
 
-| Scenario | Trigger | Strategy (condition) | Measures |
+| Scenario | Trigger | Strategy (condition) | Measures (offset) → follow-up |
 |---|---|---|---|
 | Baseline | – | – | – |
-| Scenario | `SymptomTrigger` | Self Isolation (none) | `SelfIsolation(14)` (0) |
+| Scenario | `SymptomTrigger` | Find Household Members | `FindSettingMembers` in Household, incl. the symptomatic individual (0) → *Isolation* |
+| | | Isolation | `SelfIsolation(14)` (0) |
 
-The Fig 12B listing ([sc_self_isolation_screenshot_file.jl](src/sc_self_isolation_screenshot_file.jl)) uses the same intervention with GEMS defaults ([Section 5.5](#55-performance-benchmark-sec-32-fig-15)) on 100,000 agents.
+All household members, including the symptomatic individual, isolate at home for 14 days. Each new symptomatic household member triggers the strategy again and restarts the 14 days for the whole household.
+
+The Fig 12B listing ([sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl)) uses the same intervention with GEMS defaults ([Section 5.5](#55-performance-benchmark-sec-32-fig-15)) on 100,000 agents, without a seed.
 
 ### 5.3 Parameter sweep (Sec. 3.1.3, Fig 13)
 

@@ -85,7 +85,7 @@ include("first_wave/rki_figures.jl")
 
 # INCLUDE SCENARIOS
 include("sc_outbreak.jl")
-include("sc_self_isolation.jl")
+include("sc_household_isolation.jl")
 include("sc_sweeping.jl")
 include("sc_testing.jl")
 include("sc_first_wave.jl")
@@ -154,7 +154,7 @@ function runall(;
     )
 
     printinfo("### RUNNING SIMPLE INTERVENTION SCENARIO")
-    scenario_self_isolation(
+    scenario_household_isolation(
         population = population,
         folder = folder
     )

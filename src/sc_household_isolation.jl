@@ -1,50 +1,56 @@
-export run_self_isolation_sims
-export plot_scenario_self_isolation
+export run_household_isolation_sims
+export plot_scenario_household_isolation
 
-export scenario_self_isolation
+export scenario_household_isolation
 
 
 
 """
-    run_self_isolation_sims(;
-        configfile = "models/DE_model_R0_3.28.toml",
-        infected_fraction = 0.001,
-        stop_criterion = TimesUp(limit = 365),
+    run_household_isolation_sims(;
+        configfile = "models/DE_model_first_wave.toml",
+        infected_fraction = 0.0001,
+        stop_criterion = TimesUp(limit = 100),
         population = "DE")
 
-Runs the self-isolation scenario simulations and returns 
-two ResultData objects: one for the baseline simulation and one for the scenario with self-isolation.
+Runs the household isolation scenario simulations and returns
+two ResultData objects: one for the baseline simulation and one for the scenario with household isolation.
 And also returns last simulation object for further data extraction.
 """
-function run_self_isolation_sims(;
-    configfile = "models/DE_model_R0_3.28.toml",
-    infected_fraction = 0.001,
-    stop_criterion = TimesUp(limit = 365),
+function run_household_isolation_sims(;
+    configfile = "models/DE_model_first_wave.toml",
+    infected_fraction = 0.0001,
+    stop_criterion = TimesUp(limit = 100),
     population = "DE")
 
-    # baseline simultion
+    # baseline simulation
     sim = Simulation(
+        label = "Baseline",
         configfile = configfile,
         population = population,
         seed = 0,
         infected_fraction = infected_fraction,
         stop_criterion = stop_criterion)
-    sim.label = "Baseline"
+
     run!(sim)
     rd_b = ResultData(sim, style = "LightRD")
 
 
-    # simulation with 14-day isolation (at home) upon experiencing symptoms
+    # simulation with 14-day household isolation: upon symptom onset, all household members
+    # (incl. the symptomatic individual) isolate at home; each new symptomatic member restarts it
     sim = Simulation(
+        label = "Scenario",
         configfile = configfile,
         population = population,
         seed = 0,
         infected_fraction = infected_fraction,
         stop_criterion = stop_criterion)
-    sim.label = "Scenario"
-    self_isolation = IStrategy("Self Isolation", sim)
-    add_measure!(self_isolation, SelfIsolation(14))
-    trigger = SymptomTrigger(self_isolation)
+
+    member_isolation = IStrategy("Isolation", sim)
+    add_measure!(member_isolation, SelfIsolation(14))
+    member_identification = IStrategy("Find Household Members", sim)
+    add_measure!(member_identification,
+        FindSettingMembers(Household, member_isolation))
+    trigger = SymptomTrigger(member_identification)
     add_symptom_trigger!(sim, trigger)
 
     run!(sim)
@@ -55,12 +61,13 @@ end
 
 
 """
-    plot_scenario_self_isolation(rd_b, rd_s)
+    plot_scenario_household_isolation(rd_b, rd_s, sim)
 
-Plots the self-isolation scenario results.
-Requires two ResultData objects as input, one for the baseline and one for the scenario with self-isolation.
+Plots the household isolation scenario results.
+Requires two ResultData objects as input, one for the baseline and one for the scenario with household isolation,
+and the simulation object (for the household sizes and ages per county).
 """
-function plot_scenario_self_isolation(rd_b, rd_s, sim)
+function plot_scenario_household_isolation(rd_b, rd_s, sim)
 
     # calculate r0 difference
     r0b = r0_per_county(rd_b)
@@ -78,7 +85,7 @@ function plot_scenario_self_isolation(rd_b, rd_s, sim)
         df -> groupby(df, :ags) |>
         df -> combine(df, :size => mean => :size)
 
-    # mean ages per county    
+    # mean ages per county
     ind_ages = individuals(sim) |>
         vec -> DataFrame(
             ags = county.(ags.((i -> household(i, sim)).(vec))),
@@ -91,9 +98,9 @@ function plot_scenario_self_isolation(rd_b, rd_s, sim)
         df -> leftjoin(df, hh_size, on = :ags) |>
         df -> leftjoin(df, ind_ages, on = :ags)
 
-    
+
     l = @layout [a{0.5w} b{0.5w}]
-    l2 = @layout [a{0.75h} 
+    l2 = @layout [a{0.75h}
                 b{0.25h}]
 
     return plot(
@@ -101,7 +108,6 @@ function plot_scenario_self_isolation(rd_b, rd_s, sim)
                 agsmap(
                     select(df, :ags, :r0_diff),
                     size = 0.5 .* map_dims(),
-                    # clims = (1.1, 1.2),
                     title = "R-Reduction by County",
                     linecolor = nothing,
                 ),
@@ -135,29 +141,35 @@ function plot_scenario_self_isolation(rd_b, rd_s, sim)
             layout = l,
             size = 1.5 .* (1800, 1000))
 end
-    
+
 
 """
-    scenario_self_isolation(;
-        configfile = "models/DE_model_R0_3.28.toml",
+    scenario_household_isolation(;
+        configfile = "models/DE_model_first_wave.toml",
+        infected_fraction = 0.0001,
+        stop_criterion = TimesUp(limit = 100),
         population = "DE",
         folder = nothing)
 
-Runs the self-isolation scenario and all analyses.
+Runs the household isolation scenario and all analyses.
 """
-function scenario_self_isolation(;
-    configfile = "models/DE_model_R0_3.28.toml",
+function scenario_household_isolation(;
+    configfile = "models/DE_model_first_wave.toml",
+    infected_fraction = 0.0001,
+    stop_criterion = TimesUp(limit = 100),
     population = "DE",
     folder = nothing)
 
     # create result folder if not passed
-    isnothing(folder) ? folder = result_folder() : nothing    
+    isnothing(folder) ? folder = result_folder() : nothing
 
     # run simulations and get result data objects
-    rd_b, rd_s, sim = run_self_isolation_sims(
+    rd_b, rd_s, sim = run_household_isolation_sims(
         configfile = configfile,
+        infected_fraction = infected_fraction,
+        stop_criterion = stop_criterion,
         population = population)
 
-    p_si_sc = plot_scenario_self_isolation(rd_b, rd_s, sim)
-    png(p_si_sc, joinpath(folder, "sc_self_isolation_(R0-comparison).png"))
+    p_hi = plot_scenario_household_isolation(rd_b, rd_s, sim)
+    png(p_hi, joinpath(folder, "sc_household_isolation_r0_reduction.png"))
 end
