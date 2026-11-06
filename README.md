@@ -57,7 +57,7 @@ All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-an
 | Sec. 3.1.2 Scenario modeling (Fig 12A) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 100 d | 1 per scenario / 0 |
 | Fig 12B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
 | Sec. 3.1.3 Parameter sweep (Fig 13) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 3 / 1–5043 |
-| Sec. 3.1.4 Multi-criteria evaluation (Fig 14, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | DE | 1095 d | 1 per scenario / 0, 1, 2 |
+| Sec. 3.1.4 Multi-criteria evaluation (Fig 14, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | DE | 365 d | 1 per scenario / 0, 1, 2 |
 | Sec. 3.2 Performance (Fig 15) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | GEMS defaults | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / 1–11 |
 
 ## 4. Reference model (COVID-19, wild type, first wave 2020)
@@ -277,8 +277,9 @@ Code: [sc_testing.jl](src/sc_testing.jl). Config: reference model.
 
 | Parameter | Reference model | This example |
 |---|---|---|
-| Initial infections | none | 10 infections in Gangelt (municipality key 05370008, county Heinsberg) |
-| Duration | 112 days | 1095 days |
+| Initial infections | none | 50 infections in Gangelt (municipality key 05370008, county Heinsberg) |
+| Duration | 112 days | 365 days |
+| Municipality contact parameter | 4.0 | 2.0: 50 % of community contacts prevented (`municipality_contact_reduction = 0.5`) [I] |
 | Random seeds | – | 0 (Isolation Only), 1 (Isolation & Testing), 2 (Isolation, Testing & Tracing) |
 
 **Test type** "Antigen Test" [I]: positive ~ Bernoulli(p = 0.80) if infected (sensitivity), Bernoulli(p = 0.01) if not (specificity 0.99).
@@ -292,7 +293,7 @@ Code: [sc_testing.jl](src/sc_testing.jl). Config: reference model.
 | | | Isolate & Test Contacts (not yet detected) | `SelfIsolation(14)` (0); `Test(Antigen)` (0) → negative: *Cancel Isolation* |
 | | | Cancel Isolation | `CancelSelfIsolation` (0) |
 
-The tracing scenario corresponds to Fig 9 of the paper.
+The tests in Isolation & Testing have no follow-up: the scenario detects cases without changing the spread, so it differs from Isolation Only only by the random seed. The tracing scenario corresponds to Fig 9 of the paper.
 
 ### 5.5 Performance benchmark (Sec. 3.2, Fig 15)
 

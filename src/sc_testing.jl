@@ -2,7 +2,6 @@ export calc_outcomes
 export outcome_df
 
 export run_testing_sims
-export run_recursive_testing_sims
 export plot_scenario_testing
 
 export scenario_testing
@@ -15,7 +14,7 @@ export scenario_testing
     calc_outcomes(rds; kwargs...)
 
 Generates a dataframe from a vector of `ResultData` objects and a series
-of keyworded lamda-functions that extract values from each of the `rds`.
+of keyworded lambda functions that extract values from each of the `rds`.
 
 This example extracts the label and the number of total infections from each object:
 
@@ -77,42 +76,53 @@ end
 
 """
     run_testing_sims(;
-        configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
+        configfile = "models/DE_model_first_wave.toml",
         population = "DE",
-        start_condition = RegionalSeeds(seeds = Dict(05370008=>10)), # 10 infections in Heinsberg
-        stop_criterion = TimesUp(limit = 1095),
-        transmission_reduction::Float64 = 0.67,
+        start_condition = RegionalSeeds(seeds = Dict(05370008=>50)), # 50 infections in Gangelt (Kreis Heinsberg)
+        stop_criterion = TimesUp(limit = 365),
+        municipality_contact_reduction::Float64 = 0.5,
         isolation_duration = 14,
         sensitivity = .8,
         specificity = .99)
 
-Runs three simulation scenarios (isolation-only, isolation-and-test, and isolation-testing-and-tracing).
-All scenarios assume that other measures already prevent a share of all
-transmissions (`transmission_reduction`), which reduces the transmission rate
-(`ConstantTransmissionRate`) or `transmission_scale` (`InfectiousnessProfile`) of the pathogen accordingly.
+Runs three simulation scenarios (isolation-only, isolation-and-test, and isolation-testing-and-tracing)
+on the COVID-19 reference model of the first wave example (`configfile`, without its contact phases)
+with the random seeds 0, 1, and 2. `start_condition` and `stop_criterion` replace those of the config;
+regional seeds must lie within `population` (e.g., `RegionalSeeds(seeds = Dict(10042111 => 50))`
+for 50 infections in Beckingen with `population = "SL"`).
+All scenarios assume that a share of the community contacts does not take place
+(`municipality_contact_reduction`), which reduces the contact parameter of all municipalities accordingly
+(by default, from 4 to 2 in the reference model); contacts in households, workplaces, and schools are not reduced.
+
+In all scenarios, individuals isolate for `isolation_duration` days upon symptom onset.
+The isolation-and-test scenario additionally tests them with an antigen test (`sensitivity`, `specificity`)
+on the same day, which detects cases without changing the isolation. In the tracing scenario, individuals
+who test negative are released, and the household, office, and school class members of a positively tested
+individual are identified one day later, isolated, and tested (and released if negative).
+
 Returns the three `ResultData` objects and the last `Simulation` object (for any required plotting):
 `rd_isolation_only`, `rd_isolation_and_test`, `rd_testing_and_tracing`, `sim`.
 """
 function run_testing_sims(;
-    configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
+    configfile = "models/DE_model_first_wave.toml",
     population = "DE",
 
-    start_condition = RegionalSeeds(seeds = Dict(05370008=>10)), # 10 infections in Heinsberg
-    stop_criterion = TimesUp(limit = 1095),
+    start_condition = RegionalSeeds(seeds = Dict(05370008=>50)), # 50 infections in Gangelt (Kreis Heinsberg)
+    stop_criterion = TimesUp(limit = 365),
 
-    transmission_reduction::Float64 = 0.67,
+    municipality_contact_reduction::Float64 = 0.5,
     isolation_duration = 14,
     sensitivity = .8,
     specificity = .99)
 
-    0.0 <= transmission_reduction <= 1.0 || throw(ArgumentError("Transmission reduction must be between 0 and 1. Got $transmission_reduction."))
+    0.0 <= municipality_contact_reduction <= 1.0 || throw(ArgumentError("Municipality contact reduction must be between 0 and 1. Got $municipality_contact_reduction."))
 
-    # assume that other measures already prevent a share of all transmissions
-    # (scales the transmission rate or transmission_scale of the config's transmission function)
-    function reduce_transmission!(sim)
-        tf = transmission_function(pathogen(sim))
-        scale = tf isa InfectiousnessProfile ? tf.transmission_scale : tf.transmission_rate
-        pathogen(sim).transmission_function = with_transmission_scale(tf, scale * (1.0 - transmission_reduction))
+    # assume that a share of the community contacts does not take place
+    # (scales the contact parameter of the config's municipalities)
+    function reduce_municipality_contacts!(sim)
+        c = contact_sampling_method(first(settings(sim, Municipality))).contactparameter
+        csm = ContactparameterSampling(c * (1.0 - municipality_contact_reduction))
+        foreach(s -> contact_sampling_method!(s, csm), settings(sim, Municipality))
     end
 
     ###
@@ -127,7 +137,7 @@ function run_testing_sims(;
         start_condition = start_condition,
         stop_criterion = stop_criterion)
 
-    reduce_transmission!(sim)
+    reduce_municipality_contacts!(sim)
 
     # STRATEGY & MEASURE DEFINITION
     isolation_only = IStrategy("Self Isolation", sim)
@@ -147,12 +157,12 @@ function run_testing_sims(;
     sim = Simulation(
         label = "Isolation & Testing",
         configfile = configfile,
-        population=population, 
+        population=population,
         seed = 1,
         start_condition = start_condition,
         stop_criterion = stop_criterion)
 
-    reduce_transmission!(sim)
+    reduce_municipality_contacts!(sim)
 
     # test type definition
     antigen_test = TestType("Antigen Test", pathogen(sim), sim,
@@ -179,12 +189,12 @@ function run_testing_sims(;
     sim = Simulation(
         label = "Isolation, Testing & Tracing",
         configfile = configfile,
-        population = population, 
+        population = population,
         seed = 2,
         start_condition = start_condition,
         stop_criterion = stop_criterion)
 
-    reduce_transmission!(sim)
+    reduce_municipality_contacts!(sim)
 
     # test type definition
     antigen_test = TestType("Antigen Test", pathogen(sim), sim,
@@ -302,10 +312,14 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
     c -> c * 1.1 |> ceil |> Int
 
 
-    # tick conversion function (makes 100_000 to 0.1m)
-    tick_to_m(t) = (t / 10^6) |>
-        t -> round(t, digits = 1) |>
-        t -> t < 10 ? "  $(t)m" : "$(t)m"
+    # tick conversion function (makes 2_500 to 2.5k, 20_000 to 20k, and 1_500_000 to 1.5m),
+    # padded to equal length to align the plots
+    tick_format(t) = (
+            abs(t) >= 10^6 ? "$(round(t / 10^6, digits = 1))m" :
+            abs(t) >= 10^4 ? "$(round(Int, t / 10^3))k" :
+            abs(t) >= 10^3 ? "$(round(t / 10^3, digits = 1))k" :
+            "$(round(Int, t))") |>
+        s -> lpad(s, 6)
 
     # spacing R plot ticks
     tick_to_R(t) = "        $(round(Int, t))"
@@ -320,7 +334,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
             title = "",
             plot_title = "",
             ylabel = "Infections",
-            yformatter = tick_to_m,
+            yformatter = tick_format,
             xformatter = x -> "",
             xlims = (0, max_ticks),
             xlabel = "",
@@ -344,7 +358,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
             type = :TotalTests,
             title = "",
             ylabel = "Tests",
-            yformatter = tick_to_m,
+            yformatter = tick_format,
             xformatter = x -> "",
             plot_title = "",
             xlims = (0, max_ticks),
@@ -357,7 +371,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
             type = :CumulativeIsolations,
             title = "",
             ylabel = "In Quarantine",
-            yformatter = tick_to_m,
+            yformatter = tick_format,
             plot_title = "",
             xlims = (0, max_ticks),
             bottom_margin = 15mm,
@@ -383,7 +397,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
                     title = "",
                     plot_title = "",
                     ylabel = "Detections",
-                    yformatter = tick_to_m,
+                    yformatter = tick_format,
                     ylims = (0, det_cases_ymax),
                     xformatter = x -> "",
                     xlabel = "",
@@ -393,7 +407,7 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
                     title = "",
                     plot_title = "",
                     ylabel = "Dark Figure",
-                    yformatter = tick_to_m,
+                    yformatter = tick_format,
                     ylims = (0, dark_fig_ymax),
                     xlabel = "Day",
                     legend = :topright),
@@ -489,17 +503,32 @@ end
 
 """
     scenario_testing(;
-        configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
+        configfile = "models/DE_model_first_wave.toml",
         population = "DE",
-        transmission_reduction::Float64 = 0.67,
+        start_condition = RegionalSeeds(seeds = Dict(05370008=>50)), # 50 infections in Gangelt (Kreis Heinsberg)
+        stop_criterion = TimesUp(limit = 365),
+        municipality_contact_reduction::Float64 = 0.5,
+        isolation_duration = 14,
+        sensitivity = .8,
+        specificity = .99,
         folder = nothing)
 
-Runs the testing-scenario and all analyses.
+Runs the testing scenario (see `run_testing_sims` for the parameters), plots the results
+(`sc_testing_and_observed_progression.png`), and stores the outcomes (`sc_testing_outcomes.csv`)
+in `folder` (a new result folder if `nothing`).
 """
 function scenario_testing(;
-    configfile = "models/DE_model_R0_3.28_Heinsberg_Seed_fewer_munContacts.toml",
+    configfile = "models/DE_model_first_wave.toml",
     population = "DE",
-    transmission_reduction::Float64 = 0.67,
+
+    start_condition = RegionalSeeds(seeds = Dict(05370008=>50)), # 50 infections in Gangelt (Kreis Heinsberg)
+    stop_criterion = TimesUp(limit = 365),
+
+    municipality_contact_reduction::Float64 = 0.5,
+    isolation_duration = 14,
+    sensitivity = .8,
+    specificity = .99,
+
     folder = nothing)
 
     # create result folder
@@ -509,7 +538,12 @@ function scenario_testing(;
     rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing, sim = run_testing_sims(
         configfile = configfile,
         population = population,
-        transmission_reduction = transmission_reduction)
+        start_condition = start_condition,
+        stop_criterion = stop_criterion,
+        municipality_contact_reduction = municipality_contact_reduction,
+        isolation_duration = isolation_duration,
+        sensitivity = sensitivity,
+        specificity = specificity)
 
     # plot results
     p_testing = plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing, sim)
