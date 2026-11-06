@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "984c058d37339b2a6b309be7e837c067deda2d50"
+project_hash = "6aa1e91be05b2029a86446d9fcddf05b82af6fd4"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -768,14 +768,14 @@ version = "304.1200.400+0"
 
 [[deps.GEMS]]
 deps = ["CSV", "CategoricalArrays", "ContentHashes", "CpuId", "DSP", "DataFrames", "DataStructures", "Dates", "Debugger", "DelimitedFiles", "Distributions", "Documenter", "FileIO", "Format", "GMT", "HTTP", "ImageIO", "InteractiveUtils", "JLD2", "JSON", "Logging", "LoggingExtras", "Optimization", "OptimizationCMAEvolutionStrategy", "OrderedCollections", "Parameters", "PkgVersion", "Plots", "PrettyTables", "ProgressBars", "RData", "Random", "Revise", "RollingFunctions", "Shapefile", "Statistics", "StatsBase", "StatsPlots", "Suppressor", "TOML", "TimerOutputs", "UUIDs", "UrlDownload", "VegaLite", "VideoIO", "Weave", "ZipFile"]
-git-tree-sha1 = "590cc789538026754b276ffb6e68f1560c6cab16"
-repo-rev = "v1.0.1"
+git-tree-sha1 = "ce62c14770c9af4839855b3d85876d5558920648"
+repo-rev = "release_1.0.2"
 repo-url = "https://github.com/IMMIDD/GEMS.git"
 uuid = "be47d99e-7859-414d-a902-bf4cb6b83c8a"
 version = "1.0.1"
 
 [[deps.GEMSPaper]]
-deps = ["CSV", "DataFrames", "Dates", "GEMS", "JLD2", "LinearAlgebra", "Measures", "Plots", "Proj", "Random", "Reexport", "Revise", "Statistics", "StatsBase", "TOML"]
+deps = ["CSV", "DataFrames", "Dates", "Downloads", "GEMS", "JLD2", "LinearAlgebra", "Measures", "Plots", "Proj", "Random", "Reexport", "Revise", "SHA", "Statistics", "StatsBase", "TOML"]
 path = "."
 uuid = "9e58e00f-e0e9-44ea-ab73-cbbd8c14c821"
 version = "0.1.0"
