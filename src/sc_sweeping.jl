@@ -1,6 +1,8 @@
 export set_asymptomatic_share!
 export run_sweeps
 export plot_sweeps
+export sweep_variability
+export write_sweep_variability
 
 export scenario_sweeping
 
@@ -165,6 +167,75 @@ function plot_sweeps(df)
 end
 
 """
+    sweep_variability(df)
+
+Summarizes the stochastic variability of the outcome between the replicates
+of each parameter combination (grid cell). Requires the input of `run_sweeps()`
+with at least two replicates per combination.
+
+Per cell, the sample standard deviation (n - 1) across replicates is computed.
+These are summarized across the grid as the pooled SD (root of the mean
+per-cell variance), the mean, 95th percentile, and maximum SD. The standard
+error of the plotted cell means is the pooled SD divided by √n.
+Also counts the cells whose replicates lie on both sides of R = 1.
+
+Returns a NamedTuple with the results.
+"""
+function sweep_variability(df)
+
+    cells = combine(groupby(df, [:xvals, :yvals]),
+        :outvals => length => :n,
+        :outvals => std => :sd,
+        :outvals => (r -> minimum(r) < 1 < maximum(r)) => :straddles)
+
+    n = minimum(cells.n)
+    n >= 2 || throw(ArgumentError("At least two replicates per combination are required to compute variability. Got $n."))
+    n == maximum(cells.n) || @warn "Number of replicates differs between combinations ($n to $(maximum(cells.n)))."
+
+    pooled_sd = sqrt(mean(cells.sd .^ 2))
+
+    return (
+        cells = nrow(cells),
+        replicates = n,
+        pooled_sd = pooled_sd,
+        mean_sd = mean(cells.sd),
+        p95_sd = quantile(cells.sd, 0.95),
+        max_sd = maximum(cells.sd),
+        se_mean = pooled_sd / sqrt(n),
+        straddling_cells = count(cells.straddles))
+end
+
+"""
+    write_sweep_variability(df, path)
+
+Computes the variability summary of `sweep_variability(df)` and writes it as
+a plain text file to `path`.
+"""
+function write_sweep_variability(df, path)
+
+    v = sweep_variability(df)
+    r(x) = round(x, digits = 3)
+
+    open(path, "w") do io
+        println(io, "Parameter sweep: stochastic variability of R_init between replicates")
+        println(io, "")
+        println(io, "Grid cells (parameter combinations):     $(v.cells)")
+        println(io, "Replicates per cell (n):                 $(v.replicates)")
+        println(io, "")
+        println(io, "Per-cell sample SD (n - 1) across replicates, summarized over all cells:")
+        println(io, "  Pooled SD (sqrt of mean variance):     $(r(v.pooled_sd))")
+        println(io, "  Mean SD:                               $(r(v.mean_sd))")
+        println(io, "  95th percentile SD:                    $(r(v.p95_sd))")
+        println(io, "  Maximum SD:                            $(r(v.max_sd))")
+        println(io, "")
+        println(io, "Standard error of cell means (pooled SD / sqrt(n)): $(r(v.se_mean))")
+        println(io, "Cells with replicates on both sides of R = 1:       $(v.straddling_cells) ($(round(100 * v.straddling_cells / v.cells, digits = 1)) %)")
+    end
+
+    return v
+end
+
+"""
     scenario_sweeping(;
         configfile = "models/DE_model_first_wave.toml",
         population = "SL",
@@ -202,6 +273,11 @@ function scenario_sweeping(;
 
     # store df as CSV
     CSV.write(joinpath(folder, "sc_sweep_data.csv"), sweeps)
+
+    # summarize variability between replicates (requires rep >= 2)
+    rep >= 2 ?
+        write_sweep_variability(sweeps, joinpath(folder, "sc_sweep_variability.txt")) :
+        @warn "Skipping variability summary, as it requires at least two repetitions per combination."
 
     # generate plot
     p_sw = plot_sweeps(sweeps)

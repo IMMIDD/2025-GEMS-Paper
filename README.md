@@ -293,6 +293,8 @@ To focus on the regime where self-isolation can be decisive, we assume that othe
 |---|---|---|
 | `SymptomTrigger` | Self Isolation (adheres ~ Bernoulli(p = adherence), drawn from the simulation's RNG) | `SelfIsolation(14)` (0) |
 
+The heatmap shows the mean R_init per combination. Alongside the data (`sc_sweep_data.csv`) and the heatmap (`sc_sweep_heatmap.png`), the scenario writes `sc_sweep_variability.txt`, which summarizes the variability between replicates: the per-cell sample SD across replicates, aggregated over the grid as the pooled SD (root of the mean variance), mean, 95th percentile, and maximum; the standard error of the cell means; and the number of cells whose replicates lie on both sides of R = 1.
+
 ### 5.4 Multi-criteria strategy evaluation (Sec. 3.1.4, Fig 14, Tab 2)
 
 Code: [sc_testing.jl](src/sc_testing.jl). Config: reference model.
