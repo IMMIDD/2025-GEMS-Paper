@@ -463,6 +463,7 @@ end
         configfile = "models/DE_model_first_wave.toml",
         population = "DE",
         folder = nothing,
+        folder_tag = nothing,
         generation_time = true,
         test = false)
 
@@ -471,16 +472,20 @@ symptom onset up to `RKI_CUTOFF` (after measuring the generation time of the
 model, if `generation_time`). Writes the results to `folder`, and the factors for
 the scenario to `inputs/` (`first_wave_input`) if calibrated on Germany and not
 as a `test` (one run per evaluation).
+
+If `folder` is `nothing`, a new result folder is created, with `folder_tag`
+appended to its timestamp-based name (see `result_folder`).
 """
 function calibrate_first_wave(;
     configfile = "models/DE_model_first_wave.toml",
     population = "DE",
     folder = nothing,
+    folder_tag = nothing,
     generation_time = true,
     test = false)
 
     # create result folder if not passed
-    isnothing(folder) ? folder = result_folder() : mkpath(folder)
+    isnothing(folder) ? folder = result_folder(folder_tag) : mkpath(folder)
 
     s = _first_wave_settings(configfile, population)
     if generation_time
@@ -505,6 +510,7 @@ end
         configfile = "models/DE_model_first_wave.toml",
         population = "DE",
         folder = nothing,
+        folder_tag = nothing,
         parts = FIRST_WAVE_PARTS,
         test = false)
 
@@ -518,11 +524,15 @@ Single `parts` can be run in a folder of an earlier run. For a state population
 (e.g. "SL"), all data are restricted to its counties. With `test`, every part
 runs only once (one seed, one variant). The RKI case data are downloaded on the
 first run (`obtain_rki_cases`).
+
+If `folder` is `nothing`, a new result folder is created, with `folder_tag`
+appended to its timestamp-based name (see `result_folder`).
 """
 function scenario_first_wave(;
     configfile = "models/DE_model_first_wave.toml",
     population = "DE",
     folder = nothing,
+    folder_tag = nothing,
     parts = FIRST_WAVE_PARTS,
     test = false)
 
@@ -530,7 +540,7 @@ function scenario_first_wave(;
     isempty(unknown) || throw(ArgumentError("Unknown parts $unknown, see FIRST_WAVE_PARTS."))
 
     # create result folder if not passed
-    isnothing(folder) ? folder = result_folder() : mkpath(folder)
+    isnothing(folder) ? folder = result_folder(folder_tag) : mkpath(folder)
 
     s = _first_wave_settings(configfile, population)
 

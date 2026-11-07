@@ -244,9 +244,13 @@ end
         transmission_reduction::Float64 = 0.6,
         rep = 3,
         step_size::Float64 = 0.025,
-        folder = nothing)
+        folder = nothing,
+        folder_tag = nothing)
 
 Runs the parameter sweep scenario and all analyses.
+
+If `folder` is `nothing`, a new result folder is created, with `folder_tag`
+appended to its timestamp-based name (see `result_folder`).
 """
 function scenario_sweeping(;
     configfile = "models/DE_model_first_wave.toml",
@@ -256,10 +260,11 @@ function scenario_sweeping(;
     transmission_reduction::Float64 = 0.6, # share of transmissions prevented by other measures
     rep = 3, # repetitions per combination
     step_size::Float64 = 0.025,
-    folder = nothing)
+    folder = nothing,
+    folder_tag = nothing)
 
     # create result folder if not passed
-    isnothing(folder) ? folder = result_folder() : nothing
+    isnothing(folder) ? folder = result_folder(folder_tag) : nothing
 
     # run simulations
     sweeps = run_sweeps(

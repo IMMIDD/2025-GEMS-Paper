@@ -198,14 +198,19 @@ end
     scenario_outbreak(;
         configfile = "models/DE_model_R0_3.28_Heinsberg_Seed.toml",
         population = "DE",
-        folder = nothing)
+        folder = nothing,
+        folder_tag = nothing)
 
 Runs the outbreak scenario and all analyses.
+
+If `folder` is `nothing`, a new result folder is created, with `folder_tag`
+appended to its timestamp-based name (see `result_folder`).
 """
 function scenario_outbreak(;
     configfile = "models/DE_model_R0_3.28_Heinsberg_Seed.toml",
     population = "DE",
-    folder = nothing)
+    folder = nothing,
+    folder_tag = nothing)
 
 
     # load, run, and post-process simulation
@@ -214,7 +219,7 @@ function scenario_outbreak(;
         population = population)
 
     # create result folder if not passed
-    isnothing(folder) ? folder = result_folder() : nothing    
+    isnothing(folder) ? folder = result_folder(folder_tag) : nothing    
     weekly_folder = joinpath(folder, "weekly_incidence")
     mkpath(weekly_folder)
 

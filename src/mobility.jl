@@ -272,16 +272,21 @@ end
 """
     mobility(;
         folder = nothing,
+        folder_tag = nothing,
         sim = Simulation(population = "SL"))
 
 Runs all mobilty-related analyses.
+
+If `folder` is `nothing`, a new result folder is created, with `folder_tag`
+appended to its timestamp-based name (see `result_folder`).
 """
 function mobility(;
         folder = nothing,
+        folder_tag = nothing,
         sim = Simulation(population = "SL", seed = 0))
 
     # create result folder if not passed
-    isnothing(folder) ? folder = result_folder() : nothing
+    isnothing(folder) ? folder = result_folder(folder_tag) : nothing
 
     # calculate municipality & county commutes
     mc = mun_commutes(sim)

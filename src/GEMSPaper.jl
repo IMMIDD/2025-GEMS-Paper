@@ -30,12 +30,26 @@ export runall
 
 # COMMON FUNCTIONS
 """
-result_folder()
+    result_folder(folder_tag = nothing)
 
-Creates the path to a new result folder.
+Creates a new result folder `results/<timestamp>` and returns its path.
+If a `folder_tag` is given, it is appended to the timestamp
+(`results/<timestamp>_<folder_tag>`) to make the folder easier to find.
+Whitespace in the tag is replaced by underscores; characters that are not
+allowed in folder names (`\\ / : * ? " < > |`) raise an error.
 """
-function result_folder() 
-    folder = joinpath("results", "$(Dates.format(Dates.now(), "yyyy-mm-dd_HH-MM-SS_sss"))")
+function result_folder(folder_tag = nothing)
+    name = Dates.format(Dates.now(), "yyyy-mm-dd_HH-MM-SS_sss")
+
+    if !isnothing(folder_tag)
+        tag = replace(strip(string(folder_tag)), r"\s+" => "_")
+        isempty(tag) && throw(ArgumentError("The folder tag must not be empty."))
+        occursin(r"[\\/:*?\"<>|]", tag) &&
+            throw(ArgumentError("The folder tag must not contain any of \\ / : * ? \" < > |. Got \"$folder_tag\"."))
+        name *= "_" * tag
+    end
+
+    folder = joinpath("results", name)
     mkpath(folder)
     return folder
 end
@@ -97,17 +111,20 @@ include("sc_first_wave.jl")
     runall(;
         sim_obj = nothing,
         configfile = "models/DE_model_first_wave.toml",
-        population = "DE")
+        population = "DE",
+        folder_tag = nothing)
 
-Executes all model analyses.
+Executes all model analyses and writes their results to one new result folder,
+with `folder_tag` appended to its timestamp-based name (see `result_folder`).
 """
 function runall(;
         sim_obj = nothing,
         configfile = "models/DE_model_first_wave.toml",
-        population = "DE")
+        population = "DE",
+        folder_tag = nothing)
 
     # create result folder
-    folder = result_folder()
+    folder = result_folder(folder_tag)
 
     # sim object
     sim = isnothing(sim_obj) ? Simulation(configfile=configfile, population=population, seed = 0) : sim_obj

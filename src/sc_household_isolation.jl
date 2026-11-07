@@ -149,19 +149,24 @@ end
         infected_fraction = 0.0001,
         stop_criterion = TimesUp(limit = 180),
         population = "DE",
-        folder = nothing)
+        folder = nothing,
+        folder_tag = nothing)
 
 Runs the household isolation scenario and all analyses.
+
+If `folder` is `nothing`, a new result folder is created, with `folder_tag`
+appended to its timestamp-based name (see `result_folder`).
 """
 function scenario_household_isolation(;
     configfile = "models/DE_model_first_wave.toml",
     infected_fraction = 0.0001,
     stop_criterion = TimesUp(limit = 180),
     population = "DE",
-    folder = nothing)
+    folder = nothing,
+    folder_tag = nothing)
 
     # create result folder if not passed
-    isnothing(folder) ? folder = result_folder() : nothing
+    isnothing(folder) ? folder = result_folder(folder_tag) : nothing
 
     # run simulations and get result data objects
     rd_b, rd_s, sim = run_household_isolation_sims(

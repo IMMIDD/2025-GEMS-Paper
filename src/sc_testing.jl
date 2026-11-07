@@ -511,11 +511,15 @@ end
         isolation_duration = 14,
         sensitivity = .8,
         specificity = .99,
-        folder = nothing)
+        folder = nothing,
+        folder_tag = nothing)
 
 Runs the testing scenario (see `run_testing_sims` for the parameters), plots the results
 (`sc_testing_and_observed_progression.png`), and stores the outcomes (`sc_testing_outcomes.csv`)
 in `folder` (a new result folder if `nothing`).
+
+If `folder` is `nothing`, a new result folder is created, with `folder_tag`
+appended to its timestamp-based name (see `result_folder`).
 """
 function scenario_testing(;
     configfile = "models/DE_model_first_wave.toml",
@@ -529,10 +533,11 @@ function scenario_testing(;
     sensitivity = .8,
     specificity = .99,
 
-    folder = nothing)
+    folder = nothing,
+    folder_tag = nothing)
 
     # create result folder
-    isnothing(folder) ? folder = result_folder() : nothing
+    isnothing(folder) ? folder = result_folder(folder_tag) : nothing
 
     # run simulations and get result data objects
     rd_isolation_only, rd_isolation_and_test, rd_testing_and_tracing, sim = run_testing_sims(
