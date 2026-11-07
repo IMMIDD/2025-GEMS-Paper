@@ -2,7 +2,7 @@
 ### FIRST WAVE 2020: SCHEDULED SEEDING (VIA STEPMOD)
 ###
 
-# Workaround for GEMS v1.0.1: RegionalSeeds only seeds at tick 0 and filters
+# Workaround for GEMS v1.0.2: RegionalSeeds only seeds at tick 0 and filters
 # counties with in_state instead of in_county, so we seed via stepmod instead.
 
 

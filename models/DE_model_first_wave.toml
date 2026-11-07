@@ -1,5 +1,5 @@
 # COVID-19 (wild type, 2020).
-# Infectiousness: GEMS v1.0.1 keeps agents infectious from infectiousness onset to recovery;
+# Infectiousness: GEMS v1.0.2 keeps agents infectious from infectiousness onset to recovery;
 # the InfectiousnessProfile transmission function (src/infectiousness_profile.jl)
 # scales the transmission probability by an infectiousness profile over the days since
 # infectiousness onset; GEMS only lets agents transmit until recovery (= RNA clearance),

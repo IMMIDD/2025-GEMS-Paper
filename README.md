@@ -4,9 +4,29 @@ This repository contains the code and model configurations behind the example ap
 
 > Ponge, J., Patzner, J., Suer, J., et al. *GEMS: The German Epidemic Microsimulation System.*
 
-All simulations use [GEMS](https://github.com/IMMIDD/GEMS) **v1.0.1** (pinned in [Manifest.toml](Manifest.toml)).
+All simulations use [GEMS](https://github.com/IMMIDD/GEMS) **v1.0.2** (pinned in [Manifest.toml](Manifest.toml)).
 This README documents the parameterization of every example: population, contacts, transmission, disease progression, and interventions.
 All disease examples share one **reference model**, [models/DE_model_first_wave.toml](models/DE_model_first_wave.toml) ([Section 4](#4-reference-model-covid-19-wild-type-first-wave-2020)). Each example sets its own initial infections, horizon, and interventions in code, via the `Simulation` constructor or the scenario function's keyword arguments; [Section 5](#5-example-specific-parameterization) lists only these deviations.
+
+## Contents
+
+1. [Repository layout](#1-repository-layout)
+2. [Reproducing the results](#2-reproducing-the-results)
+3. [Overview: examples, code, and configuration](#3-overview-examples-code-and-configuration)
+4. [Reference model (COVID-19, wild type, first wave 2020)](#4-reference-model-covid-19-wild-type-first-wave-2020)
+   - [4.1 Simulation and initial infections](#41-simulation-and-initial-infections)
+   - [4.2 Contacts](#42-contacts)
+   - [4.3 Transmission](#43-transmission)
+   - [4.4 Progression assignment](#44-progression-assignment)
+   - [4.5 Transition durations](#45-transition-durations)
+5. [Example-specific parameterization](#5-example-specific-parameterization)
+   - [5.1 First wave 2020 (Sec. 3.1.1)](#51-first-wave-2020-sec-311)
+   - [5.2 Scenario modeling (Sec. 3.1.2, Fig 12)](#52-scenario-modeling-sec-312-fig-12)
+   - [5.3 Parameter sweep (Sec. 3.1.3, Fig 13)](#53-parameter-sweep-sec-313-fig-13)
+   - [5.4 Multi-criteria strategy evaluation (Sec. 3.1.4, Fig 14, Tab 2)](#54-multi-criteria-strategy-evaluation-sec-314-fig-14-tab-2)
+   - [5.5 Performance benchmark (Sec. 3.2, Fig 15)](#55-performance-benchmark-sec-32-fig-15)
+6. [Population analyses (Fig 4–7)](#6-population-analyses-fig-47)
+7. [References](#7-references)
 
 ---
 
@@ -52,7 +72,7 @@ All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-an
 | Paper element | Script → function | Config | Population | Horizon | Runs / random seeds |
 |---|---|---|---|---|---|
 | Fig 4–6 (population, demographics, commuting) | `demographics.jl`, `settings.jl`, `mobility.jl` | none | DE | – | – |
-| Fig 7 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | GEMS defaults | SL | – | 0 |
+| Fig 7 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | reference model | DE | – | 0 |
 | Sec. 3.1.1 First wave 2020 | [sc_first_wave.jl](src/sc_first_wave.jl) → `scenario_first_wave()` | reference model | DE | 10.02.–31.05.2020 | see [5.1](#51-first-wave-2020-sec-311) |
 | Sec. 3.1.2 Scenario modeling (Fig 12A) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 180 d | 1 per scenario / 0 |
 | Fig 12B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
@@ -183,7 +203,7 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 | Counties | Berlin districts merged into 11000; Eisenach (16056) merged into the Wartburgkreis (16063) | data structure |
 | Reporting delays | RKI onset → report delays per onset week (all of Germany) | RKI cases |
 
-**Introduced infections** (added via `stepmod`, as `RegionalSeeds` in GEMS v1.0.1 only infects at tick 0)
+**Introduced infections** (added via `stepmod`, as `RegionalSeeds` in GEMS v1.0.2 only infects at tick 0)
 
 | Item | Value | Source |
 |---|---|---|
@@ -204,7 +224,7 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 |---|---|---|
 | Phase start dates | phase 2: 09.03. (large events cancelled), phase 3: 16.03. (schools closed), phase 4: 23.03. (contact restrictions) | [L] dates of the measures |
 | Transitions between phases | linear over 3, 3, 4 days | [L] Dehning et al. 2020 |
-| Contact factors (phases 1–4) | 0.570 / 0.164 / 0.162 / 0.120, multiplied with the contact parameters of all settings except households | [C] [inputs/first_wave_factors_DE_model_first_wave.csv](inputs/first_wave_factors_DE_model_first_wave.csv) |
+| Contact factors (phases 1–4) | 0.567 / 0.170 / 0.157 / 0.121, multiplied with the contact parameters of all settings except households | [C] [inputs/first_wave_factors_DE_model_first_wave.csv](inputs/first_wave_factors_DE_model_first_wave.csv) |
 | Care homes | households with at least 11 members, scaled like the other settings | [A] |
 | School closure | all school settings closed from 16.03.2020 | [L] |
 | Ascertainment | 0.22 of all infections detected | – |
@@ -217,7 +237,7 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 | Step | Setup |
 |---|---|
 | 1. Transmission scale | [Section 4.3](#43-transmission) |
-| 2a. Generation time of the model | Saarland, 70 days, scale 0.35, 20 extra infections per day in the Regionalverband Saarbrücken (ticks 7–27), ascertainment 1.0, random seed 2; cohort of ticks 10–22; mean 5.77 d ([inputs/generation_time_DE_model_first_wave.csv](inputs/generation_time_DE_model_first_wave.csv)) |
+| 2a. Generation time of the model | Saarland, 70 days, scale 0.35, 20 extra infections per day in the Regionalverband Saarbrücken (ticks 7–27), ascertainment 1.0, random seed 2; cohort of ticks 10–22; mean 5.86 d ([inputs/generation_time_DE_model_first_wave.csv](inputs/generation_time_DE_model_first_wave.csv)) |
 | 2b. Contact factors | fitted to the weekly RKI cases by onset, weeks 10–16 (up to 19.04., weight 0.5 for week 10), with the R per phase of GEMS kept inside the 95 % interval of the RKI R per phase (R(t) back-calculated from 01.02., infections 01.03.–12.04., block bootstrap with 1,000 samples, block length 7 d); surrogate fit, then damped Gauss–Newton steps, at most 7 evaluations with 2 runs each (random seeds 0, 1); runs until 17.05. |
 | 2c. Band | 20 factor samples from the calibration uncertainty (random seeds 1001–1020) ([inputs/first_wave_band_factors_DE_model_first_wave.csv](inputs/first_wave_band_factors_DE_model_first_wave.csv)) |
 
@@ -301,7 +321,7 @@ The tests in Isolation & Testing have no follow-up: the scenario detects cases w
 
 ### 5.5 Performance benchmark (Sec. 3.2, Fig 15)
 
-GEMS default parameterization ([data/DefaultConf.toml @ v1.0.1](https://github.com/IMMIDD/GEMS/blob/v1.0.1/data/DefaultConf.toml)), also used for Fig 7 and Fig 12B.
+GEMS default parameterization ([data/DefaultConf.toml @ v1.0.2](https://github.com/IMMIDD/GEMS/blob/v1.0.2/data/DefaultConf.toml)), also used for Fig 12B.
 
 | Parameter | Value |
 |---|---|
@@ -321,7 +341,7 @@ Protocol: one warm-up run, then 11 runs per population (random seeds 1–11), me
 No disease parameters are involved.
 
 - **Fig 4–6:** Germany (84,563,726 individuals).
-- **Fig 7:** Saarland, GEMS defaults.
+- **Fig 7:** Germany, contacts of the reference model.
 
 ## 7. References
 
