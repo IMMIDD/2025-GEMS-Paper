@@ -3,6 +3,7 @@
 ###
 
 export plot_paper_figure_1
+export plot_paper_figure_2
 
 
 # sizes (px): map (aspect of the bounds below), horizontal gap between the maps (margin
@@ -331,5 +332,271 @@ function plot_paper_figure_1(tbl::DataFrame, daily::DataFrame, weeks;
         abs(offset.value) < 0.1 && break
         curve[:left_margin] = curve[:left_margin] - offset
     end
+    return p
+end
+
+
+
+###
+### FIGURE 2: STATES
+###
+
+# English names of the states (by state number, as `RKI_STATES`)
+const _FIG2_STATES = ["Schleswig-Holstein", "Hamburg", "Lower Saxony", "Bremen",
+    "North Rhine-Westphalia", "Hesse", "Rhineland-Palatinate", "Baden-Württemberg", "Bavaria",
+    "Saarland", "Berlin", "Brandenburg", "Mecklenburg-Vorpommern", "Saxony",
+    "Saxony-Anhalt", "Thuringia"]
+
+# sizes (px): width as figure 1 (same font sizes in print), width of the column with the
+# shared y label, height of each panel (plot area), and of the key below the panels
+const _FIG2_WIDTH = 6318
+const _FIG2_YLABEL_WIDTH = 120
+const _FIG2_PANEL_HEIGHT = 950
+const _FIG2_KEY_HEIGHT = 120
+# gaps between the panels (margins right of and below each panel)
+const _FIG2_HGAP = 12mm
+const _FIG2_VGAP = 10mm
+
+# width (px) of a text as GR draws it (measured as Plots measures tick labels; the font
+# size scales with the plot size, so the width in px does not depend on it)
+function _fig2_text_width(s, font, size)
+    p = plot(size = (1000, 1000))
+    Plots.gr_set_font(Plots.font(font, size), p)
+    return first(Plots.gr_text_size(s)) * maximum(p[:size])
+end
+
+# curves of a state (`r`, row of `rki_state_table`) per 100,000 as 7-day means from
+# `first_day` to `last_day`: RKI (official population), GEMS (model population) of the
+# runs (`states`), and the low and high end of the band (`band`, or else of `states`);
+# peak height of the 7-day mean of GEMS relative to RKI (ratio); means and peaks on the
+# whole data, only then cut to the shown window
+function _fig2_curves(r, states, band; first_day, last_day)
+    rows(d) = sort(d[d.state .== r.state, :], :date)
+    d = rows(states)
+    b = isnothing(band) ? d : rows(band)
+    keep(x, dates) = x[first_day .<= dates .<= last_day]
+    rki = 1e5 .* rolling7(d.rki) ./ r.population_official
+    gems = 1e5 .* rolling7(d.gems) ./ r.population
+    per_100k(x, population) = keep(1e5 .* rolling7(x) ./ population, b.date)
+    return (
+        state = r.state,
+        date = keep(d.date, d.date),
+        rki = keep(rki, d.date),
+        gems = keep(gems, d.date),
+        low = per_100k(b.gems_low, r.population),
+        high = per_100k(b.gems_high, r.population),
+        peak_ratio = maximum(gems) / maximum(rki))
+end
+
+# peak height (PH) of GEMS relative to RKI as text ("PH ×0.73"), explained in the key
+function _fig2_peak_text(c)
+    n = round(Int, 100 * c.peak_ratio)
+    return "PH ×$(n ÷ 100).$(lpad(n % 100, 2, '0'))"
+end
+
+# key below the panels, centered in one line (drawn by hand with measured text widths, in
+# px of the panel of `width`): the series (band, GEMS, RKI) and the abbreviations of the
+# peaks (bold)
+function _fig2_key(band_label, rki_label, width; peaks)
+    fs = _FIG1_FONTSIZE
+    tw(s) = _fig2_text_width(s, _FIG1_FONT, fs)
+    caps(s) = _fig2_text_width(s, _FIG1_FONT_BOLD, fs)
+    sample, gap, sep = 90, 20, 120
+    items = Any[(:band, band_label), (:gems, "GEMS"), (:rki, rki_label)]
+    if peaks
+        push!(items, (:abbr, ("PH", " = peak height, GEMS/RKI")))
+    end
+    item_width(kind, s) = kind == :abbr ? caps(s[1]) + tw(s[2]) : sample + gap + tw(s)
+    total = sum(item_width(k, s) for (k, s) in items) + sep * (length(items) - 1)
+
+    p = plot(framestyle = :none, ticks = false, xlims = (0, width), ylims = (0, 1),
+        legend = false, widen = false, margin = 0mm)
+    x, y = (width - total) / 2, 0.45
+    for (kind, s) in items
+        if kind == :band
+            plot!(p, Shape([x, x + sample, x + sample, x], [y - 0.2, y - 0.2, y + 0.2, y + 0.2]),
+                fillcolor = _FIG1_GEMS,
+                fillalpha = 0.25,
+                linealpha = 0,
+                label = "")
+        elseif kind in (:gems, :rki)
+            plot!(p, [x, x + sample], [y, y],
+                color = kind == :gems ? _FIG1_GEMS : _FIG1_RKI,
+                linewidth = kind == :gems ? 7 : 5,
+                label = "")
+        end
+        if kind == :abbr
+            annotate!(p, x, y, text(s[1], fs, :left, _FIG1_FONT_BOLD))
+            annotate!(p, x + caps(s[1]), y, text(s[2], fs, :left, _FIG1_FONT))
+        else
+            annotate!(p, x + sample + gap, y, text(s, fs, :left, _FIG1_FONT))
+        end
+        x += item_width(kind, s) + sep
+    end
+    return p
+end
+
+# one state panel: GEMS (band and 7-day mean), RKI (reference, grey), end of the fitted
+# data; the name of the state top left (and the peak height of GEMS relative to RKI top
+# right); tick labels only on the left column and on the bottom row; labels of the
+# cutoff only in the first panel; no legend (the key is below the panels)
+function _fig2_panel(c, k; ymax, xticks, yticks, cutoff, peaks)
+    first_panel, left, bottom = k == 1, mod(k, 4) == 1, k > 12
+    xmin, xmax = Dates.value(first(c.date)), Dates.value(last(c.date)) + 1
+    days = Dates.value.(c.date)
+    blank(t) = (t, fill("", length(t)))
+    ylabels(t) = [isinteger(y) ? string(Int(y)) : string(y) for y in t]
+
+    p = plot(
+        tickfontsize = _FIG1_FONTSIZE,
+        legend = false,
+        grid = true,
+        gridalpha = 0.15,
+        gridlinewidth = 2,
+        framestyle = :axes,
+        tick_direction = :in,
+        widen = false,
+        xlims = (xmin, xmax),
+        ylims = (0, ymax),
+        xticks = bottom ? _date_ticks(xticks) : blank(Dates.value.(xticks)),
+        yticks = left ? (yticks, ylabels(yticks)) : blank(yticks),
+        margin = 0mm,
+        right_margin = _FIG2_HGAP,
+        bottom_margin = _FIG2_VGAP)
+    plot!(p, days, c.low,
+        fillrange = c.high,
+        color = _FIG1_GEMS,
+        fillalpha = 0.25,
+        linewidth = 0,
+        label = "")
+    plot!(p, days, c.gems,
+        color = _FIG1_GEMS,
+        linewidth = 7,
+        label = "")
+    plot!(p, days, c.rki,
+        color = _FIG1_RKI,
+        linewidth = 5,
+        label = "")
+
+    # end of the fitted data (fitted up to and including `cutoff`: the line is at the end
+    # of that day), ends in a dot below the name of the state (as in figure 1), with its
+    # labels in the first panel
+    x, y = Dates.value(cutoff) + 1, 0.75 * ymax
+    plot!(p, [x, x], [0, y],
+        linestyle = :dash,
+        linewidth = 3,
+        color = _FIG1_GREY,
+        label = "")
+    scatter!(p, [x], [y],
+        color = _FIG1_GREY,
+        markersize = 8,
+        markerstrokewidth = 0,
+        label = "")
+    if first_panel
+        annotate!(p, x - 2.5, y,
+            text("← fitted until $(ddmm(cutoff))", _FIG1_FONTSIZE, :right, _FIG1_FONT,
+                _FIG1_GREY))
+        annotate!(p, x + 2.5, y,
+            text("forecast →", _FIG1_FONTSIZE, :left, _FIG1_FONT, _FIG1_GREY))
+    end
+
+    annotate!(p, xmin + 1.5, 0.92 * ymax,
+        text(_FIG2_STATES[c.state], _FIG1_HEADERFONTSIZE, :left, _FIG1_FONT_BOLD))
+    if peaks
+        annotate!(p, xmax - 1.5, 0.92 * ymax,
+            text(_fig2_peak_text(c), _FIG1_FONTSIZE, :right, _FIG1_FONT, _FIG1_GREY))
+    end
+    return p
+end
+
+"""
+    plot_paper_figure_2(st, states;
+        band = nothing,
+        runs = nothing,
+        first_day = nothing,
+        cutoff,
+        last_day = nothing,
+        basis = :report,
+        peaks = true)
+
+Figure 2 of the paper: daily cases per 100,000 (7-day means) per state from
+`first_day` to `last_day` (default: the first and last day of `states`), one
+panel per state of `st` (`rki_state_table`, for the populations) with a shared
+y scale: RKI (reference, grey) and GEMS (mean of the runs of `states`, from
+`rki_state_summary`) with the 90% band of the calibration runs (`band`, as
+`states`; if `nothing`, the range of the `runs` runs of `states`, with a
+warning), and the end of the fitted data (`cutoff`). With `peaks`, each panel
+shows the peak height (PH) of the GEMS 7-day mean relative to the RKI one
+(ratio). All values are computed on the whole data, `first_day` and `last_day`
+only set the shown window.
+"""
+function plot_paper_figure_2(st::DataFrame, states::DataFrame;
+    band = nothing,
+    runs = nothing,
+    first_day::Union{Date, Nothing} = nothing,
+    cutoff::Date,
+    last_day::Union{Date, Nothing} = nothing,
+    basis = :report,
+    peaks::Bool = true)
+
+    first_day = something(first_day, minimum(states.date))
+    last_day = something(last_day, maximum(states.date))
+    if isnothing(band)
+        @warn "No 90% calibration band per state: figure 2 shows the range of " *
+            "$(isnothing(runs) ? "the" : runs) final runs instead."
+    end
+    band_label = !isnothing(band) ? "GEMS, 90% calibration band" :
+        isnothing(runs) ? "GEMS, range of the runs" : "GEMS, range of $runs runs"
+    onset = basis == :onset
+    rki_label = onset ? "RKI (known onset)" : "RKI"
+    year = Dates.year(first_day)
+    title = (onset ? "Cases by symptom onset per day by federal state" :
+        "Reported cases per day by federal state") *
+        ", $(Dates.monthname(first_day))–$(Dates.monthname(last_day)) $year"
+    ylabel = (onset ? "Cases by symptom onset" : "Reported cases") *
+        " per day per 100,000 (7-day mean)"
+
+    curves = [_fig2_curves(r, states, band,
+        first_day = first_day,
+        last_day = last_day) for r in eachrow(st)]
+    # shared scale, with room above the curves for the names
+    ymax = 1.2 * maximum(max(maximum(c.rki), maximum(c.high)) for c in curves)
+    yticks = filter(y -> y < ymax, first(Plots.PlotUtils.optimize_ticks(0.0, ymax, k_min = 3, k_max = 4)))
+    mondays = [d for d in first_day:Day(1):last_day if Dates.dayofweek(d) == 1]
+    # every 4th Monday (a subset of the ticks of figure 1), so the labels of neighboring
+    # panels do not run into each other
+    xticks = mondays[1:4:end]
+
+    # rows: title | shared y label, 4 x 4 panels | key (below the panels, centered on them)
+    th, ph, kh = _FIG1_TITLE_HEIGHT, _FIG2_PANEL_HEIGHT, _FIG2_KEY_HEIGHT
+    height = th + 4 * ph + kh
+    widths = [_FIG2_YLABEL_WIDTH, _FIG2_WIDTH - _FIG2_YLABEL_WIDTH] ./ _FIG2_WIDTH
+    l = grid(3, 1, heights = [th, 4 * ph, kh] ./ height)
+    l[2, 1] = grid(1, 2, widths = widths)
+    l[2, 1][1, 2] = grid(4, 4)
+    l[3, 1] = grid(1, 2, widths = widths)
+
+    p = plot(
+        _fig1_text(_fig1_t(title, y = 0.45, size = _FIG1_TITLEFONTSIZE)),
+        _fig1_text(_fig1_t(ylabel, size = _FIG1_HEADERFONTSIZE, rotation = 90)),
+        [_fig2_panel(c, k,
+            ymax = ymax,
+            xticks = xticks,
+            yticks = yticks,
+            cutoff = cutoff,
+            peaks = peaks) for (k, c) in enumerate(curves)]...,
+        _fig1_text(),
+        _fig2_key(band_label, rki_label, _FIG2_WIDTH - _FIG2_YLABEL_WIDTH, peaks = peaks),
+        layout = l,
+        size = (_FIG2_WIDTH, height),
+        fontfamily = _FIG1_FONT)
+
+    # the heights of a layout are shares of the plot areas, the paddings (gaps, tick
+    # labels) come on top: enlarge the plot by them so that the panels get their height
+    sp = p.subplots
+    h(s) = Measures.height(s.plotarea).value * Plots.DPI / 25.4
+    Plots.prepare_output(p)
+    used = h(sp[1]) + 4 * h(sp[3]) + h(sp[end])
+    plot!(p, size = (_FIG2_WIDTH, round(Int, 2 * height - used)))
     return p
 end

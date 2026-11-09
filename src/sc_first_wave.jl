@@ -276,8 +276,9 @@ function _rki_counterfactuals(folder, s::RKISettings; seeds, phases)
 end
 
 
-# runs with the factor samples (the first `runs`, all if `nothing`) and their 5-95% band; each run
-# is written to its own folder, so a restart skips the finished runs
+# runs with the factor samples (the first `runs`, all if `nothing`) and their 5-95% band, national
+# and per state; each run is written to its own folder, so a restart skips the finished runs (runs
+# without the state file, from before it was written, are repeated)
 function _rki_band(folder, s::RKISettings; runs = nothing)
     samples = CSV.read(first_wave_input("band_factors", s.configfile), DataFrame)
     if !isnothing(runs)
@@ -286,14 +287,16 @@ function _rki_band(folder, s::RKISettings; runs = nothing)
     factor_columns = ["f$k" for k in 1:(length(s.dates) + 1)]
     dir = mkpath(joinpath(folder, "sc_first_wave_band_runs"))
     run_file(seed, b) = joinpath(dir, "run_$(seed)_$(_basis_labels(b).name).csv")
+    state_file(seed, b) = joinpath(dir, "run_$(seed)_$(_basis_labels(b).name)_states.csv")
     stats_file(seed) = joinpath(dir, "stats_$seed.csv")
 
     for r in eachrow(samples)
-        all(isfile(run_file(r.seed, b)) for b in BASES) && continue
+        all(isfile(run_file(r.seed, b)) && isfile(state_file(r.seed, b)) for b in BASES) && continue
         out = run_rki_phase_sims(s, [collect(r[factor_columns])], [r.seed], stage = "band")
         CSV.write(stats_file(r.seed), out.stats)
         for b in BASES
             CSV.write(run_file(r.seed, b), select(out[b].daily, :date, :rki, :gems))
+            CSV.write(state_file(r.seed, b), select(out[b].states, :date, :state, :rki, :gems))
         end
     end
 
@@ -304,6 +307,9 @@ function _rki_band(folder, s::RKISettings; runs = nothing)
         dailies = [CSV.read(run_file(seed, b), DataFrame) for seed in samples.seed]
         band = rki_daily_summary(dailies, quantiles = (0.05, 0.95))
         CSV.write(joinpath(folder, first_wave_file("band", "daily", b)), band)
+        states = [CSV.read(state_file(seed, b), DataFrame) for seed in samples.seed]
+        CSV.write(joinpath(folder, first_wave_file("band", "states", b)),
+            rki_state_summary(states, quantiles = (0.05, 0.95)))
     end
 end
 
@@ -384,6 +390,19 @@ function _figures_final(folder, s::RKISettings, b)
         png_file("states", "daily"))
     png(plot_rki_state_scatter(st, RKI_WINDOWS, basis = b), png_file("states", "scatter"))
     png(plot_rki_state_maps(tbl, RKI_MAP_WEEKS, basis = b), png_file("states", "maps"))
+    # paper figure (reported cases only): with the band of the calibration runs per state if they
+    # exist, else with the range of the final runs
+    if b == :report
+        band_file = joinpath(folder, first_wave_file("band", "states", b))
+        stats_file = joinpath(folder, first_wave_file("final", "stats"))
+        png(plot_paper_figure_2(st, CSV.read(file("states"), DataFrame),
+                band = isfile(band_file) ? CSV.read(band_file, DataFrame) : nothing,
+                runs = isfile(stats_file) ? nrow(CSV.read(stats_file, DataFrame)) : nothing,
+                cutoff = RKI_CUTOFF,
+                last_day = RKI_LAST_DAY,
+                basis = b),
+            png_file("paper_figure_2", ""))
+    end
 end
 
 # county metrics, scatter plots of the windows and of single weeks, and maps

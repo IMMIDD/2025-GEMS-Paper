@@ -249,19 +249,22 @@ end
 
 
 """
-    rki_state_summary(tables)
+    rki_state_summary(tables; quantiles = nothing)
 
 Mean, minimum (`gems_low`), and maximum (`gems_high`) of the GEMS cases over
-runs of `rki_state_daily` tables.
+runs of `rki_state_daily` tables; with `quantiles = (low, high)` these
+quantiles instead of the minimum and maximum.
 """
-function rki_state_summary(tables::Vector{DataFrame})
+function rki_state_summary(tables::Vector{DataFrame}; quantiles = nothing)
+    low, high = isnothing(quantiles) ? (minimum, maximum) :
+        (x -> quantile(x, quantiles[1]), x -> quantile(x, quantiles[2]))
     return reduce(vcat, tables) |>
         d -> groupby(d, [:date, :state], sort = true) |>
         d -> combine(d,
             :rki => first => :rki,
             :gems => mean => :gems,
-            :gems => minimum => :gems_low,
-            :gems => maximum => :gems_high)
+            :gems => low => :gems_low,
+            :gems => high => :gems_high)
 end
 
 
