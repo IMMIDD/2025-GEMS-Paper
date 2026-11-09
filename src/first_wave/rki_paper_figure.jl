@@ -356,6 +356,15 @@ const _FIG2_KEY_HEIGHT = 120
 # gaps between the panels (margins right of and below each panel)
 const _FIG2_HGAP = 12mm
 const _FIG2_VGAP = 10mm
+# locator maps: width relative to the peak height text (PH ×0.00), distance (px) from
+# the right and top edge of the panel, colors of the state of the panel and of the others
+const _FIG2_LOCATOR_SCALE = 1.0
+const _FIG2_LOCATOR_RIGHT = 15
+const _FIG2_LOCATOR_TOP = 240
+const _FIG2_LOCATOR_ON = RGB(0.35, 0.35, 0.35)
+const _FIG2_LOCATOR_OFF = RGB(0.86, 0.86, 0.86)
+# city states (Hamburg, Bremen, Berlin): marked with a dot on the locator map
+const _FIG2_CITY_STATES = (2, 4, 11)
 
 # width (px) of a text as GR draws it (measured as Plots measures tick labels; the font
 # size scales with the plot size, so the width in px does not depend on it)
@@ -385,7 +394,8 @@ function _fig2_curves(r, states, band; first_day, last_day)
         gems = keep(gems, d.date),
         low = per_100k(b.gems_low, r.population),
         high = per_100k(b.gems_high, r.population),
-        peak_ratio = maximum(gems) / maximum(rki))
+        peak_ratio = maximum(gems) / maximum(rki),
+        population = r.population_official)
 end
 
 # peak height (PH) of GEMS relative to RKI as text ("PH ×0.73"), explained in the key
@@ -396,13 +406,14 @@ end
 
 # key below the panels, centered in one line (drawn by hand with measured text widths, in
 # px of the panel of `width`): the series (band, GEMS, RKI) and the abbreviations of the
-# peaks (bold)
+# population and peaks (bold)
 function _fig2_key(band_label, rki_label, width; peaks)
     fs = _FIG1_FONTSIZE
     tw(s) = _fig2_text_width(s, _FIG1_FONT, fs)
     caps(s) = _fig2_text_width(s, _FIG1_FONT_BOLD, fs)
     sample, gap, sep = 90, 20, 120
     items = Any[(:band, band_label), (:gems, "GEMS"), (:rki, rki_label)]
+    push!(items, (:abbr, ("pop.", " = population in millions")))
     if peaks
         push!(items, (:abbr, ("PH", " = peak height, GEMS/RKI")))
     end
@@ -437,8 +448,8 @@ function _fig2_key(band_label, rki_label, width; peaks)
 end
 
 # one state panel: GEMS (band and 7-day mean), RKI (reference, grey), end of the fitted
-# data; the name of the state top left (and the peak height of GEMS relative to RKI top
-# right); tick labels only on the left column and on the bottom row; labels of the
+# data; the name, population, and peak height of GEMS relative to RKI of the state top
+# left; tick labels only on the left column and on the bottom row; labels of the
 # cutoff only in the first panel; no legend (the key is below the panels)
 function _fig2_panel(c, k; ymax, xticks, yticks, cutoff, peaks)
     first_panel, left, bottom = k == 1, mod(k, 4) == 1, k > 12
@@ -479,9 +490,9 @@ function _fig2_panel(c, k; ymax, xticks, yticks, cutoff, peaks)
         label = "")
 
     # end of the fitted data (fitted up to and including `cutoff`: the line is at the end
-    # of that day), ends in a dot below the name of the state (as in figure 1), with its
-    # labels in the first panel
-    x, y = Dates.value(cutoff) + 1, 0.75 * ymax
+    # of that day), ends in a dot at the height of the population, above the locator map
+    # (as in figure 1), with its labels in the first panel
+    x, y = Dates.value(cutoff) + 1, 0.82 * ymax
     plot!(p, [x, x], [0, y],
         linestyle = :dash,
         linewidth = 3,
@@ -494,7 +505,7 @@ function _fig2_panel(c, k; ymax, xticks, yticks, cutoff, peaks)
         label = "")
     if first_panel
         annotate!(p, x - 2.5, y,
-            text("← fitted until $(ddmm(cutoff))", _FIG1_FONTSIZE, :right, _FIG1_FONT,
+            text("← fitted", _FIG1_FONTSIZE, :right, _FIG1_FONT,
                 _FIG1_GREY))
         annotate!(p, x + 2.5, y,
             text("forecast →", _FIG1_FONTSIZE, :left, _FIG1_FONT, _FIG1_GREY))
@@ -502,9 +513,14 @@ function _fig2_panel(c, k; ymax, xticks, yticks, cutoff, peaks)
 
     annotate!(p, xmin + 1.5, 0.92 * ymax,
         text(_FIG2_STATES[c.state], _FIG1_HEADERFONTSIZE, :left, _FIG1_FONT_BOLD))
+    # official population in millions, below the name
+    annotate!(p, xmin + 1.5, 0.82 * ymax,
+        text("pop. $(round(c.population / 1e6, digits = 1)) M", _FIG1_FONTSIZE, :left,
+            _FIG1_FONT, _FIG1_GREY))
+    # peak height below the population (the curves are still flat there)
     if peaks
-        annotate!(p, xmax - 1.5, 0.92 * ymax,
-            text(_fig2_peak_text(c), _FIG1_FONTSIZE, :right, _FIG1_FONT, _FIG1_GREY))
+        annotate!(p, xmin + 1.5, 0.72 * ymax,
+            text(_fig2_peak_text(c), _FIG1_FONTSIZE, :left, _FIG1_FONT, _FIG1_GREY))
     end
     return p
 end
@@ -517,7 +533,8 @@ end
         cutoff,
         last_day = nothing,
         basis = :report,
-        peaks = true)
+        peaks = true,
+        locator = true)
 
 Figure 2 of the paper: daily cases per 100,000 (7-day means) per state from
 `first_day` to `last_day` (default: the first and last day of `states`), one
@@ -527,8 +544,10 @@ y scale: RKI (reference, grey) and GEMS (mean of the runs of `states`, from
 `states`; if `nothing`, the range of the `runs` runs of `states`, with a
 warning), and the end of the fitted data (`cutoff`). With `peaks`, each panel
 shows the peak height (PH) of the GEMS 7-day mean relative to the RKI one
-(ratio). All values are computed on the whole data, `first_day` and `last_day`
-only set the shown window.
+(ratio), below the name and the population of the state. With `locator`, each
+panel has a small map of Germany on the right with its state highlighted. All
+values are computed on the whole data, `first_day` and `last_day` only set the
+shown window.
 """
 function plot_paper_figure_2(st::DataFrame, states::DataFrame;
     band = nothing,
@@ -537,7 +556,8 @@ function plot_paper_figure_2(st::DataFrame, states::DataFrame;
     cutoff::Date,
     last_day::Union{Date, Nothing} = nothing,
     basis = :report,
-    peaks::Bool = true)
+    peaks::Bool = true,
+    locator::Bool = true)
 
     first_day = something(first_day, minimum(states.date))
     last_day = something(last_day, maximum(states.date))
@@ -598,5 +618,59 @@ function plot_paper_figure_2(st::DataFrame, states::DataFrame;
     Plots.prepare_output(p)
     used = h(sp[1]) + 4 * h(sp[3]) + h(sp[end])
     plot!(p, size = (_FIG2_WIDTH, round(Int, 2 * height - used)))
+
+    # locator maps: right of each panel, below the end of the fitted data
+    if locator
+        shapes = _fig2_state_shapes()
+        w = _FIG2_LOCATOR_SCALE * _fig2_text_width("PH ×0.00", _FIG1_FONT, _FIG1_FONTSIZE)
+        h_map = w * (_FIG1_YLIMS[2] - _FIG1_YLIMS[1]) / (_FIG1_XLIMS[2] - _FIG1_XLIMS[1])
+        px(x) = x * 25.4 / Plots.DPI * mm
+        for (k, c) in enumerate(curves)
+            _fig2_locator!(p, 2 + k, c.state, shapes,
+                bbox(px(_FIG2_LOCATOR_RIGHT), px(_FIG2_LOCATOR_TOP), px(w), px(h_map), :top, :right))
+        end
+    end
+    return p
+end
+
+# land areas of the states (shapes of GEMS without water areas), by state number
+function _fig2_state_shapes()
+    t = DataFrame(germanshapes(1))
+    t = t[coalesce.(t.GF, 0) .== 4, :]
+    return [parse(Int, a[1:2]) => g for (a, g) in zip(t.AGS_0, t.geometry)]
+end
+
+# locator map of Germany as an inset of subplot `parent` (in `box`), with `state`
+# highlighted (the city states, too small at this size, with a dot in addition)
+function _fig2_locator!(p, parent, state, shapes, box)
+    n = length(p.subplots) + 1
+    for (k, (s, g)) in enumerate(shapes)
+        args = k == 1 ? (inset = (parent, box), subplot = n) : (subplot = n,)
+        plot!(p, g;
+            args...,
+            fillcolor = s == state ? _FIG2_LOCATOR_ON : _FIG2_LOCATOR_OFF,
+            linecolor = RGB(1, 1, 1),
+            linewidth = 1,
+            label = "",
+            framestyle = :none,
+            ticks = false,
+            legend = false,
+            aspect_ratio = :equal,
+            xlims = _FIG1_XLIMS,
+            ylims = _FIG1_YLIMS,
+            widen = false,
+            margin = 0mm,
+            background_color_subplot = RGBA(1, 1, 1, 0),
+            background_color_inside = RGBA(1, 1, 1, 0))
+    end
+    if state in _FIG2_CITY_STATES
+        points = reduce(vcat, [g.points for (s, g) in shapes if s == state])
+        scatter!(p, [mean(q.x for q in points)], [mean(q.y for q in points)],
+            subplot = n,
+            color = _FIG2_LOCATOR_ON,
+            markersize = 9,
+            markerstrokewidth = 0,
+            label = "")
+    end
     return p
 end
