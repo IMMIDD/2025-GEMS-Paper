@@ -6,6 +6,7 @@ export plot_rki_projection
 export plot_rki_phase_projections
 export plot_rki_counterfactuals
 export plot_rki_imports
+export plot_rki_seeding
 export plot_rki_maps
 export plot_rki_scatter
 export plot_rki_state_weekly
@@ -247,6 +248,60 @@ function plot_rki_imports(daily::DataFrame, seeded::DataFrame;
         layout = grid(2, 1, heights = [0.72, 0.28]),
         size = (1600, 1100),
         left_margin = 10mm)
+end
+
+
+"""
+    plot_rki_seeding(daily, seeded, infections; phase_dates, cutoff, basis = :report)
+
+Seeding figure: left `plot_rki_imports`, right the infections per day in GEMS
+(`infections`, columns `date`, `infections`, `seeded`, from `run_rki_phase_sims`)
+as stacked areas of seeded infections and infections by transmission in the model.
+"""
+function plot_rki_seeding(daily::DataFrame, seeded::DataFrame, infections::DataFrame;
+    phase_dates,
+    cutoff::Date,
+    basis = :report)
+
+    left = plot_rki_imports(daily, seeded,
+        phase_dates = phase_dates,
+        cutoff = cutoff,
+        basis = basis)
+
+    right = plot(infections.date, infections.infections,
+        fillrange = 0,
+        fillalpha = 0.85,
+        linewidth = 0,
+        color = :darkorange,
+        label = "by transmission in GEMS",
+        ylabel = "infections per day",
+        legend = :topright,
+        size = (1600, 1100),
+        left_margin = 10mm,
+        bottom_margin = 10mm,
+        fontfamily = "Times Roman")
+    plot!(right, infections.date, infections.seeded,
+        fillrange = 0,
+        fillalpha = 0.85,
+        linewidth = 0,
+        color = :gray,
+        label = "seeded (imports and Heinsberg)")
+    vline!(right, phase_dates,
+        linestyle = :dot,
+        color = :black,
+        label = "phase start")
+    vline!(right, [cutoff],
+        linestyle = :dash,
+        color = :black,
+        label = "end of fitted data")
+    share = round(100 * sum(infections.seeded) / sum(infections.infections), digits = 1)
+    plot!(right,
+        title = "seeded: $share % of all infections",
+        xticks = xticks(left[1]),
+        xrotation = 45)
+    return plot(left, right,
+        layout = (1, 2),
+        size = (3200, 1100))
 end
 
 

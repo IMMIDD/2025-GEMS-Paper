@@ -134,6 +134,7 @@ simulation_days(startdate::Date, last_day::Date) = Dates.value(last_day - startd
         heinsberg = true,
         imports_from = nothing,
         extra_seeds = nothing,
+        random_seeding = false,
         transmission_rate = nothing,
         switches = Pair{Date, Float64}[])
 
@@ -144,8 +145,10 @@ before the run (e.g. `phase_setup`).
 
 Variants: `heinsberg = false` drops the Heinsberg cluster, `imports_from` drops
 the imports infected before that date, `extra_seeds` is an additional seeding
-schedule, `transmission_rate` replaces the rate of the config (the `transmission_scale`
-of an `InfectiousnessProfile`), and `switches` (`date => rate`) change it during the run.
+schedule, `random_seeding` puts the same number of seeds per day into counties
+drawn in proportion to their population, `transmission_rate` replaces the rate of
+the config (the `transmission_scale` of an `InfectiousnessProfile`), and
+`switches` (`date => rate`) change it during the run.
 
 Returns `sim`, the post processor `pp`, the seeding `schedule`, the RKI cases
 in the counties of the model (`rki`), the population per county (`pop`), the
@@ -158,6 +161,7 @@ function run_rki_sim(s::RKISettings;
     heinsberg = true,
     imports_from = nothing,
     extra_seeds = nothing,
+    random_seeding = false,
     transmission_rate = nothing,
     switches = Pair{Date, Float64}[])
 
@@ -199,6 +203,9 @@ function run_rki_sim(s::RKISettings;
     schedule = vcat(parts...) |>
         d -> groupby(d, [:tick, :ags]) |>
         d -> combine(d, :count => sum => :count)
+    if random_seeding
+        schedule = _random_counties(schedule, pop, seed)
+    end
     others = sum(schedule.count) - sum(imports.count)
     printinfo("Seeding $(sum(imports.count)) imports and $others other infections")
 
@@ -223,6 +230,20 @@ function run_rki_sim(s::RKISettings;
         startdate = sim.startdate,
         enddate = enddate,
         setup = setup_info)
+end
+
+
+# seeding schedule with the same number of seeds per tick as `schedule`, in counties drawn in
+# proportion to their population in the model
+function _random_counties(schedule, pop, seed)
+    rng = Random.Xoshiro(seed)
+    rows = DataFrame(tick = Int[], ags = AGS[], count = Int[])
+    for g in groupby(schedule, :tick)
+        for a in sample(rng, pop.ags, Weights(pop.population), sum(g.count))
+            push!(rows, (first(g.tick), a, 1))
+        end
+    end
+    return merge_schedule(rows)
 end
 
 
@@ -370,6 +391,21 @@ function rki_daily_summary(dailies::Vector{DataFrame}; quantiles = nothing)
 end
 
 
+# infections per day of a run of `run_rki_sim`: all and seeded (id_a == -1)
+function _daily_infections(res)
+    days = collect(res.startdate:Day(1):res.enddate)
+    all, seeded = zeros(Int, length(days)), zeros(Int, length(days))
+    inf = infections(res.pp)
+    for (t, a) in zip(Int.(inf.tick), inf.id_a)
+        if 0 <= t < length(days)
+            all[t + 1] += 1
+            seeded[t + 1] += a == -1
+        end
+    end
+    return DataFrame(date = days, infections = all, seeded = seeded)
+end
+
+
 # one run with contact phases and testing: per basis (reporting date, and symptom onset with the
 # GEMS detected infections thinned to the share of RKI cases with a known onset) the daily cases,
 # cases per state, and the county table; the share of transmissions outside households per phase;
@@ -421,6 +457,7 @@ function _phase_run(s::RKISettings, factors, seed; map_weeks, stage, school_reop
     return (
         report = basis_results(res, by_report),
         onset = basis_results(res_onset, by_onset),
+        infections = _daily_infections(res),
         shares = shares,
         stats = stats,
         model = res.model)
@@ -438,7 +475,8 @@ Runs GEMS with the contact phases of `s` and testing, one run per factor
 vector and seed. Returns per basis (`report`: by reporting date, `onset`: by
 symptom onset) the daily cases as mean and range of the runs (`daily`), the
 county tables of the runs for `map_weeks` (`tbls`), and the daily cases per
-state (`states`); further the statistics per run (`stats`), the mean share of
+state (`states`); further the mean infections per day, all and seeded
+(`infections`), the statistics per run (`stats`), the mean share of
 transmissions outside households per phase (`shares`), and the incubation
 `model`. `sim_options` (seeding variants) are passed to `run_rki_sim`.
 """
@@ -465,9 +503,14 @@ function run_rki_phase_sims(s::RKISettings, factors::Vector{<:AbstractVector}, s
             tbls = isempty(map_weeks) ? DataFrame[] : [r[b].tbl for r in runs],
             states = rki_state_summary([r[b].state for r in runs]))
     end
+    infections = DataFrame(
+        date = runs[1].infections.date,
+        infections = mean(r.infections.infections for r in runs),
+        seeded = mean(r.infections.seeded for r in runs))
     return (
         report = summary(:report),
         onset = summary(:onset),
+        infections = infections,
         stats = DataFrame([r.stats for r in runs]),
         shares = vec(mean(reduce(hcat, [r.shares for r in runs]), dims = 2)),
         model = last(runs).model)
