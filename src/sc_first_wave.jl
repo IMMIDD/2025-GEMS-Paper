@@ -361,6 +361,16 @@ function _figures_final(folder, s::RKISettings, b)
 
     tbl = _read_counties(file("counties"))
     _figures_counties(folder, "final", tbl, b)
+    # paper figure (reported cases only): with the band of the calibration runs if they exist
+    if b == :report
+        band_file = joinpath(folder, first_wave_file("band", "daily", b))
+        png(plot_paper_figure_1(tbl, daily, RKI_MAP_WEEKS,
+                band = isfile(band_file) ? CSV.read(band_file, DataFrame) : nothing,
+                phase_dates = s.dates,
+                cutoff = RKI_CUTOFF,
+                basis = b),
+            png_file("paper_figure_1", ""))
+    end
 
     st = rki_state_table(tbl, RKI_WEEKS)
     CSV.write(joinpath(folder, first_wave_file("states", "weekly", b)), st)

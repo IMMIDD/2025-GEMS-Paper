@@ -96,6 +96,7 @@ include("first_wave/rki_simulation.jl")
 include("first_wave/rki_comparison.jl")
 include("first_wave/rki_calibration.jl")
 include("first_wave/rki_figures.jl")
+include("first_wave/rki_paper_figure.jl")
 
 # INCLUDE SCENARIOS
 include("sc_outbreak.jl")
