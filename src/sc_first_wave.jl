@@ -96,6 +96,8 @@ calibrated contact factors of the config (`first_wave_input`, see
 - `:counterfactuals`: contacts of a phase kept from the next phase on
 - `:band`: runs with the factor samples of the calibration
 - `:seeds_robustness`: all RKI cases infected before the first phase change as seeds
+- `:random_seeds`: the same number of seeds per day in counties drawn in proportion to their
+  population
 - `:figures`: figures of all parts whose results exist (counterfactuals: with `:final`)
 """
 const FIRST_WAVE_PARTS = (
@@ -104,6 +106,7 @@ const FIRST_WAVE_PARTS = (
     :counterfactuals,
     :band,
     :seeds_robustness,
+    :random_seeds,
     :figures)
 
 
@@ -224,7 +227,8 @@ function _rki_calibration(folder, s::RKISettings; seeds, band_size)
 end
 
 
-# runs with the calibrated factors, and the expected seeded infections
+# runs with the calibrated factors, the expected seeded infections, and the infections per day
+# of the runs
 function _rki_final(folder, s::RKISettings; seeds)
     f = _read_factors(s)
     out = run_rki_phase_sims(s, fill(f, length(seeds)), seeds,
@@ -232,6 +236,17 @@ function _rki_final(folder, s::RKISettings; seeds)
         stage = "final")
     _write_runs(folder, "final", out)
     CSV.write(joinpath(folder, first_wave_file("seeded_infections")), rki_seeded_infections(s))
+    CSV.write(joinpath(folder, first_wave_file("final", "infections")), out.infections)
+end
+
+
+# runs with the same number of seeds per day, in counties drawn in proportion to their population
+function _rki_random_seeds(folder, s::RKISettings; seeds)
+    out = run_rki_phase_sims(s, fill(_read_factors(s), length(seeds)), seeds,
+        map_weeks = RKI_WEEKS,
+        stage = "random seeds",
+        random_seeding = true)
+    _write_runs(folder, "random_seeds", out)
 end
 
 
@@ -364,6 +379,15 @@ function _figures_final(folder, s::RKISettings, b)
         png_file("final", "projection"))
     png(plot_rki_imports(daily, seeded, phase_dates = s.dates, cutoff = RKI_CUTOFF, basis = b),
         png_file("final", "projection_imports"))
+    infections_file = joinpath(folder, first_wave_file("final", "infections"))
+    if isfile(infections_file)
+        infections = CSV.read(infections_file, DataFrame)
+        p = plot_rki_seeding(daily, seeded, infections,
+            phase_dates = s.dates,
+            cutoff = RKI_CUTOFF,
+            basis = b)
+        png(p, png_file("final", "seeding"))
+    end
 
     tbl = _read_counties(file("counties"))
     _figures_counties(folder, "final", tbl, b)
@@ -455,6 +479,21 @@ function _figures_seeds_robustness(folder, s::RKISettings, b)
     _figures_counties(folder, "seeds_robustness", tbl, b)
 end
 
+function _figures_random_seeds(folder, s::RKISettings, b)
+    file(part, kind) = joinpath(folder, first_wave_file(part, kind, b))
+    isfile(file("random_seeds", "daily")) || return
+    runs = ["GEMS, seeds in random counties (by population)" =>
+        CSV.read(file("random_seeds", "daily"), DataFrame)]
+    if isfile(file("final", "daily"))
+        final = CSV.read(file("final", "daily"), DataFrame)
+        push!(runs, "GEMS, main design (tourism model + Heinsberg)" => final)
+    end
+    png(plot_rki_projection(runs, phase_dates = s.dates, cutoff = RKI_CUTOFF, basis = b),
+        joinpath(folder, first_wave_file("random_seeds", "projection", b, ext = "png")))
+    tbl = _read_counties(file("random_seeds", "counties"))
+    _figures_counties(folder, "random_seeds", tbl, b)
+end
+
 # all figures (and the county metrics) of the parts whose results exist in `folder`
 function _rki_figures(folder, s::RKISettings)
     for b in BASES
@@ -463,6 +502,7 @@ function _rki_figures(folder, s::RKISettings)
         _figures_projections(folder, s, b)
         _figures_counterfactuals(folder, s, b)
         _figures_seeds_robustness(folder, s, b)
+        _figures_random_seeds(folder, s, b)
     end
 end
 
@@ -589,6 +629,9 @@ function scenario_first_wave(;
     end
     if :seeds_robustness in parts
         _rki_seeds_robustness(folder, s, seeds = _seeds(3, test))
+    end
+    if :random_seeds in parts
+        _rki_random_seeds(folder, s, seeds = _seeds(3, test))
     end
     if :figures in parts
         _rki_figures(folder, s)
