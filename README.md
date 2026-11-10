@@ -250,6 +250,7 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 | `:counterfactuals` | contacts of phase k kept from the start of phase k + 1 on (k = 1–3) | 1 per variant / 0 |
 | `:band` | factor samples of the calibration, 5–95 % band, national and per state | 20 / 1001–1020 |
 | `:seeds_robustness` | all RKI cases infected before 09.03. as introduced infections (divided by the ascertainment, Heinsberg 1:1), no transmission before 09.03. | 3 / 0–2 |
+| `:random_seeds` | the seeds of `:final` (imports and Heinsberg cluster), the same number per day, in counties drawn in proportion to their population (drawn anew for each random seed) | 3 / 0–2 |
 | `:figures` | figures of all parts whose results exist | – |
 
 ### 5.2 Scenario modeling (Sec. 3.1.2, Fig 12)
