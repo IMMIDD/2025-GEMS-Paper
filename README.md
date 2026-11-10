@@ -227,7 +227,7 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 | Contact factors (phases 1–4) | 0.567 / 0.170 / 0.157 / 0.121, multiplied with the contact parameters of all settings except households | [C] [inputs/first_wave_factors_DE_model_first_wave.csv](inputs/first_wave_factors_DE_model_first_wave.csv) |
 | Care homes | households with at least 11 members, scaled like the other settings | [A] |
 | School closure | all school settings closed from 16.03.2020 | [L] |
-| Ascertainment | 0.22 of all infections detected | – |
+| Ascertainment | 0.22 of all infections detected | [L] adapted: under-ascertainment factor of 4 to 5 in the first half of 2020 from seroprevalence studies (Robert Koch-Institut 2021), i.e. 20–25 % of infections detected; 1 / 4.5 = 0.22 |
 | Testing | perfect PCR test at symptom onset with probability p = (0.22 − hospitalized share) / (symptomatic share − hospitalized share), and at hospital admission (if not detected before); positives are not isolated | [A] |
 | Reported cases by reporting date | detected infections, reported at symptom onset (asymptomatic: infection + 6 d) plus a delay drawn from the RKI delays of the onset week | [A] |
 | Reported cases by onset | detected infections at symptom onset (asymptomatic: infection + 6 d), each kept with the share of RKI cases with a known onset (per onset week); compared with the RKI cases with a known onset | [A] |
@@ -360,6 +360,7 @@ No disease parameters are involved.
 - Mossong, J., et al. (2008). Social contacts and mixing patterns relevant to the spread of infectious diseases. *PLoS Med* 5(3):e74. https://doi.org/10.1371/journal.pmed.0050074
 - Ponge, J., et al. (2024). A standardized framework for modeling non-pharmaceutical interventions in individual-based infectious disease simulations. *WSC 2024*, 1106–1117. https://doi.org/10.1109/WSC63780.2024.10838778
 - Robert Koch-Institut (2020). Täglicher Lagebericht des RKI zur Coronavirus-Krankheit-2019 (COVID-19), reports of 04.03.–27.04.2020.
+- Robert Koch-Institut (2021). SARS-CoV-2-Seroprävalenz in der Allgemeinbevölkerung in Deutschland [Factsheet], as of 23.11.2021. https://doi.org/10.25646/9288
 - Robert Koch-Institut (2026). SARS-CoV-2 Infektionen in Deutschland [Data set], version of 14.10.2026. Zenodo. https://doi.org/10.5281/zenodo.23357370. License: CC BY 4.0
 - Schilling, J., Lehfeld, A.-S., Schumacher, D., Diercke, M., Buda, S., Haas, W., RKI COVID-19 Study Group (2020). Krankheitsschwere der ersten COVID-19-Welle in Deutschland basierend auf den Meldungen gemäß Infektionsschutzgesetz. *Journal of Health Monitoring* 5(S11). https://doi.org/10.25646/7169
 - Statistische Ämter des Bundes und der Länder (2025). Volkswirtschaftliche Gesamtrechnungen der Länder, Reihe 2 Band 3, Tab. 2.4 (Berechnungsstand Februar 2025). statistikportal.de. License: Datenlizenz Deutschland – Namensnennung – Version 2.0.
