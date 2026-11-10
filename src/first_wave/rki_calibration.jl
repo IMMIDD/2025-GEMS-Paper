@@ -561,7 +561,8 @@ the calibration `cal` (`calibrate_rki_phases`).
 function curve_factor_samples(cal; n::Int, seed = 0)
     W = length(cal.problem.obs)
     A = curve_residuals(cal.v; cal.problem...).d .* cal.J
-    σ = sqrt(sum(abs2, cal.r[1:W]) / W)
+    K = length(cal.factors)
+    σ = sqrt(sum(abs2, cal.r[1:W]) / (W - K))
     C = σ^2 .* inv(A' * A)
     L = LinearAlgebra.cholesky(LinearAlgebra.Symmetric((C .+ C') ./ 2)).L
     θ = log.(cal.factors)

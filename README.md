@@ -237,9 +237,9 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 | Step | Setup |
 |---|---|
 | 1. Transmission scale | [Section 4.3](#43-transmission) |
-| 2a. Generation time of the model | Saarland, 70 days, scale 0.35, 20 extra infections per day in the Regionalverband Saarbrücken (ticks 7–27), ascertainment 1.0, random seed 2; cohort of ticks 10–22; mean 5.86 d ([inputs/generation_time_DE_model_first_wave.csv](inputs/generation_time_DE_model_first_wave.csv)) |
+| 2a. Generation time of the model | Saarland, 70 days, scale 0.35, 20 extra infections per day in the Regionalverband Saarbrücken (ticks 7–27), ascertainment 1.0, random seed 2; cohort of ticks 10–22; mean 5.68 d ([inputs/generation_time_DE_model_first_wave.csv](inputs/generation_time_DE_model_first_wave.csv)) |
 | 2b. Contact factors | fitted to the weekly RKI cases by onset, weeks 10–16 (up to 19.04., weight 0.5 for week 10), with the R per phase of GEMS kept inside the 95 % interval of the RKI R per phase (R(t) back-calculated from 01.02., infections 01.03.–12.04., block bootstrap with 1,000 samples, block length 7 d); surrogate fit, then damped Gauss–Newton steps, at most 7 evaluations with 2 runs each (random seeds 0, 1); runs until 17.05. |
-| 2c. Band | 20 factor samples from the calibration uncertainty (random seeds 1001–1020) ([inputs/first_wave_band_factors_DE_model_first_wave.csv](inputs/first_wave_band_factors_DE_model_first_wave.csv)) |
+| 2c. Band | 20 factor samples (log-normal) from the approximate covariance of the fit, σ²(AᵀA)⁻¹ with A the weighted Jacobian of the residuals at the optimum and σ² = residual sum of squares / (7 weeks − 4 factors) (random seeds 1001–1020) ([inputs/first_wave_band_factors_DE_model_first_wave.csv](inputs/first_wave_band_factors_DE_model_first_wave.csv)) |
 
 **Parts of the scenario** (`FIRST_WAVE_PARTS`)
 
@@ -248,7 +248,7 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 | `:final` | calibrated factors until 31.05. (six weeks of forecast after 19.04.) | 3 / 0–2 |
 | `:projections` | from 20.04. on, the contacts of phase 2, 3, or 4, or of phase 1 (until 17.05.); schools reopen in the projections to phase 1 and 2 | 2 per variant / 0, 1 |
 | `:counterfactuals` | contacts of phase k kept from the start of phase k + 1 on (k = 1–3) | 1 per variant / 0 |
-| `:band` | factor samples of the calibration, 5–95 % band | 20 / 1001–1020 |
+| `:band` | factor samples of the calibration, 5–95 % band, national and per state | 20 / 1001–1020 |
 | `:seeds_robustness` | all RKI cases infected before 09.03. as introduced infections (divided by the ascertainment, Heinsberg 1:1), no transmission before 09.03. | 3 / 0–2 |
 | `:figures` | figures of all parts whose results exist | – |
 
