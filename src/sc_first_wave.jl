@@ -501,8 +501,36 @@ function _figures_random_seeds(folder, s::RKISettings, b)
     _figures_counties(folder, "random_seeds", tbl, b)
 end
 
+# seeded (introduced) infections of the final runs, for the paper text: infections and seeded
+# infections (mean of the runs) for the whole run, the fitted period, and each phase (from its
+# start date, no transition), and the planned seeds per source
+function _seeding_summary(folder, s::RKISettings)
+    file = joinpath(folder, first_wave_file("final", "infections"))
+    isfile(file) || return
+    inf = CSV.read(file, DataFrame)
+    starts = vcat(first(inf.date), s.dates)
+    ends = vcat(s.dates .- Day(1), last(inf.date))
+    periods = vcat(
+        ["whole run" => (first(inf.date), last(inf.date)),
+         "fitted period" => (first(inf.date), RKI_CUTOFF)],
+        ["phase $k" => (starts[k], ends[k]) for k in eachindex(starts)])
+    rows = map(periods) do (name, (from, to))
+        i = from .<= inf.date .<= to
+        (period = name, from = from, to = to, infections = sum(inf.infections[i]),
+            seeded = sum(inf.seeded[i]), seeded_share = sum(inf.seeded[i]) / sum(inf.infections[i]))
+    end
+    CSV.write(joinpath(folder, first_wave_file("final", "seeding_summary")), DataFrame(rows))
+
+    seeds = CSV.read(joinpath(folder, first_wave_file("seeded_infections")), DataFrame)
+    sources = setdiff(names(seeds), ["date"])
+    totals = [sum(seeds[!, c]) for c in sources]
+    CSV.write(joinpath(folder, first_wave_file("final", "seeding_sources")),
+        DataFrame(source = sources, seeded = totals, share = totals ./ sum(totals)))
+end
+
 # all figures (and the county metrics) of the parts whose results exist in `folder`
 function _rki_figures(folder, s::RKISettings)
+    _seeding_summary(folder, s)
     _figures_paper(folder, s)
     for b in BASES
         _figures_final(folder, s, b)

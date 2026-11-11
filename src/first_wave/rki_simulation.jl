@@ -441,6 +441,13 @@ function _phase_run(s::RKISettings, factors, seed; map_weeks, stage, school_reop
     # admission within the run)
     inf = infections(res.pp)
     mature = inf.tick .<= s.days - 21
+    # infections and seeded infections (imports, Heinsberg) in total and per phase (phase k from
+    # its start date, phase 1 from the start of the run; no transition)
+    daily = _daily_infections(res)
+    phase = [1 + count(d >= p for p in s.dates) for d in daily.date]
+    phase_sum(col, k) = sum(daily[phase .== k, col])
+    n_phases = length(s.dates) + 1
+    seeded = sum(daily.seeded)
     stats = merge(
         (stage = stage,
             seed = seed,
@@ -449,15 +456,21 @@ function _phase_run(s::RKISettings, factors, seed; map_weeks, stage, school_reop
             detected = count(!ismissing, inf.first_detected_tick),
             ascertainment = mean(.!ismissing.(inf.first_detected_tick[mature])),
             p_symptomatic = res.setup.p_symptomatic,
-            hospitalized = res.setup.hospitalized),
+            hospitalized = res.setup.hospitalized,
+            seeded = seeded,
+            seeded_share = seeded / sum(daily.infections)),
         (; (Symbol("f$k") => x for (k, x) in enumerate(factors))...),
-        (; (Symbol("share_outside_$k") => x for (k, x) in enumerate(shares))...))
+        (; (Symbol("share_outside_$k") => x for (k, x) in enumerate(shares))...),
+        (; (Symbol("infections_$k") => phase_sum(:infections, k) for k in 1:n_phases)...),
+        (; (Symbol("seeded_$k") => phase_sum(:seeded, k) for k in 1:n_phases)...),
+        (; (Symbol("seeded_share_$k") =>
+            phase_sum(:seeded, k) / max(phase_sum(:infections, k), 1) for k in 1:n_phases)...))
     printinfo("$stage: seed $seed done after $(round(runtime / 60, digits = 1)) min, " *
         "ascertainment $(round(stats.ascertainment, digits = 3))")
     return (
         report = basis_results(res, by_report),
         onset = basis_results(res_onset, by_onset),
-        infections = _daily_infections(res),
+        infections = daily,
         shares = shares,
         stats = stats,
         model = res.model)
@@ -476,7 +489,9 @@ vector and seed. Returns per basis (`report`: by reporting date, `onset`: by
 symptom onset) the daily cases as mean and range of the runs (`daily`), the
 county tables of the runs for `map_weeks` (`tbls`), and the daily cases per
 state (`states`); further the mean infections per day, all and seeded
-(`infections`), the statistics per run (`stats`), the mean share of
+(`infections`), the statistics per run (`stats`, including the seeded
+infections in total and per phase: `seeded`, `seeded_share`, `infections_k`,
+`seeded_k`, `seeded_share_k`, phase k from its start date), the mean share of
 transmissions outside households per phase (`shares`), and the incubation
 `model`. `sim_options` (seeding variants) are passed to `run_rki_sim`.
 """
