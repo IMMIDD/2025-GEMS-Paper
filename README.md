@@ -76,7 +76,7 @@ All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-an
 | Sec. 3.1.1 First wave 2020 | [sc_first_wave.jl](src/sc_first_wave.jl) → `scenario_first_wave()` | reference model | DE | 10.02.–31.05.2020 | see [5.1](#51-first-wave-2020-sec-311) |
 | Sec. 3.1.2 Scenario modeling (Fig 12A) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 180 d | 1 per scenario / 0 |
 | Fig 12B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
-| Sec. 3.1.3 Parameter sweep (Fig 13) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 3 / 1–5043 |
+| Sec. 3.1.3 Parameter sweep (Fig 13) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 5 / 1–8405 |
 | Sec. 3.1.4 Multi-criteria evaluation (Fig 14, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | DE | 365 d | 1 per scenario / 0, 1, 2 |
 | Sec. 3.2 Performance (Fig 15) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | GEMS defaults | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / 1–11 |
 
@@ -277,17 +277,17 @@ The Fig 12B listing ([sc_household_isolation_screenshot_file.jl](src/sc_househol
 
 Code: [sc_sweeping.jl](src/sc_sweeping.jl). Config: reference model.
 
-To focus on the regime where self-isolation can be decisive, we assume that other measures already prevent 60 % of all transmissions, such that without isolation R_init lies slightly above 1.
+To focus on the regime where self-isolation can be decisive, we assume that other measures already prevent 67 % of all transmissions, such that without isolation R_init lies slightly above 1.
 
 | Parameter | Reference model | This example |
 |---|---|---|
 | Population | – | Saarland |
 | Initial infections | none | 0.1 % of the population, random |
 | Duration | 112 days | 365 days |
-| Transmission scale | 0.50486 | × (1 − 0.6): 60 % of transmissions prevented by other measures (`transmission_reduction = 0.6`) [I] |
+| Transmission scale | 0.50486 | × (1 − 0.67): 67 % of transmissions prevented by other measures (`transmission_reduction = 0.67`) [I] |
 | Asymptomatic share (x-axis) | 0.17 | 0 to 1, step 0.025, set in all age groups; the other categories rescaled proportionally |
 | Adherence (y-axis) | – | 0 to 1, step 0.025 |
-| Repetitions | – | 3 per combination; random seeds 1–5043 (one per run) |
+| Repetitions | – | 5 per combination; random seeds 1–8405 (one per run) |
 | Outcome | – | R_init per run (`r0(PostProcessor(sim))`: infections caused by the first 5 % of all infections, divided by their number) |
 
 | Trigger | Strategy (condition) | Measures |
