@@ -391,16 +391,6 @@ function _figures_final(folder, s::RKISettings, b)
 
     tbl = _read_counties(file("counties"))
     _figures_counties(folder, "final", tbl, b)
-    # paper figure (reported cases only): with the band of the calibration runs if they exist
-    if b == :report
-        band_file = joinpath(folder, first_wave_file("band", "daily", b))
-        png(plot_paper_figure_1(tbl, daily, RKI_MAP_WEEKS,
-                band = isfile(band_file) ? CSV.read(band_file, DataFrame) : nothing,
-                phase_dates = s.dates,
-                cutoff = RKI_CUTOFF,
-                basis = b),
-            png_file("paper_figure_1", ""))
-    end
 
     st = rki_state_table(tbl, RKI_WEEKS)
     CSV.write(joinpath(folder, first_wave_file("states", "weekly", b)), st)
@@ -414,19 +404,36 @@ function _figures_final(folder, s::RKISettings, b)
         png_file("states", "daily"))
     png(plot_rki_state_scatter(st, RKI_WINDOWS, basis = b), png_file("states", "scatter"))
     png(plot_rki_state_maps(tbl, RKI_MAP_WEEKS, basis = b), png_file("states", "maps"))
-    # paper figure (reported cases only): with the band of the calibration runs per state if they
-    # exist, else with the range of the final runs
-    if b == :report
-        band_file = joinpath(folder, first_wave_file("band", "states", b))
-        stats_file = joinpath(folder, first_wave_file("final", "stats"))
-        png(plot_paper_figure_2(st, CSV.read(file("states"), DataFrame),
-                band = isfile(band_file) ? CSV.read(band_file, DataFrame) : nothing,
-                runs = isfile(stats_file) ? nrow(CSV.read(stats_file, DataFrame)) : nothing,
-                cutoff = RKI_CUTOFF,
-                last_day = RKI_LAST_DAY,
-                basis = b),
-            png_file("paper_figure_2", ""))
-    end
+end
+
+# paper figures 1 and 2 of the final runs (reported cases only), with the band of the
+# calibration runs if it exists (figure 2: else with the range of the final runs). Drawn before
+# all other figures: GR maps each new color to an entry of a color table that lasts for the
+# whole Julia session, and once the county maps of the other figures have filled it, colors
+# requested for the first time are drawn wrong (grey annotations come out teal).
+function _figures_paper(folder, s::RKISettings)
+    b = :report
+    file(kind) = joinpath(folder, first_wave_file("final", kind, b))
+    isfile(file("daily")) || return
+    band_file(kind) = joinpath(folder, first_wave_file("band", kind, b))
+    png_file(kind) = joinpath(folder, first_wave_file(kind, "", b, ext = "png"))
+    tbl = _read_counties(file("counties"))
+
+    png(plot_paper_figure_1(tbl, CSV.read(file("daily"), DataFrame), RKI_MAP_WEEKS,
+            band = isfile(band_file("daily")) ? CSV.read(band_file("daily"), DataFrame) : nothing,
+            phase_dates = s.dates,
+            cutoff = RKI_CUTOFF,
+            basis = b),
+        png_file("paper_figure_1"))
+
+    stats_file = joinpath(folder, first_wave_file("final", "stats"))
+    png(plot_paper_figure_2(rki_state_table(tbl, RKI_WEEKS), CSV.read(file("states"), DataFrame),
+            band = isfile(band_file("states")) ? CSV.read(band_file("states"), DataFrame) : nothing,
+            runs = isfile(stats_file) ? nrow(CSV.read(stats_file, DataFrame)) : nothing,
+            cutoff = RKI_CUTOFF,
+            last_day = RKI_LAST_DAY,
+            basis = b),
+        png_file("paper_figure_2"))
 end
 
 # county metrics, scatter plots of the windows and of single weeks, and maps
@@ -496,6 +503,7 @@ end
 
 # all figures (and the county metrics) of the parts whose results exist in `folder`
 function _rki_figures(folder, s::RKISettings)
+    _figures_paper(folder, s)
     for b in BASES
         _figures_final(folder, s, b)
         _figures_band(folder, s, b)
