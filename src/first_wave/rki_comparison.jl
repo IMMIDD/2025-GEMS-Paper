@@ -136,26 +136,39 @@ function state_incidence(cases, pop, state)
 end
 
 
+# two-sided bootstrap p-value of the null hypothesis 0 (0 if no sample is on the other side,
+# i.e. p < 1 / number of samples)
+_bootstrap_p(b) = min(1.0, 2 * min(mean(b .<= 0), mean(b .>= 0)))
+
+
 """
     rki_weekly_metrics(tbl, weeks;
         persistence = tbl.rki_incidence_before,
-        bootstrap = 500,
+        bootstrap = 2000,
         seed = 0)
 
 Spearman correlation between the RKI and GEMS incidence per county for each
-week (or window of `rki_cumulative_table`), with a 95% bootstrap interval over
-states, and per state. The baselines are the correlations of the RKI incidence
-with the population, the seeds per inhabitant, the closeness to Ischgl, and
-`persistence` (by default the RKI incidence before the first week of the table).
+week (or window of `rki_cumulative_table`), and per state. Uncertainty comes
+from a bootstrap over states (`bootstrap` samples of the states, drawn with
+replacement, each with all its counties): standard deviation, 95% interval, and
+two-sided p-value (0 means p < 1 / `bootstrap`).
+
+The baselines are the correlations of the RKI incidence with the population,
+the seeds per inhabitant, the closeness to Ischgl, and `persistence` (by
+default the RKI incidence before the first week of the table). For the seeds,
+the table also gives the 95% interval and the gain of GEMS over the seeds
+(`gain_seeds` = `spearman` − `base_seeds`), with its interval and p-value from
+the same bootstrap samples (paired).
 """
 function rki_weekly_metrics(tbl::DataFrame, weeks;
     persistence = tbl.rki_incidence_before,
-    bootstrap::Int = 500,
+    bootstrap::Int = 2000,
     seed = 0)
 
     rng = Random.Xoshiro(seed)
     res = DataFrame()
     states = sort(unique(tbl.state))
+    rows = Dict(s => findall(tbl.state .== s) for s in states)
     for w in weeks
         rki_cases = tbl[!, county_column("rki", "cases", w)]
         gems_cases = tbl[!, county_column("gems", "cases", w)]
@@ -163,11 +176,15 @@ function rki_weekly_metrics(tbl::DataFrame, weeks;
         gi = tbl[!, county_column("gems", "incidence", w)]
         seeds = tbl[!, county_column("seeds", "", w)] ./ tbl.population
 
-        # bootstrap over states
-        boot = map(1:bootstrap) do _
-            i = reduce(vcat, [findall(tbl.state .== s) for s in rand(rng, states, length(states))])
-            corspearman(ri[i], gi[i])
+        # bootstrap over states: GEMS and seeds on the same samples; samples in which a
+        # correlation is undefined (constant column) are dropped
+        pairs = map(1:bootstrap) do _
+            i = reduce(vcat, [rows[s] for s in rand(rng, states, length(states))])
+            (corspearman(ri[i], gi[i]), corspearman(ri[i], seeds[i]))
         end
+        boot = filter(!isnan, first.(pairs))
+        boot_seeds = filter(!isnan, last.(pairs))
+        gain = filter(!isnan, [g - s for (g, s) in pairs])
         if length(states) < 3
             by_state = NaN
         else
@@ -176,16 +193,27 @@ function rki_weekly_metrics(tbl::DataFrame, weeks;
                 state_incidence(gems_cases, tbl.population, tbl.state))
         end
 
+        q(b, p) = isempty(b) ? NaN : quantile(b, p)
+        spearman = corspearman(ri, gi)
+        base_seeds = corspearman(ri, seeds)
         push!(res, (
             week = w,
-            spearman = corspearman(ri, gi),
-            spearman_low = quantile(boot, 0.025),
-            spearman_high = quantile(boot, 0.975),
+            spearman = spearman,
+            spearman_low = q(boot, 0.025),
+            spearman_high = q(boot, 0.975),
+            spearman_sd = isempty(boot) ? NaN : std(boot),
+            spearman_p = isempty(boot) ? NaN : _bootstrap_p(boot),
             spearman_states = by_state,
             base_population = corspearman(ri, tbl.population_official),
-            base_seeds = corspearman(ri, seeds),
+            base_seeds = base_seeds,
+            base_seeds_low = q(boot_seeds, 0.025),
+            base_seeds_high = q(boot_seeds, 0.975),
             base_distance = corspearman(ri, -tbl.distance_km),
-            base_persistence = corspearman(ri, persistence)))
+            base_persistence = corspearman(ri, persistence),
+            gain_seeds = spearman - base_seeds,
+            gain_seeds_low = q(gain, 0.025),
+            gain_seeds_high = q(gain, 0.975),
+            gain_seeds_p = isempty(gain) ? NaN : _bootstrap_p(gain)))
     end
     return res
 end
