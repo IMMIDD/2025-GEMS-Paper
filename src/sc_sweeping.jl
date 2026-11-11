@@ -84,6 +84,10 @@ function run_sweeps(;
     # each simulation gets its own (reproducible) seed
     sim_count = 0
 
+    # progress output: estimate the remaining time from the mean duration per run
+    total = rep * length(0.0:step_size:1.0)^2
+    start = time()
+
     # run all simulations rep times
     for _ in 1:rep
         # vary asymptomatic rate
@@ -125,6 +129,9 @@ function run_sweeps(;
                 push!(xvals, asymp)
                 push!(yvals, adherence)
                 push!(outvals, r0(PostProcessor(sim)))
+
+                remaining = round(Int, (time() - start) / sim_count * (total - sim_count))
+                printinfo("Sweep run $sim_count / $total done, estimated time remaining: $(canonicalize(Second(remaining)))\n")
             end
         end
     end
