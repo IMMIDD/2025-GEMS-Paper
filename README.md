@@ -271,7 +271,7 @@ Code: [sc_household_isolation.jl](src/sc_household_isolation.jl). Config: refere
 
 All household members, including the symptomatic individual, isolate at home for 14 days. Each new symptomatic household member triggers the strategy again and restarts the 14 days for the whole household.
 
-The baseline run also produces the GEMS readout figure (`sc_household_isolation_baseline_combined.png`): daily infections and deaths, effective reproduction number, household attack rate, infection duration, cumulative disease progressions, progression categories, and maps of R0 and infection fatality per county. Its ResultData object uses the default style, since the progression categories and the fatality map need the raw infections.
+The baseline run also produces the GEMS readout figure (`sc_household_isolation_baseline_combined.png`): daily infections, effective reproduction number, household attack rate, infection duration, cumulative disease progressions, progression categories, and maps of the initial reproduction number (R_init) and infection fatality per county. Its ResultData object uses the default style, since the progression categories and the fatality map need the raw infections.
 
 The Fig 12B listing ([sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl)) uses the same intervention with GEMS defaults ([Section 5.5](#55-performance-benchmark-sec-32-fig-15)) on 100,000 agents, without a fixed random seed.
 
