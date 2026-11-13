@@ -157,14 +157,17 @@ end
 # (axes, ticks, fonts, colors) and the layout are set here. Font, panel titles, and
 # colorbars in the style of the first wave figures (`_FIG1_*`); width as figure 2.
 
-# sizes (px): figure width, height of a map (its width follows from the aspect of the
-# county shapes, `_FIG1_MAP`; two maps and their titles make the figure 7,370 px high,
-# a full page of PLOS: 7.5 × 8.75 in), share of the map height that its colorbar
-# spans, height of the title rows, width of the y label column of the heatmap (F; its
-# tick labels start there; the other rows' y label columns end where their tick labels
-# start, see `_ro_combined`), gap between y label and tick labels
+# sizes (px): figure width and height (a full page of PLOS: 7.5 × 8.75 in; the maps
+# span the plot areas of A–C and D–F, their widths follow from the aspect of the
+# county shapes, `_FIG1_MAP`), share of the map height that its colorbar spans, height
+# of the title rows, width of the y label column of the heatmap (F; its tick labels
+# start there; the other rows' y label columns end where their tick labels start, see
+# `_ro_combined`), gap between y label and tick labels
 const _RO_WIDTH = _FIG2_WIDTH
-const _RO_MAP_HEIGHT = 3455
+const _RO_HEIGHT = 7370
+
+# share of the height of A–C (D–F) by which the maps reach below C (F)
+const _RO_MAP_SPILL = 0.05
 const _RO_COLORBAR_SHARE = 0.7
 const _RO_TITLE_HEIGHT = 230
 const _RO_YLABEL_WIDTH_HEATMAP = 180
@@ -269,10 +272,10 @@ end
 # ticks and label of a colorbar in the empty cell right of it (as
 # `_fig1_colorbar_ticks`, for any range and tick format). The label is rotated; with
 # `sub`, it gets a subscript (e.g. R with "init": GR's Times has no subscript letters),
-# centered for a colorbar of `height` px. `labelx`: position of the label (0: at the
-# colorbar, 1: right edge of the cell).
+# centered for a colorbar of `height` px (needed only with `sub`). `labelx`: position
+# of the label (0: at the colorbar, 1: right edge of the cell).
 function _ro_colorbar_ticks(lo, hi, label; format = _ro_num, sub = nothing,
-    height = _RO_COLORBAR_SHARE * _RO_MAP_HEIGHT, labelx = 0.82)
+    height = nothing, labelx = 0.82)
 
     p = plot(framestyle = :none, ticks = false, xlims = (0, 1), ylims = (lo, hi),
         legend = false, widen = false, margin = 0mm)
@@ -398,8 +401,8 @@ default-style ResultData object (`ProgressionCategories` and `CaseFatalityMap` n
 the raw infections).
 
 All panels are drawn by GEMS; this function only sets their axes and fonts (as in
-the first wave figures), adds titles, y labels, and thin colorbars, and aligns the
-plot areas of the left column.
+the first wave figures), adds titles, y labels, and thin colorbars, aligns the plot
+areas of the left column, and fits the maps to them (G next to A–C, H next to D–F).
 """
 plot_combined_readouts(rd, r0map, fatalitymap) =
     _ro_combined(plot_gemsplots(rd), r0map, fatalitymap)
@@ -424,17 +427,21 @@ function _ro_combined(panels, r0map, fatalitymap)
         "Individuals (Millions)",
         ""]
 
-    # sizes (px): title rows, maps, colorbar with its ticks, y labels; the left column
-    # takes the rest of the width, its six panels share the height of the two maps
-    W = _RO_WIDTH
-    th, mh = _RO_TITLE_HEIGHT, _RO_MAP_HEIGHT
-    mw = round(Int, mh * _FIG1_MAP[1] / _FIG1_MAP[2])
+    # sizes (px): figure, title rows, panel rows of the left column (six, with their
+    # titles, over the full height), colorbar with its ticks. The maps span the plot
+    # areas of A–C and D–F, which Plots knows only once it has laid out the figure:
+    # the first layout uses an estimate (`mh`), `fit_maps!` below sets the right
+    # column to the measured plot areas (rows: title G, map G, space, title H, map H,
+    # space; the map titles in the rows of the titles of A and D)
+    W, H = _RO_WIDTH, _RO_HEIGHT
+    th = _RO_TITLE_HEIGHT
+    ph = (H - 6 * th) / 6
+    mh = 3 * (th + ph) - th - ph / 4
+    aspect = (_FIG1_XLIMS[2] - _FIG1_XLIMS[1]) / (_FIG1_YLIMS[2] - _FIG1_YLIMS[1])
     cw, cl = _FIG1_COLORBAR_WIDTH, _FIG1_COLORBAR_LABELS
     gap = round(Int, _FIG1_GAP.value / 25.4 * Plots.DPI)
-    rw = mw + gap + cw + cl
+    rw = mh * aspect + gap + cw + cl
     lw = W - rw
-    H = 2 * th + 2 * mh
-    ph = (H - 6 * th) / 6
     rest = (1 - _RO_COLORBAR_SHARE) / 2
 
     # y label columns: the heatmap's tick labels (the widest) start after its narrow
@@ -470,21 +477,24 @@ function _ro_combined(panels, r0map, fatalitymap)
         l[1, 1][2k, 1] = grid(1, 3, widths = [yw, lw - yw - cw - cl, cw + cl] ./ lw)
     end
     l[1, 1][12, 1][1, 3] = grid(1, 2, widths = [cw, cl] ./ (cw + cl))
-    l[1, 2] = grid(5, 1, heights = [th, mh, th, mh, tiny] ./ (H + tiny))
-    for r in (2, 4)
-        l[1, 2][r, 1] = grid(1, 2, widths = [mw + gap, cw + cl] ./ rw)
+    space = (H + tiny - 2 * th - 2 * mh) / 2
+    l[1, 2] = grid(6, 1, heights = [th, mh, space, th, mh, space] ./ (H + tiny))
+    for r in (2, 5)
+        l[1, 2][r, 1] = grid(1, 2, widths = [rw - cw - cl, cw + cl] ./ rw)
         l[1, 2][r, 1][1, 2] = grid(3, 1, heights = [rest, 1 - 2 * rest, rest])
         l[1, 2][r, 1][1, 2][2, 1] = grid(1, 2, widths = [cw, cl] ./ (cw + cl))
     end
 
-    # panels in the order of the layout; remember where the plots of the left column
-    # and the heatmap's colorbar are
+    # panels in the order of the layout; remember where the titles and plots of the left
+    # column, the heatmap's colorbar, the maps, and the rows of the right column are
     items = Any[]
+    ltitles = Int[]
     column = Int[]
     heat_cb = Int[]
     for k in 1:6
-        push!(items, _ro_title('A' + (k - 1), titles[k]), _ro_ylabel(ylabels[k], ywidths[k]),
-            panels[k])
+        push!(items, _ro_title('A' + (k - 1), titles[k]))
+        push!(ltitles, length(items))
+        push!(items, _ro_ylabel(ylabels[k], ywidths[k]), panels[k])
         push!(column, length(items))
         if k < 6
             push!(items, _fig1_text())
@@ -497,19 +507,25 @@ function _ro_combined(panels, r0map, fatalitymap)
         end
     end
     push!(items, _fig1_text())
+    maps = Int[]
+    rows = Int[]
     for (letter, title, m, lo, hi, label, sub) in (
             ("G", "Initial Reproduction Number by County", r0map, r0_lo, r0_hi, "R", "init"),
             ("H", "Infection Fatality by County", fatalitymap, cf_lo, cf_hi,
                 "Deaths per Infection (%)", nothing))
+        push!(items, _ro_title(letter, title))
+        push!(rows, length(items))
+        push!(items, m)
+        push!(maps, length(items))
+        push!(rows, length(items))
         push!(items,
-            _ro_title(letter, title),
-            m,
             _fig1_text(),
             _ro_colorbar(lo, hi, cgrad(:inferno)),
-            _ro_colorbar_ticks(lo, hi, label, sub = sub),
+            _ro_colorbar_ticks(lo, hi, label, sub = sub, height = _RO_COLORBAR_SHARE * mh),
+            _fig1_text(),
             _fig1_text())
+        push!(rows, length(items))
     end
-    push!(items, _fig1_text())
 
     p = plot(items...,
         layout = l,
@@ -517,15 +533,77 @@ function _ro_combined(panels, r0map, fatalitymap)
         dpi = Plots.DPI,
         fontfamily = _FIG1_FONT)
 
-    # line up the left edges of the plot areas of the left column (tick labels of
-    # different widths), and the heatmap's colorbar with the heatmap if the row did not
-    # (repeat: each move changes the plot areas)
+    # Right column from the left one as Plots laid it out (px from the top left): the
+    # rows of the titles G and H as those of A and D, the plot areas of the maps from
+    # the top of A to the bottom of C and from the top of D to the bottom of F (plus
+    # `_RO_MAP_SPILL` of that height below), as wide
+    # as their height gives (the narrower map moved right, next to its colorbar); the
+    # left column takes the rest of the width. Plots splits the height of a column
+    # among its rows by their fractions after the rows' padding, hence the padding is
+    # taken off. Returns whether anything changed by more than half a pixel.
     sp = p.subplots
+    right = p.layout[1, 2]
+    topx(m) = m.value / 25.4 * Plots.DPI
+    ptop(i; box = false) = topx(Plots.top(box ? sp[i].bbox : sp[i].plotarea))
+    pbottom(i; box = false) = topx(Plots.bottom(box ? sp[i].bbox : sp[i].plotarea))
+    pwidth(i) = topx(Plots.width(sp[i].plotarea))
+    pheight(i; box = false) = pbottom(i, box = box) - ptop(i, box = box)
+    function fit_maps!()
+        g, h = maps
+        span(upper, lower) = (1 + _RO_MAP_SPILL) * (pbottom(lower) - ptop(upper))
+        # rows: their borders, padding, and fractions
+        ends = [
+            pbottom(ltitles[1], box = true),
+            ptop(column[1]) + span(column[1], column[3]) + pbottom(g, box = true) - pbottom(g),
+            ptop(ltitles[4], box = true),
+            pbottom(ltitles[4], box = true),
+            ptop(column[4]) + span(column[4], column[6]) + pbottom(h, box = true) - pbottom(h),
+            pbottom(rows[end], box = true)]
+        sizes = diff([0; ends])
+        pads = [pheight(i, box = true) - pheight(i) for i in rows]
+        changed = any(abs.(sizes .- [pheight(i, box = true) for i in rows]) .> 0.5)
+        fractions = max.(sizes .- pads, 1)
+        right.heights = Measure[x / sum(fractions) * Plots.pct for x in fractions]
+        # tops of the maps at the tops of A and D (as far as the rows do not set them)
+        for (k, start, panel) in ((g, ends[1], column[1]), (h, ends[4], column[4]))
+            e = (ptop(panel) - start) - (ptop(k) - ptop(k, box = true))
+            if abs(e) > 0.5
+                sp[k][:top_margin] = sp[k][:top_margin] + e * Plots.px
+                changed = true
+            end
+        end
+        # widths: surplus of each map's plot area over the width its height gives; the
+        # column loses the smaller surplus, the other map moves right by the difference
+        surplus = [pwidth(k) - span(upper, lower) * aspect
+            for (k, upper, lower) in ((g, column[1], column[3]), (h, column[4], column[6]))]
+        cut = minimum(surplus)
+        if abs(cut) > 0.5
+            cwidth = p.layout.widths[2].value * W - cut
+            p.layout.widths = Measure[w / W * Plots.pct for w in (W - cwidth, cwidth)]
+            for r in (2, 5)
+                right[r, 1].widths = Measure[w / cwidth * Plots.pct
+                    for w in (cwidth - cw - cl, cw + cl)]
+            end
+            changed = true
+        end
+        for (k, s) in zip(maps, surplus)
+            if abs(s - cut) > 0.5
+                sp[k][:left_margin] = sp[k][:left_margin] + (s - cut) * Plots.px
+                changed = true
+            end
+        end
+        return changed
+    end
+
+    # fit the maps (see above), line up the left edges of the plot areas of the left
+    # column (tick labels of different widths), and the heatmap's colorbar with the
+    # heatmap if the row did not (repeat: each move changes the plot areas)
     hm = sp[column[6]]
-    for _ in 1:4
+    for _ in 1:10
         Plots.prepare_output(p)
+        moved = fit_maps!()
+        moved && Plots.prepare_output(p)
         target = maximum(Plots.left(sp[i].plotarea) for i in column)
-        moved = false
         for i in column
             offset = target - Plots.left(sp[i].plotarea)
             if abs(offset.value) > 0.1
