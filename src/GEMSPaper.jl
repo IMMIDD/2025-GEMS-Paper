@@ -99,7 +99,6 @@ include("first_wave/rki_figures.jl")
 include("first_wave/rki_paper_figure.jl")
 
 # INCLUDE SCENARIOS
-include("sc_outbreak.jl")
 include("sc_household_isolation.jl")
 include("sc_sweeping.jl")
 include("sc_testing.jl")

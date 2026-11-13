@@ -74,7 +74,7 @@ All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-an
 | Fig 4–6 (population, demographics, commuting) | `demographics.jl`, `settings.jl`, `mobility.jl` | none | DE | – | – |
 | Fig 7 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | reference model | DE | – | 0 |
 | Sec. 3.1.1 First wave 2020 | [sc_first_wave.jl](src/sc_first_wave.jl) → `scenario_first_wave()` | reference model | DE | 10.02.–31.05.2020 | see [5.1](#51-first-wave-2020-sec-311) |
-| Sec. 3.1.2 Scenario modeling (Fig 12A) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 180 d | 1 per scenario / 0 |
+| Sec. 3.1.2 Scenario modeling (Fig 12A, baseline readouts) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 180 d | 1 per scenario / 0 |
 | Fig 12B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
 | Sec. 3.1.3 Parameter sweep (Fig 13) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 5 / 1–8405 |
 | Sec. 3.1.4 Multi-criteria evaluation (Fig 14, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | DE | 365 d | 1 per scenario / 0, 1, 2 |
@@ -270,6 +270,8 @@ Code: [sc_household_isolation.jl](src/sc_household_isolation.jl). Config: refere
 | | | Isolation | `SelfIsolation(14)` (0) |
 
 All household members, including the symptomatic individual, isolate at home for 14 days. Each new symptomatic household member triggers the strategy again and restarts the 14 days for the whole household.
+
+The baseline run also produces the GEMS readout figure (`sc_household_isolation_baseline_combined.png`): daily infections and deaths, effective reproduction number, household attack rate, infection duration, cumulative disease progressions, progression categories, and maps of R0 and infection fatality per county. Its ResultData object uses the default style, since the progression categories and the fatality map need the raw infections.
 
 The Fig 12B listing ([sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl)) uses the same intervention with GEMS defaults ([Section 5.5](#55-performance-benchmark-sec-32-fig-15)) on 100,000 agents, without a fixed random seed.
 

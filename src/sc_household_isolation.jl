@@ -1,5 +1,8 @@
 export run_household_isolation_sims
 export plot_scenario_household_isolation
+export plot_r0_by_region
+export plot_case_fatality
+export plot_combined_readouts
 
 export scenario_household_isolation
 
@@ -15,6 +18,9 @@ export scenario_household_isolation
 Runs the household isolation scenario simulations and returns
 two ResultData objects: one for the baseline simulation and one for the scenario with household isolation.
 And also returns last simulation object for further data extraction.
+
+The baseline uses the default ResultData style, as its readout figure
+(`plot_combined_readouts`) needs the raw infections; the scenario uses `"LightRD"`.
 """
 function run_household_isolation_sims(;
     configfile = "models/DE_model_first_wave.toml",
@@ -32,7 +38,7 @@ function run_household_isolation_sims(;
         stop_criterion = stop_criterion)
 
     run!(sim)
-    rd_b = ResultData(sim, style = "LightRD")
+    rd_b = ResultData(sim)
 
 
     # simulation with 14-day household isolation: upon symptom onset, all household members
@@ -144,6 +150,118 @@ end
 
 
 """
+    plot_case_fatality(rd)
+
+Plots case fatality map.
+"""
+function plot_case_fatality(rd)
+    return gemsmap(rd, type = :CaseFatalityMap, level = 2,
+        size = map_dims(),
+        titlefontsize = map_titlefontsize(),
+        ytickfontsize = map_legendfontsize(),
+        colorbar_titlefontsize = map_legendfontsize(),
+        right_margin=5mm,
+        linecolor = nothing,
+        title = "Infection Fatality",
+        colorbar_title = "Percentage (%)",
+        fontfamily = "Times Roman")
+end
+
+
+"""
+    plot_r0_by_region(rd)
+
+Plots R0 by region map.
+"""
+function plot_r0_by_region(rd)
+    return gemsmap(rd, type = :R0Map, level = 2,
+        size = map_dims(),
+        titlefontsize = map_titlefontsize(),
+        ytickfontsize = map_legendfontsize(),
+        colorbar_titlefontsize = map_legendfontsize(),
+        right_margin=5mm,
+        linecolor = nothing,
+        title ="Basic Reproduction Number (R0)",
+        plot_title = "",
+        colorbar_title = "Basic Reproduction Number (R0)",
+        fontfamily = "Times Roman")
+end
+
+
+function plot_gemsplots(rd)
+    return plot(
+            gemsplot(rd, type = :TickCases,
+                series = [:exposed, :deaths],
+                titlefontsize = map_legendfontsize(),
+                title = "Daily Infections",
+                plot_title = "",
+                linewidth = 3,
+                top_margin = 10mm),
+            gemsplot(rd, type = :EffectiveReproduction,
+                linewidth = 3,
+                top_margin = -20mm),
+            gemsplot(rd, type = :HouseholdAttackRate,
+                ar_only = true,
+                markersize = 15,
+                xlims = (1, 10),
+                top_margin = -20mm),
+            gemsplot(rd, type = :InfectionDuration,
+                linecolor = :transparent,
+                xlims = (0, 41),
+                top_margin = -20mm),
+            gemsplot(rd, type = :CumulativeDiseaseProgressions,
+                xlims = (0, 41),
+                top_margin = -20mm),
+            gemsplot(rd, type = :ProgressionCategories,
+                top_margin = -20mm),
+
+            layout = (6, 1),
+            tickfontsize = map_legendfontsize(),
+            legendfontsize = map_legendfontsize(),
+            labelfontsize = map_legendfontsize(),
+            titlefontsize = map_titlefontsize(),
+            left_margin = 10mm,
+            bottom_margin = 20mm
+        )
+end
+
+
+"""
+    plot_combined_readouts(rd, r0map, fatalitymap)
+
+Combines the GEMS readout plots of `rd` (daily infections, effective R, household
+attack rate, infection duration, cumulative disease progressions, progression
+categories) with the R0 and infection fatality maps. `rd` must be a default-style
+ResultData object (`ProgressionCategories` and `CaseFatalityMap` need the raw infections).
+"""
+function plot_combined_readouts(rd, r0map, fatalitymap)
+
+    l = @layout [a{0.45w} b{0.55w}]
+
+    return plot(
+        plot_gemsplots(rd),
+        plot(
+            plot!(r0map,
+                top_margin = -60mm,
+                bottom_margin = -30mm),
+            plot!(fatalitymap,
+                top_margin = -30mm,
+                bottom_margin = -50mm),
+            left_margin = -40mm,
+            layout = (2, 1),
+            size = ((map_dims()[1], 2 * map_dims()[2]))
+        ),
+
+        layout = l,
+        size = 2 .* map_dims(),
+
+        titlefontsize = map_titlefontsize(),
+        fontfamily = "Times Roman",
+    )
+end
+
+
+"""
     scenario_household_isolation(;
         configfile = "models/DE_model_first_wave.toml",
         infected_fraction = 0.0001,
@@ -177,4 +295,8 @@ function scenario_household_isolation(;
 
     p_hi = plot_scenario_household_isolation(rd_b, rd_s, sim)
     png(p_hi, joinpath(folder, "sc_household_isolation_r0_reduction.png"))
+
+    # GEMS readouts of the baseline
+    p_readouts = plot_combined_readouts(rd_b, plot_r0_by_region(rd_b), plot_case_fatality(rd_b))
+    png(p_readouts, joinpath(folder, "sc_household_isolation_baseline_combined.png"))
 end
