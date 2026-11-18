@@ -202,7 +202,7 @@ Interventions use the Trigger–Strategy–Measure (TriSM) framework ([Ponge et 
 
 ### 5.1 First wave 2020 (Sec. 3.1.1, Fig 10–11)
 
-Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave/). Config: reference model. Compared with the RKI cases by reporting date and by symptom onset.
+Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave/). Config: reference model. Calibrated on the RKI cases by symptom onset; compared with the RKI cases by reporting date (also by symptom onset with `diagnostics = true`).
 
 **Data**
 
@@ -211,22 +211,36 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 | RKI cases | county, reporting date, symptom onset; version of 14.10.2026 | Robert Koch-Institut 2026 (Zenodo, CC BY 4.0) |
 | Unknown onsets | onsets > 21 d before the report, or later after the report than the 99 % quantile of the model's incubation period, are treated as unknown | [A] data errors / a case reported before onset is at most one incubation period before it |
 | Counties | Berlin districts merged into 11000; Eisenach (16056) merged into the Wartburgkreis (16063) | data structure |
-| Reporting delays | RKI onset → report delays per onset week (all of Germany) | RKI cases |
+| Reporting delays | RKI onset → report delays per onset week (all of Germany, onsets 01.02.–31.05.; weeks with < 200 cases take the nearest week) | [L] adapted: Robert Koch-Institut 2026 |
+| Median reporting delay | 5 d (`MEDIAN_REPORT_DELAY`, fixed in the code) | [L] adapted: median onset → report delay of the RKI cases with a known onset 01.02.–31.05.2020 (Robert Koch-Institut 2026) |
+| Imports, countries of infection | RKI situation reports of 04.03., 06.03., 08.03., 22.03., 24.03., 26.03., 27.04.2020 | Robert Koch-Institut 2020 |
+| Tyrol overnight stays | guests from Germany, winter 2018/19, 7 origin regions | [L] Amt der Tiroler Landesregierung 2019, Tab. 6, p. 11 |
+| Origin regions of the Tyrol data | states mapped to whole regions: Nord = SH, HH, NI, HB; MD = HE, RP, SL; Ost = BB, MV, SN, ST, TH; BY, BW, NW, BE | [A] approximation: Statistik Austria assigns guests by postal code (e.g. 68/69 Mannheim/Heidelberg to MD, 89 Ulm to BY, 38 incl. parts of ST to Nord; Statistik Austria n.d.) |
+| County geography | land areas and population (`EWZ`) of the GEMS county shapes; straight-line distance from the area-weighted centroid in Gauss–Krüger zone 3 (EPSG:31467) | [D] GEMS county shapes; [A] straight-line distance from the centroid |
+| County income | disposable income of private households (incl. non-profit institutions) per inhabitant 2019 ([inputs/county_income_2019.csv](inputs/county_income_2019.csv)); Eisenach (16056) takes the value of the Wartburgkreis; used relative to the population-weighted national mean | [L] Statistische Ämter des Bundes und der Länder 2026, Tab. 2.4 |
+| School holidays | KMK holiday calendar 2019/20 | [L] Sekretariat der Kultusministerkonferenz 2018 |
 
 **Introduced infections** (added via `stepmod`, as `RegionalSeeds` in GEMS v1.0.2 only infects at tick 0)
 
 | Item | Value | Source |
 |---|---|---|
-| Imported cases per reporting week (weeks 9–17) | 35, 262, 2,781, 6,454, 3,814, 1,095, 267, 113, 31 | [L] RKI situation report of 27.04.2020, Fig. 3 (weeks 10–17); week 9 extrapolated from the reports of 04.–08.03. |
-| Share of Austria and Italy | 0.90 (weeks 9–12), 0.84 (weeks 13–17) | [L] country tables of the RKI situation reports up to 08.03., 08.–22.03., and 22.–26.03. |
-| Share of Italy in the Alpine imports | 1.0 (weeks 9–10), 0.21 (11–12), 0.07 (13–17) | [L] RKI situation reports of 08.03., 22.03. (995 of 4,849), and 27.04. (474 of 6,443) |
-| Import curve | back-calculated to infection dates over the model's time to onset and the RKI reporting delays (200 iterations), divided by the ascertainment | [A] |
-| Allocation to counties: Austria | Tyrol overnight stays per German origin region (winter 2018/19), distributed within the region by population × relative income^1.0 × (distance to Ischgl / 100 km)^−0.4, × (1 + 1.0 × school holidays of the state) | [L] Amt der Tiroler Landesregierung 2019, Tab. 6; [L] income elasticity 1.0 (T-MONA guest survey); [L] adapted: distance decay 0.4 (slope of the Tyrol overnight stays across the regions); [A] holiday factor 1.0 |
-| Allocation: Italy | 70 % like Austria with Bozen as reference point, 30 % by population × income | [L] ski share 0.7 (RKI situation reports) |
-| Allocation: other countries | population × income | [A] |
-| School holidays (mid-February–March 2020) | BY, BW 22.02.–01.03.; HH 29.02.–15.03.; RP 15.–23.02.; SL 15.–25.02.; SN, MV 08.–23.02.; BW: 50 % of the schools | [L] school holiday calendars; [A] BW coverage 0.5 |
-| County income | disposable income of private households per inhabitant 2019 | [L] VGR der Länder, Reihe 2 Band 3, Tab. 2.4 ([inputs/county_income_2019.csv](inputs/county_income_2019.csv)) |
-| Heinsberg cluster | RKI cases of Kreis Heinsberg with onset (or, if unknown, reporting date) up to 29.02. and reported by 07.03., infected 1:1 at onset − 6 d (rounded mean incubation 1 + 0.8 + 4.0), or report − 11 d (+ median reporting delay 5 d) if the onset is unknown | [A] |
+| Imported cases per reporting week (weeks 10–17) | 262, 2,781, 6,454, 3,814, 1,095, 267, 113, 31 | [L] RKI situation report of 27.04.2020, p. 3, Fig. 3 (exposure "Ausland"; n = 97,150 cases with a known place of exposure) |
+| Imported cases, week 9 | 35 | [L] adapted: log-linear fit of the cases with exposure abroad (sum of the listed countries) on 04., 06., 08.03. (64, 130, 223; Tab. 2), evaluated at 02.03.; [A] stands for all imports reported up to the end of week 9 (fit not in the code) |
+| Which cases are imports | cases with exposure abroad among the cases with a known place of exposure (63 % of the cases up to 27.04.) | [A] the cases with an unknown place of exposure (37 %) are not imputed |
+| Share of Austria and Italy | 0.90 (weeks 9–12), 0.84 (weeks 13–17) | [L] adapted: weeks 9–10: Italy 200 of 223 foreign exposures on 08.03. (Tab. 2; no Austria); weeks 11–12 and 13: share in the increase of the country mentions 08.→22.03. and 22.→26.03. (Tab. 3 and text); [A] report intervals taken as reporting weeks, mentions as cases; 0.84 carried over to weeks 14–17 (the report of 27.04. bounds the share for 22.03.→27.04. at ≤ 0.814) |
+| Share of Italy in the Alpine imports | 1.0 (weeks 9–10), 0.21 (11–12), 0.07 (13–17) | [L] adapted: no Austria on 08.03.; Italy's share in the increase of the Alpine mentions 08.→22.03. (995 of 4,849) and 22.03.→27.04. (474 of 6,443; Tab. 2); [A] reference date 27.04. here, 26.03. for the share of Austria and Italy |
+| Import curve | infections per day (10.02.–26.04.) back-calculated from the weekly counts (reporting week = ISO week) over the time to onset (1 + Poisson(4.8) d; asymptomatic: infection + 6 d) and the RKI onset → report delays of the onset week, separately for Austria, Italy, and other countries; EMS with smoothing weights 1/4, 1/2, 1/4, flat start, 200 iterations; from 01.02. for the R(t) back-calculation | time to onset: reference model ([Section 4.5](#45-transition-durations)); delays: RKI (Data); [L] Becker et al. 1991 (method); [A] 200 iterations without a convergence criterion; no imports before 10.02. (config start; 01.02. for R(t)) or after 26.04. (end of week 17); asymptomatic imports reported with onset at infection + 6 d |
+| Infections per reported import | 1 / 0.22 ≈ 4.5 | [A] imports detected like all infections; returning travellers from risk areas were probably tested more often, so the imports may be overestimated |
+| Seeding of the imports | per day and source, expected count × 4.5 rounded stochastically (floor + Bernoulli draw); counties drawn with replacement by the allocation weights (computed with the county populations of the model); a random susceptible resident of the county (any age) infected; imports into counties outside the population model dropped | [A] |
+| Reference points | Ischgl (47.0128 N, 10.2919 E) for Austria, Bozen (46.498 N, 11.354 E) for Italy | [A] Tyrol accounts for 2,737 of the 2,995 mentions with an Austrian region in the RKI report of 26.03. (Tab. 3), with Ischgl as its main cluster; South Tyrol/Trentino is the Italian region named most often (reports of 08.–26.03.) |
+| Allocation to counties: Austria | Tyrol overnight stays per German origin region, distributed within the region by population × relative income^1.0 × (distance to Ischgl / 100 km)^−0.4, × (1 + 1.0 × school holidays of the state on the infection date) | see the following rows |
+| Distance decay | 0.4 | [L] adapted: slope of ln(Tyrol overnight stays per inhabitant) on ln(population-weighted mean distance to Ischgl) over the 7 origin regions (−0.39; fit not in the code), applied within the regions; [A] not adjusted for income (−0.25 with income^1.0 removed) |
+| Income elasticity | 1.0 | [A] trips proportional to income (also used for the other imports) |
+| Holiday factor | 1.0 | [A] weight doubled during school holidays |
+| Allocation: Italy | 70 % like Austria with Bozen as reference point (same Tyrol origin regions and holiday factor), 30 % by population × income | [A] ski share 0.7; share of South Tyrol/Trentino in the RKI reports: 58 % of the Italian exposures (08.03., Tab. 2), 85–86 % of the Italian regions named (24./26.03., Tab. 3), 21 % of all Italy mentions (22.03.); plausible range 0.2–0.86 |
+| Allocation: other countries | population × relative income^1.0 | [A] |
+| School holidays (mid-February–March 2020) | BY, BW 22.02.–01.03.; HH 29.02.–15.03.; RP 15.–23.02.; SL 15.–25.02.; SN, MV 08.–23.02.; BW: 50 % of the schools | [L] Sekretariat der Kultusministerkonferenz 2018 (all states except BW); [A] adjacent weekends added; [A] BW: carnival week as in BY (no state-wide winter holidays, carnival holidays set by each school), coverage 0.5 (no source, range 0–1); not included: ST, TH (10.–14.02.), movable days in other states (e.g. carnival in NRW), Easter holidays |
+| Heinsberg cluster | RKI cases of Kreis Heinsberg with onset (or, if unknown, reporting date) up to 29.02. and reported by 07.03., infected 1:1 at onset − 6 d (rounded mean incubation 1 + 0.8 + 4.0), or report − 11 d (+ median reporting delay 5 d) if the onset is unknown; 180 cases seeded (170 with onset); 132 cases with onset up to 29.02. reported later are not seeded | [A] without a direct source: cut-off 29.02. (two weeks after the carnival session of 15.02., Streeck et al. 2020), reporting limit 07.03., 1:1 (not divided by the ascertainment); imports are allocated to Heinsberg in addition |
 
 **Contact phases and testing**
 
@@ -234,10 +248,10 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 |---|---|---|
 | Phase start dates | phase 2: 09.03. (large events cancelled), phase 3: 16.03. (schools closed), phase 4: 23.03. (contact restrictions) | [L] dates of the measures |
 | Transitions between phases | linear over 3, 3, 4 days | [L] Dehning et al. 2020 |
-| Contact factors (phases 1–4) | 0.567 / 0.170 / 0.157 / 0.121, multiplied with the contact parameters of all settings except households | [C] [inputs/first_wave_factors_DE_model_first_wave.csv](inputs/first_wave_factors_DE_model_first_wave.csv) |
+| Contact factors (phases 1–4) | 0.570 / 0.163 / 0.165 / 0.119, multiplied with the contact parameters of all settings except households | [C] [inputs/first_wave_factors_DE_model_first_wave.csv](inputs/first_wave_factors_DE_model_first_wave.csv) |
 | Care homes | households with at least 11 members, scaled like the other settings | [A] |
 | School closure | all school settings closed from 16.03.2020 | [L] |
-| Ascertainment | 0.22 of all infections detected | [L] adapted: under-ascertainment factor of 4 to 5 in the first half of 2020 from seroprevalence studies (Robert Koch-Institut 2021), i.e. 20–25 % of infections detected; 1 / 4.5 = 0.22 |
+| Ascertainment | 0.22 of all infections detected (`ASCERTAINMENT_2020`); also used to scale the reported imports, not the Heinsberg cluster | [L] adapted: under-ascertainment factor of 4 to 5 in the first half of 2020 from seroprevalence studies (Robert Koch-Institut 2021, p. 1), i.e. 20–25 % of infections detected; 1 / 4.5 = 0.22; [A] the same factor for imports |
 | Testing | perfect PCR test at symptom onset with probability p = (0.22 − hospitalized share) / (symptomatic share − hospitalized share), and at hospital admission (if not detected before); positives are not isolated | [A] |
 | Reported cases by reporting date | detected infections, reported at symptom onset (asymptomatic: infection + 6 d) plus a delay drawn from the RKI delays of the onset week | [A] |
 | Reported cases by onset | detected infections at symptom onset (asymptomatic: infection + 6 d), each kept with the share of RKI cases with a known onset (per onset week); compared with the RKI cases with a known onset | [A] |
@@ -251,17 +265,30 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 | 2b. Contact factors | fitted to the weekly RKI cases by onset, weeks 10–16 (up to 19.04., weight 0.5 for week 10), with the R per phase of GEMS kept inside the 95 % interval of the RKI R per phase (R(t) back-calculated from 01.02., infections 01.03.–12.04., block bootstrap with 1,000 samples, block length 7 d); surrogate fit, then damped Gauss–Newton steps, at most 7 evaluations with 2 runs each (random seeds 0, 1); runs until 17.05. |
 | 2c. Band | 20 factor samples (log-normal) from the approximate covariance of the fit, σ²(AᵀA)⁻¹ with A the weighted Jacobian of the residuals at the optimum and σ² = residual sum of squares / (7 weeks − 4 factors) (random seeds 1001–1020) ([inputs/first_wave_band_factors_DE_model_first_wave.csv](inputs/first_wave_band_factors_DE_model_first_wave.csv)) |
 
+**Evaluation** (`rki_county_metrics` in [src/first_wave/rki_comparison.jl](src/first_wave/rki_comparison.jl))
+
+| Item | Setup |
+|---|---|
+| Windows | fitting period (weeks 10–16, up to 19.04.) and forecast (weeks 17–22, up to 31.05.), cumulative; single weeks 10, 11, 13, 15, 17 |
+| County agreement | Spearman correlation of the RKI and GEMS incidence per county (cases per 100,000; RKI with the official, GEMS with the model population; mean of the runs) |
+| Uncertainty | bootstrap over states: 2,000 samples of the 16 states drawn with replacement, each with all its counties (random seed 0); SD, 95 % interval, and two-sided p-value |
+| State agreement | Spearman correlation of the incidence of the 16 states |
+| Baselines | correlation of the RKI incidence with the population, the introduced infections per inhabitant, the closeness to Ischgl, and the earlier RKI incidence (forecast window: incidence of the fitting period; fitting window and single weeks: RKI incidence by reporting date up to 01.03.) |
+| Gain over the introductions | Spearman of GEMS minus Spearman of the introduced infections per inhabitant, with interval and p-value from the same bootstrap samples (paired); for `:random_seeds`, this is the contribution of the simulated spread (population and contact model) |
+
 **Parts of the scenario** (`FIRST_WAVE_PARTS`)
 
-| Part | Setup | Runs / random seeds |
-|---|---|---|
-| `:final` | calibrated factors until 31.05. (six weeks of forecast after 19.04.) | 3 / 0–2 |
-| `:projections` | from 20.04. on, the contacts of phase 2, 3, or 4, or of phase 1 (until 17.05.); schools reopen in the projections to phase 1 and 2 | 2 per variant / 0, 1 |
-| `:counterfactuals` | contacts of phase k kept from the start of phase k + 1 on (k = 1–3) | 1 per variant / 0 |
-| `:band` | factor samples of the calibration, 5–95 % band, national and per state | 20 / 1001–1020 |
-| `:seeds_robustness` | all RKI cases infected before 09.03. as introduced infections (divided by the ascertainment, Heinsberg 1:1), no transmission before 09.03. | 3 / 0–2 |
-| `:random_seeds` | the seeds of `:final` (imports and Heinsberg cluster), the same number per day, in counties drawn in proportion to their population (drawn anew for each random seed) | 3 / 0–2 |
-| `:figures` | figures of all parts whose results exist | – |
+By default, `scenario_first_wave()` runs only the parts of the paper (`FIRST_WAVE_PAPER_PARTS`, marked *paper*) and writes the outputs of the paper (cases by reporting date, the paper figures `sc_first_wave_paper_figure_1_reported.png` and `…_2_reported.png`, the seeding summary, and the county metrics) and the files they are built from. The other parts can be selected with `parts`, e.g. `scenario_first_wave(parts = (:projections, :figures), diagnostics = true)`; `diagnostics = true` also writes the comparisons by symptom onset and the figures of all parts.
+
+| Part | Setup | Runs / random seeds | Paper |
+|---|---|---|---|
+| `:final` | calibrated factors until 31.05. (six weeks of forecast after 19.04.) | 3 / 0–2 | paper |
+| `:projections` | from 20.04. on, the contacts of phase 2, 3, or 4, or of phase 1 (until 17.05.); schools reopen in the projections to phase 1 and 2 | 2 per variant / 0, 1 | – |
+| `:counterfactuals` | contacts of phase k kept from the start of phase k + 1 on (k = 1–3) | 1 per variant / 0 | – |
+| `:band` | factor samples of the calibration, 5–95 % band, national and per state | 20 / 1001–1020 | paper |
+| `:seeds_robustness` | all RKI cases infected before 09.03. as introduced infections (divided by the ascertainment, Heinsberg 1:1), no transmission before 09.03. | 3 / 0–2 | – |
+| `:random_seeds` | the seeds of `:final` (imports and Heinsberg cluster), the same number per day, in counties drawn in proportion to their population (drawn anew for each random seed) | 3 / 0–2 | paper |
+| `:figures` | paper figures, seeding summary, county metrics; with `diagnostics`, the figures of all parts whose results exist | – | paper |
 
 ### 5.2 Scenario modeling (Sec. 3.2.1, Fig 14–15)
 
@@ -360,8 +387,9 @@ No disease parameters are involved.
 
 ## 7. References
 
-- Amt der Tiroler Landesregierung (2019). Der Tourismus im Winter 2018/19, Tab. 6.
+- Amt der Tiroler Landesregierung, Abteilung Raumordnung und Statistik (2019). Der Tourismus im Winter 2018/2019. Innsbruck, August 2019. Tab. 6 (p. 11). https://www.tirol.gv.at/fileadmin/themen/statistik-budget/statistik/downloads/Tourismus/Der_Tourismus_im_Winter_18_19.pdf
 - Ashcroft, P., et al. (2020). COVID-19 infectivity profile correction. *Swiss Med Wkly* 150:w20336. https://doi.org/10.4414/smw.2020.20336
+- Becker, N. G., Watson, L. F., Carlin, J. B. (1991). A method of non-parametric back-projection and its application to AIDS data. *Stat Med* 10(10):1527–1542. https://doi.org/10.1002/sim.4780101005
 - Byambasuren, O., et al. (2020). Estimating the extent of asymptomatic COVID-19 and its potential for community transmission: Systematic review and meta-analysis. *JAMMI* 5(4):223–234. https://doi.org/10.3138/jammi-2020-0030
 - Byrne, A. W., et al. (2020). Inferred duration of infectious period of SARS-CoV-2: rapid scoping review and analysis of available evidence for asymptomatic and symptomatic COVID-19 cases. *BMJ Open* 10(8):e039856. https://doi.org/10.1136/bmjopen-2020-039856
 - Dehning, J., et al. (2020). Inferring change points in the spread of COVID-19 reveals the effectiveness of interventions. *Science* 369(6500):eabb9789. https://doi.org/10.1126/science.abb9789
@@ -372,10 +400,12 @@ No disease parameters are involved.
 - McAloon, C., et al. (2020). Incubation period of COVID-19: a rapid systematic review and meta-analysis of observational research. *BMJ Open* 10(8):e039652. https://doi.org/10.1136/bmjopen-2020-039652
 - Mossong, J., et al. (2008). Social contacts and mixing patterns relevant to the spread of infectious diseases. *PLoS Med* 5(3):e74. https://doi.org/10.1371/journal.pmed.0050074
 - Ponge, J., et al. (2024). A standardized framework for modeling non-pharmaceutical interventions in individual-based infectious disease simulations. *WSC 2024*, 1106–1117. https://doi.org/10.1109/WSC63780.2024.10838778
-- Robert Koch-Institut (2020). Täglicher Lagebericht des RKI zur Coronavirus-Krankheit-2019 (COVID-19), reports of 04.03.–27.04.2020.
-- Robert Koch-Institut (2021). SARS-CoV-2-Seroprävalenz in der Allgemeinbevölkerung in Deutschland [Factsheet], as of 23.11.2021. https://doi.org/10.25646/9288
+- Robert Koch-Institut (2020). Täglicher Lagebericht des RKI zur Coronavirus-Krankheit-2019 (COVID-19), reports of 04.03., 06.03., 08.03. (Tab. 2), 22.03., 24.03., 26.03. (Tab. 3), and 27.04.2020 (Fig. 3, Tab. 2). https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Situationsberichte/2020-MM-DD-de.pdf?__blob=publicationFile (no longer online; archived copies: https://web.archive.org/web/2020/ followed by that URL)
+- Robert Koch-Institut (2021). SARS-CoV-2-Seroprävalenz in der Allgemeinbevölkerung in Deutschland [Factsheet], as of 23.11.2021, p. 1. https://doi.org/10.25646/9288
 - Robert Koch-Institut (2026). SARS-CoV-2 Infektionen in Deutschland [Data set], version of 14.10.2026. Zenodo. https://doi.org/10.5281/zenodo.23357370. License: CC BY 4.0
-- Schilling, J., Lehfeld, A.-S., Schumacher, D., Diercke, M., Buda, S., Haas, W., RKI COVID-19 Study Group (2020). Krankheitsschwere der ersten COVID-19-Welle in Deutschland basierend auf den Meldungen gemäß Infektionsschutzgesetz. *Journal of Health Monitoring* 5(S11). https://doi.org/10.25646/7169
-- Statistische Ämter des Bundes und der Länder (2025). Volkswirtschaftliche Gesamtrechnungen der Länder, Reihe 2 Band 3, Tab. 2.4 (Berechnungsstand Februar 2025). statistikportal.de. License: Datenlizenz Deutschland – Namensnennung – Version 2.0.
-- T-MONA guest survey (income elasticity of ski trips).
+- Schilling, J., Lehfeld, A.-S., Schumacher, D., Ullrich, A., Diercke, M., Buda, S., Haas, W., RKI COVID-19 Study Group (2020). Krankheitsschwere der ersten COVID-19-Welle in Deutschland basierend auf den Meldungen gemäß Infektionsschutzgesetz. *Journal of Health Monitoring* 5(S11):2–20. https://doi.org/10.25646/7169
+- Sekretariat der Kultusministerkonferenz (2018). Ferien im Schuljahr 2019/2020 in den Ländern in der Bundesrepublik Deutschland, as of 11.07.2018. https://www.kmk.org/fileadmin/Dateien/pdf/Ferienkalender/FER19_20.pdf
+- Statistik Austria (n.d.). Zuordnungsverzeichnis Deutschland (German postal codes → origin regions of the Austrian tourism statistics), edited by Landesstatistik Steiermark. https://www.landesentwicklung.steiermark.at/cms/dokumente/12656884_141979459/b19d32c7/Zuordnungsverzeichnis%20Oesterreich%20Deutschland-PLZ-PDF.pdf
+- Statistische Ämter des Bundes und der Länder (2026). Einkommen der privaten Haushalte in den kreisfreien Städten und Landkreisen der Bundesrepublik Deutschland 1995 bis 2023. Volkswirtschaftliche Gesamtrechnungen der Länder, Reihe 2, Kreisergebnisse Band 3, Tab. 2.4 (Berechnungsstand Februar 2025, published January 2026). https://www.statistikportal.de/de/vgrdl/publikationenbsalt. License: Datenlizenz Deutschland – Namensnennung – Version 2.0.
+- Streeck, H., et al. (2020). Infection fatality rate of SARS-CoV2 in a super-spreading event in Germany. *Nat Commun* 11:5829. https://doi.org/10.1038/s41467-020-19509-y
 - Verity, R., et al. (2020). Estimates of the severity of coronavirus disease 2019: a model-based analysis. *Lancet Infect Dis* 20(6):669–677. https://doi.org/10.1016/S1473-3099(20)30243-7
