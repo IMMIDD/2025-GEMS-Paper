@@ -3,6 +3,7 @@ export run_sweeps
 export plot_sweeps
 export sweep_variability
 export write_sweep_variability
+export replot_sweeps
 
 export scenario_sweeping
 
@@ -156,7 +157,7 @@ function plot_sweeps(df)
     return gemsheatmap(df.xvals, df.yvals, df.outvals,
         xlabel = "Fraction of Asymptomatic Cases",
         ylabel = "Probability of Adherence",
-        colorbar_title = "\nInitial Effective Reproduction Number",
+        colorbar_title = "\nInitial Reproduction Number",
         xrev = false,
         yrev = true,
         xformatter = formattick,
@@ -184,6 +185,8 @@ Per cell, the sample standard deviation (n - 1) across replicates is computed.
 These are summarized across the grid as the pooled SD (root of the mean
 per-cell variance), the mean, 95th percentile, and maximum SD. The standard
 error of the plotted cell means is the pooled SD divided by √n.
+The per-cell range (maximum minus minimum across replicates) is summarized
+as its minimum, maximum, mean, and median across the grid.
 Also counts the cells whose replicates lie on both sides of R = 1.
 
 Returns a NamedTuple with the results.
@@ -193,6 +196,7 @@ function sweep_variability(df)
     cells = combine(groupby(df, [:xvals, :yvals]),
         :outvals => length => :n,
         :outvals => std => :sd,
+        :outvals => (r -> maximum(r) - minimum(r)) => :range,
         :outvals => (r -> minimum(r) < 1 < maximum(r)) => :straddles)
 
     n = minimum(cells.n)
@@ -209,6 +213,10 @@ function sweep_variability(df)
         p95_sd = quantile(cells.sd, 0.95),
         max_sd = maximum(cells.sd),
         se_mean = pooled_sd / sqrt(n),
+        min_range = minimum(cells.range),
+        max_range = maximum(cells.range),
+        mean_range = mean(cells.range),
+        median_range = median(cells.range),
         straddling_cells = count(cells.straddles))
 end
 
@@ -234,6 +242,12 @@ function write_sweep_variability(df, path)
         println(io, "  Mean SD:                               $(r(v.mean_sd))")
         println(io, "  95th percentile SD:                    $(r(v.p95_sd))")
         println(io, "  Maximum SD:                            $(r(v.max_sd))")
+        println(io, "")
+        println(io, "Per-cell range (max - min) across replicates, summarized over all cells:")
+        println(io, "  Minimum range:                         $(r(v.min_range))")
+        println(io, "  Maximum range:                         $(r(v.max_range))")
+        println(io, "  Mean range:                            $(r(v.mean_range))")
+        println(io, "  Median range:                          $(r(v.median_range))")
         println(io, "")
         println(io, "Standard error of cell means (pooled SD / sqrt(n)): $(r(v.se_mean))")
         println(io, "Cells with replicates on both sides of R = 1:       $(v.straddling_cells) ($(round(100 * v.straddling_cells / v.cells, digits = 1)) %)")
@@ -294,4 +308,24 @@ function scenario_sweeping(;
     # generate plot
     p_sw = plot_sweeps(sweeps)
     png(p_sw, joinpath(folder, "sc_sweep_heatmap.png"))
+end
+
+"""
+    replot_sweeps(folder)
+
+Redraws the heatmap and rewrites the variability summary from the
+`sc_sweep_data.csv` that `scenario_sweeping()` stored in `folder`, without
+re-running the simulations. Overwrites `sc_sweep_heatmap.png` and
+`sc_sweep_variability.txt` in `folder`.
+"""
+function replot_sweeps(folder)
+
+    sweeps = CSV.read(joinpath(folder, "sc_sweep_data.csv"), DataFrame)
+
+    # the variability summary requires at least two replicates per combination
+    maximum(combine(groupby(sweeps, [:xvals, :yvals]), nrow => :n).n) >= 2 ?
+        write_sweep_variability(sweeps, joinpath(folder, "sc_sweep_variability.txt")) :
+        @warn "Skipping variability summary, as it requires at least two repetitions per combination."
+
+    png(plot_sweeps(sweeps), joinpath(folder, "sc_sweep_heatmap.png"))
 end

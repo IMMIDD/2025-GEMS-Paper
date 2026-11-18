@@ -57,7 +57,7 @@ function outcome_df(rd_isolation_only, rd_isolation_and_test, rd_testing_and_tra
         lost_workdays = rd -> sum(cumulative_quarantines(rd).workers), 
         lost_otherdays = rd -> sum(cumulative_quarantines(rd).other), 
         detection_rate = detection_rate,
-        base_reproduction = r0,
+        initial_reproduction = r0,
         hospitalizations = rd -> sum(tick_hosptitalizations(rd).hospital_admissions),
         icu_admissions = rd -> sum(tick_hosptitalizations(rd).icu_admissions),
         deaths = rd -> sum(tick_deaths(rd).death_cnt),

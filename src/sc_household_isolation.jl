@@ -6,6 +6,9 @@ export plot_combined_readouts
 
 export scenario_household_isolation
 
+# label of the reduction of the initial reproduction number (R^init in the paper);
+# plain text, as GR's LaTeX rendering is unreliable with the Times font
+const _RINIT_REDUCTION_LABEL = "Reduction of Initial R"
 
 
 """
@@ -114,20 +117,20 @@ function plot_scenario_household_isolation(rd_b, rd_s, sim)
                 agsmap(
                     select(df, :ags, :r0_diff),
                     size = 0.5 .* map_dims(),
-                    title = "R-Reduction by County",
+                    title = "$_RINIT_REDUCTION_LABEL by County",
                     linecolor = nothing,
                 ),
                 plot(
                     scatter(df.age, df.r0_diff,
-                        title = "R-Reduction by Mean Age",
+                        title = "$_RINIT_REDUCTION_LABEL by Mean Age",
                         xlabel = "Mean Age",
-                        ylabel = "R-Reduction",
+                        ylabel = _RINIT_REDUCTION_LABEL,
                         label = "County",
                         markerstrokewidth=0),
                     scatter(df.size, df.r0_diff,
-                        title = "R-Reduction by Mean HH-Size",
+                        title = "$_RINIT_REDUCTION_LABEL by Mean HH-Size",
                         xlabel = "Mean Household Size",
-                        ylabel = "R-Reduction",
+                        ylabel = _RINIT_REDUCTION_LABEL,
                         label = "County",
                         markerstrokewidth=0),
                     left_margin = 15mm,
@@ -171,7 +174,7 @@ end
 """
     plot_r0_by_region(rd)
 
-Plots R0 by region map.
+Plots the map of the initial reproduction number per county.
 """
 function plot_r0_by_region(rd)
     return gemsmap(rd, type = :R0Map, level = 2,
@@ -181,9 +184,9 @@ function plot_r0_by_region(rd)
         colorbar_titlefontsize = map_legendfontsize(),
         right_margin=5mm,
         linecolor = nothing,
-        title ="Basic Reproduction Number (R0)",
+        title = "Initial Reproduction Number",
         plot_title = "",
-        colorbar_title = "Basic Reproduction Number (R0)",
+        colorbar_title = "Initial Reproduction Number",
         fontfamily = "Times Roman")
 end
 
@@ -231,7 +234,7 @@ end
 
 Combines the GEMS readout plots of `rd` (daily infections, effective R, household
 attack rate, infection duration, cumulative disease progressions, progression
-categories) with the R0 and infection fatality maps. `rd` must be a default-style
+categories) with the maps of the initial reproduction number and the infection fatality. `rd` must be a default-style
 ResultData object (`ProgressionCategories` and `CaseFatalityMap` need the raw infections).
 """
 function plot_combined_readouts(rd, r0map, fatalitymap)

@@ -20,11 +20,11 @@ All disease examples share one **reference model**, [models/DE_model_first_wave.
    - [4.4 Progression assignment](#44-progression-assignment)
    - [4.5 Transition durations](#45-transition-durations)
 5. [Example-specific parameterization](#5-example-specific-parameterization)
-   - [5.1 First wave 2020 (Sec. 3.1.1)](#51-first-wave-2020-sec-311)
-   - [5.2 Scenario modeling (Sec. 3.1.2, Fig 12)](#52-scenario-modeling-sec-312-fig-12)
-   - [5.3 Parameter sweep (Sec. 3.1.3, Fig 13)](#53-parameter-sweep-sec-313-fig-13)
-   - [5.4 Multi-criteria strategy evaluation (Sec. 3.1.4, Fig 14, Tab 2)](#54-multi-criteria-strategy-evaluation-sec-314-fig-14-tab-2)
-   - [5.5 Performance benchmark (Sec. 3.2, Fig 15)](#55-performance-benchmark-sec-32-fig-15)
+   - [5.1 First wave 2020 (Sec. 3.1.1, Fig 10–11)](#51-first-wave-2020-sec-311-fig-1011)
+   - [5.2 Scenario modeling (Sec. 3.2.1, Fig 14–15)](#52-scenario-modeling-sec-321-fig-1415)
+   - [5.3 Parameter sweep (Sec. 3.2.2, Fig 16)](#53-parameter-sweep-sec-322-fig-16)
+   - [5.4 Multi-criteria strategy evaluation (Sec. 3.2.3, Fig 17, Tab 2)](#54-multi-criteria-strategy-evaluation-sec-323-fig-17-tab-2)
+   - [5.5 Performance benchmark (Sec. 3.3, Fig 18)](#55-performance-benchmark-sec-33-fig-18)
 6. [Population analyses (Fig 4–7)](#6-population-analyses-fig-47)
 7. [References](#7-references)
 
@@ -40,7 +40,7 @@ All disease examples share one **reference model**, [models/DE_model_first_wave.
 | `src/sc_*.jl` | One file per example scenario |
 | [src/first_wave/](src/first_wave/) | RKI data, imported and introduced infections, intervention phases of March 2020 (fitted contact reductions), calibration, and figures of the first wave example |
 | [src/demographics.jl](src/demographics.jl), [src/settings.jl](src/settings.jl), [src/mobility.jl](src/mobility.jl), [src/contacts.jl](src/contacts.jl) | Population analyses (Fig 4–7) |
-| [src/benchmarking.jl](src/benchmarking.jl) | Performance benchmark (Fig 15) |
+| [src/benchmarking.jl](src/benchmarking.jl) | Performance benchmark (Fig 18) |
 | [calibrate_first_wave.jl](calibrate_first_wave.jl) | Calibration of the reference model (transmission scale, generation time, contact factors); not part of `runall()` |
 | [inputs/](inputs/) | Calibration results read by the scenarios, county income data |
 | `data/` | RKI case data, downloaded on the first run |
@@ -63,7 +63,16 @@ Each example can also be run on its own: `scenario_first_wave()`, `scenario_hous
 
 The first wave example downloads the RKI case data (about 400 MB, checked against a SHA-256 checksum) to `data/` on its first run. Its calibrated contact factors are read from `inputs/`; to recalibrate, run [calibrate_first_wave.jl](calibrate_first_wave.jl).
 
+The parameter sweep stores its results in `sc_sweep_data.csv`; `replot_sweeps(folder)` redraws the heatmap and the variability summary from that file without re-running the 8,405 simulations.
+
 All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-and-configuration)). Bit-identical results require the same number of Julia threads.
+
+**Machines used for the paper**
+
+| Machine | Hardware | Julia | Threads (`JULIA_NUM_THREADS`) | Used for |
+|---|---|---|---|---|
+| Server | AMD EPYC 9575F (64 cores, 128 threads), 755 GB DDR5 RAM (5200 MT/s, CL52), NVMe SSD | TODO (1.12?) | TODO | TODO: all examples? performance benchmark (Sec. 3.3) |
+| Desktop | Intel i9-14900K, 128 GB DDR5 RAM, 4 TB NVMe SSD | TODO (1.12?) | TODO | desktop runtime of the national model (Sec. 3.3) |
 
 *Terminology:* a *random seed* initializes the random number generator of a simulation; infections that start an epidemic are called *initial infections* (at tick 0) or *introduced infections* (added during the run).
 
@@ -73,12 +82,13 @@ All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-an
 |---|---|---|---|---|---|
 | Fig 4–6 (population, demographics, commuting) | `demographics.jl`, `settings.jl`, `mobility.jl` | none | DE | – | – |
 | Fig 7 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | reference model | DE | – | 0 |
-| Sec. 3.1.1 First wave 2020 | [sc_first_wave.jl](src/sc_first_wave.jl) → `scenario_first_wave()` | reference model | DE | 10.02.–31.05.2020 | see [5.1](#51-first-wave-2020-sec-311) |
-| Sec. 3.1.2 Scenario modeling (Fig 12A, baseline readouts) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 180 d | 1 per scenario / 0 |
-| Fig 12B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
-| Sec. 3.1.3 Parameter sweep (Fig 13) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 5 / 1–8405 |
-| Sec. 3.1.4 Multi-criteria evaluation (Fig 14, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | DE | 365 d | 1 per scenario / 0, 1, 2 |
-| Sec. 3.2 Performance (Fig 15) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | GEMS defaults | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / 1–11 |
+| Sec. 3.1.1 First wave 2020 (Fig 10–11) | [sc_first_wave.jl](src/sc_first_wave.jl) → `scenario_first_wave()` | reference model | DE | 10.02.–31.05.2020 | see [5.1](#51-first-wave-2020-sec-311-fig-1011) |
+| Sec. 3.1.2 RSV immunization 2025/26 (Fig 12–13) | separate repository: [IMMIDD/2025-RSV-scenario](https://github.com/IMMIDD/2025-RSV-scenario) | – | – | – | – |
+| Sec. 3.2.1 Scenario modeling (Fig 14A, baseline readouts Fig 15) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 180 d | 1 per scenario / 0 |
+| Fig 14B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
+| Sec. 3.2.2 Parameter sweep (Fig 16) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 5 / 1–8405 |
+| Sec. 3.2.3 Multi-criteria evaluation (Fig 17, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | DE | 365 d | 1 per scenario / 0, 1, 2 |
+| Sec. 3.3 Performance (Fig 18) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | GEMS defaults | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / 1–11 |
 
 ## 4. Reference model (COVID-19, wild type, first wave 2020)
 
@@ -190,7 +200,7 @@ All durations are Poisson(λ) distributed, in days. GEMS adds 1 day to every exp
 
 Interventions use the Trigger–Strategy–Measure (TriSM) framework ([Ponge et al. 2024](https://doi.org/10.1109/WSC63780.2024.10838778)), listed as trigger → strategy (condition) → measures (offset).
 
-### 5.1 First wave 2020 (Sec. 3.1.1)
+### 5.1 First wave 2020 (Sec. 3.1.1, Fig 10–11)
 
 Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave/). Config: reference model. Compared with the RKI cases by reporting date and by symptom onset.
 
@@ -253,7 +263,7 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 | `:random_seeds` | the seeds of `:final` (imports and Heinsberg cluster), the same number per day, in counties drawn in proportion to their population (drawn anew for each random seed) | 3 / 0–2 |
 | `:figures` | figures of all parts whose results exist | – |
 
-### 5.2 Scenario modeling (Sec. 3.1.2, Fig 12)
+### 5.2 Scenario modeling (Sec. 3.2.1, Fig 14–15)
 
 Code: [sc_household_isolation.jl](src/sc_household_isolation.jl). Config: reference model.
 
@@ -271,11 +281,11 @@ Code: [sc_household_isolation.jl](src/sc_household_isolation.jl). Config: refere
 
 All household members, including the symptomatic individual, isolate at home for 14 days. Each new symptomatic household member triggers the strategy again and restarts the 14 days for the whole household.
 
-The baseline run also produces the GEMS readout figure (`sc_household_isolation_baseline_combined.png`): daily infections and deaths, effective reproduction number, household attack rate, infection duration, cumulative disease progressions, progression categories, and maps of R0 and infection fatality per county. Its ResultData object uses the default style, since the progression categories and the fatality map need the raw infections.
+The baseline run also produces the GEMS readout figure (Fig 15, `sc_household_isolation_baseline_combined.png`): daily infections and deaths, effective reproduction number, household attack rate, infection duration, cumulative disease progressions, progression categories, and maps of the initial reproduction number and the infection fatality per county. Its ResultData object uses the default style, since the progression categories and the fatality map need the raw infections.
 
-The Fig 12B listing ([sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl)) uses the same intervention with GEMS defaults ([Section 5.5](#55-performance-benchmark-sec-32-fig-15)) on 100,000 agents, without a fixed random seed.
+The Fig 14B listing ([sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl)) uses the same intervention with GEMS defaults ([Section 5.5](#55-performance-benchmark-sec-33-fig-18)) on 100,000 agents, without a fixed random seed.
 
-### 5.3 Parameter sweep (Sec. 3.1.3, Fig 13)
+### 5.3 Parameter sweep (Sec. 3.2.2, Fig 16)
 
 Code: [sc_sweeping.jl](src/sc_sweeping.jl). Config: reference model.
 
@@ -296,9 +306,9 @@ To focus on the regime where self-isolation can be decisive, we assume that othe
 |---|---|---|
 | `SymptomTrigger` | Self Isolation (adheres ~ Bernoulli(p = adherence), drawn from the simulation's RNG) | `SelfIsolation(14)` (0) |
 
-The heatmap shows the mean R_init per combination. Alongside the data (`sc_sweep_data.csv`) and the heatmap (`sc_sweep_heatmap.png`), the scenario writes `sc_sweep_variability.txt`, which summarizes the variability between replicates: the per-cell sample SD across replicates, aggregated over the grid as the pooled SD (root of the mean variance), mean, 95th percentile, and maximum; the standard error of the cell means; and the number of cells whose replicates lie on both sides of R = 1.
+The heatmap shows the mean R_init per combination. Alongside the data (`sc_sweep_data.csv`) and the heatmap (`sc_sweep_heatmap.png`), the scenario writes `sc_sweep_variability.txt`, which summarizes the variability between replicates: the per-cell sample SD across replicates, aggregated over the grid as the pooled SD (root of the mean variance), mean, 95th percentile, and maximum; the per-cell range (maximum − minimum) across replicates, aggregated as its minimum, maximum, mean, and median; the standard error of the cell means; and the number of cells whose replicates lie on both sides of R = 1.
 
-### 5.4 Multi-criteria strategy evaluation (Sec. 3.1.4, Fig 14, Tab 2)
+### 5.4 Multi-criteria strategy evaluation (Sec. 3.2.3, Fig 17, Tab 2)
 
 Code: [sc_testing.jl](src/sc_testing.jl). Config: reference model.
 
@@ -324,9 +334,9 @@ To focus on the regime where tracing can be decisive, we assume that other measu
 
 The tests in Isolation & Testing have no follow-up: the scenario detects cases without changing the spread, so it differs from Isolation Only only by the random seed. The tracing scenario corresponds to Fig 9 of the paper.
 
-### 5.5 Performance benchmark (Sec. 3.2, Fig 15)
+### 5.5 Performance benchmark (Sec. 3.3, Fig 18)
 
-GEMS default parameterization ([data/DefaultConf.toml @ v1.0.2](https://github.com/IMMIDD/GEMS/blob/v1.0.2/data/DefaultConf.toml)), also used for Fig 12B.
+GEMS default parameterization ([data/DefaultConf.toml @ v1.0.2](https://github.com/IMMIDD/GEMS/blob/v1.0.2/data/DefaultConf.toml)), also used for Fig 14B.
 
 | Parameter | Value |
 |---|---|
