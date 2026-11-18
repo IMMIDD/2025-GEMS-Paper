@@ -2,17 +2,17 @@
 ### FIRST WAVE 2020: SCHEDULED SEEDING (VIA STEPMOD)
 ###
 
-# Workaround for GEMS v1.0.2: RegionalSeeds only seeds at tick 0 and filters
-# counties with in_state instead of in_county, so we seed via stepmod instead.
+# RegionalSeeds in GEMS v1.0.2 only seeds at tick 0, so infections that are
+# introduced over time are seeded via stepmod instead.
 
 
 """
     add_seeding!(sim::Simulation, schedule::DataFrame; seed = 0)
 
 Attaches a seeding schedule to the simulation (see `seeding_stepmod`), after
-the existing `stepmod`. Also adds a tick trigger with an empty strategy that
-keeps the simulation awake: GEMS skips ticks without active infections and
-does not notice infections added via `stepmod`.
+the existing `stepmod`. GEMS wakes a dormant simulation after infections made
+in `stepmod`, so ticks without active infections before a seeding tick can be
+skipped safely.
 """
 function add_seeding!(sim::Simulation, schedule::DataFrame; seed = 0)
     inner = sim.stepmod
@@ -21,7 +21,6 @@ function add_seeding!(sim::Simulation, schedule::DataFrame; seed = 0)
         inner(s)
         seeding(s)
     end
-    add_tick_trigger!(sim, STickTrigger(Municipality, SStrategy("keep awake (seeding)", sim)))
     return sim
 end
 
