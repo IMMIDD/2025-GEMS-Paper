@@ -6,6 +6,9 @@ export plot_combined_readouts
 
 export scenario_household_isolation
 
+# label of the reduction of the initial reproduction number (R^init in the paper);
+# plain text, as GR's LaTeX rendering is unreliable with the Times font
+const _RINIT_REDUCTION_LABEL = "Reduction of Initial R"
 
 
 """
@@ -114,20 +117,20 @@ function plot_scenario_household_isolation(rd_b, rd_s, sim)
                 agsmap(
                     select(df, :ags, :r0_diff),
                     size = 0.5 .* map_dims(),
-                    title = "R-Reduction by County",
+                    title = "$_RINIT_REDUCTION_LABEL by County",
                     linecolor = nothing,
                 ),
                 plot(
                     scatter(df.age, df.r0_diff,
-                        title = "R-Reduction by Mean Age",
+                        title = "$_RINIT_REDUCTION_LABEL by Mean Age",
                         xlabel = "Mean Age",
-                        ylabel = "R-Reduction",
+                        ylabel = _RINIT_REDUCTION_LABEL,
                         label = "County",
                         markerstrokewidth=0),
                     scatter(df.size, df.r0_diff,
-                        title = "R-Reduction by Mean HH-Size",
+                        title = "$_RINIT_REDUCTION_LABEL by Mean HH-Size",
                         xlabel = "Mean Household Size",
-                        ylabel = "R-Reduction",
+                        ylabel = _RINIT_REDUCTION_LABEL,
                         label = "County",
                         markerstrokewidth=0),
                     left_margin = 15mm,
