@@ -3,6 +3,7 @@
 ###
 
 export FIRST_WAVE_PARTS
+export FIRST_WAVE_PAPER_PARTS
 export scenario_first_wave
 export calibrate_first_wave
 
@@ -98,7 +99,11 @@ calibrated contact factors of the config (`first_wave_input`, see
 - `:seeds_robustness`: all RKI cases infected before the first phase change as seeds
 - `:random_seeds`: the same number of seeds per day in counties drawn in proportion to their
   population
-- `:figures`: figures of all parts whose results exist (counterfactuals: with `:final`)
+- `:figures`: the paper figures and the outputs of the paper text; with
+  `diagnostics`, also the figures of all parts whose results exist (counterfactuals:
+  with `:final`)
+
+`scenario_first_wave` runs only the `FIRST_WAVE_PAPER_PARTS` by default.
 """
 const FIRST_WAVE_PARTS = (
     :final,
@@ -108,6 +113,15 @@ const FIRST_WAVE_PARTS = (
     :seeds_robustness,
     :random_seeds,
     :figures)
+
+"""
+    FIRST_WAVE_PAPER_PARTS
+
+Parts of `scenario_first_wave` whose results go into the paper (Sec. 3.1.1,
+Figs. 10-11): the final runs, the band, the runs with random seed counties, and
+the figures.
+"""
+const FIRST_WAVE_PAPER_PARTS = (:final, :band, :random_seeds, :figures)
 
 
 """
@@ -153,10 +167,10 @@ end
 # county table with AGS
 _read_counties(file) = transform(CSV.read(file, DataFrame), :ags => ByRow(AGS) => :ags)
 
-# statistics, daily curves, and county and state tables of `run_rki_phase_sims` (both bases)
-function _write_runs(folder, part, out)
+# statistics, daily curves, and county and state tables of `run_rki_phase_sims` (of the `bases`)
+function _write_runs(folder, part, out; bases = BASES)
     CSV.write(joinpath(folder, first_wave_file(part, "stats")), out.stats)
-    for b in BASES
+    for b in bases
         tbl = rki_cumulative_table(rki_average_runs(out[b].tbls), RKI_WINDOWS)
         CSV.write(joinpath(folder, first_wave_file(part, "daily", b)), out[b].daily)
         CSV.write(joinpath(folder, first_wave_file(part, "counties", b)), _ags_ids(tbl))
@@ -229,24 +243,24 @@ end
 
 # runs with the calibrated factors, the expected seeded infections, and the infections per day
 # of the runs
-function _rki_final(folder, s::RKISettings; seeds)
+function _rki_final(folder, s::RKISettings; seeds, bases = BASES)
     f = _read_factors(s)
     out = run_rki_phase_sims(s, fill(f, length(seeds)), seeds,
         map_weeks = RKI_WEEKS,
         stage = "final")
-    _write_runs(folder, "final", out)
+    _write_runs(folder, "final", out, bases = bases)
     CSV.write(joinpath(folder, first_wave_file("seeded_infections")), rki_seeded_infections(s))
     CSV.write(joinpath(folder, first_wave_file("final", "infections")), out.infections)
 end
 
 
 # runs with the same number of seeds per day, in counties drawn in proportion to their population
-function _rki_random_seeds(folder, s::RKISettings; seeds)
+function _rki_random_seeds(folder, s::RKISettings; seeds, bases = BASES)
     out = run_rki_phase_sims(s, fill(_read_factors(s), length(seeds)), seeds,
         map_weeks = RKI_WEEKS,
         stage = "random seeds",
         random_seeding = true)
-    _write_runs(folder, "random_seeds", out)
+    _write_runs(folder, "random_seeds", out, bases = bases)
 end
 
 
@@ -292,9 +306,9 @@ end
 
 
 # runs with the factor samples (the first `runs`, all if `nothing`) and their 5-95% band, national
-# and per state; each run is written to its own folder, so a restart skips the finished runs (runs
-# without the state file, from before it was written, are repeated)
-function _rki_band(folder, s::RKISettings; runs = nothing)
+# and per state (of the `bases`); each run is written to its own folder (both bases), so a restart
+# skips the finished runs (runs without the state file, from before it was written, are repeated)
+function _rki_band(folder, s::RKISettings; runs = nothing, bases = BASES)
     samples = CSV.read(first_wave_input("band_factors", s.configfile), DataFrame)
     if !isnothing(runs)
         samples = samples[1:runs, :]
@@ -318,7 +332,7 @@ function _rki_band(folder, s::RKISettings; runs = nothing)
     stats = [CSV.read(stats_file(seed), DataFrame) for seed in samples.seed]
     CSV.write(joinpath(folder, first_wave_file("band", "stats")),
         reduce(vcat, stats, cols = :union))
-    for b in BASES
+    for b in bases
         dailies = [CSV.read(run_file(seed, b), DataFrame) for seed in samples.seed]
         band = rki_daily_summary(dailies, quantiles = (0.05, 0.95))
         CSV.write(joinpath(folder, first_wave_file("band", "daily", b)), band)
@@ -436,10 +450,23 @@ function _figures_paper(folder, s::RKISettings)
         png_file("paper_figure_2"))
 end
 
-# county metrics, scatter plots of the windows and of single weeks, and maps
-function _figures_counties(folder, part, tbl, b)
+# county metrics (Spearman correlations of the windows and single weeks, see `rki_county_metrics`)
+function _county_metrics(folder, part, tbl, b)
     metrics = rki_county_metrics(tbl, RKI_WINDOWS, RKI_MAP_WEEKS)
     CSV.write(joinpath(folder, first_wave_file(part, "metrics", b)), metrics)
+end
+
+# county metrics of the paper (final runs and random seed counties, by reporting date)
+function _paper_metrics(folder)
+    for part in ("final", "random_seeds")
+        file = joinpath(folder, first_wave_file(part, "counties", :report))
+        isfile(file) && _county_metrics(folder, part, _read_counties(file), :report)
+    end
+end
+
+# county metrics, scatter plots of the windows and of single weeks, and maps
+function _figures_counties(folder, part, tbl, b)
+    _county_metrics(folder, part, tbl, b)
     png_file(kind) = joinpath(folder, first_wave_file(part, kind, b, ext = "png"))
     png(plot_rki_scatter(tbl, RKI_WINDOWS, basis = b), png_file("cumulative_scatter"))
     png(plot_rki_scatter(tbl, RKI_MAP_WEEKS, basis = b), png_file("scatter"))
@@ -528,10 +555,15 @@ function _seeding_summary(folder, s::RKISettings)
         DataFrame(source = sources, seeded = totals, share = totals ./ sum(totals)))
 end
 
-# all figures (and the county metrics) of the parts whose results exist in `folder`
-function _rki_figures(folder, s::RKISettings)
+# paper figures, seeding summary, and county metrics of the paper; with `diagnostics`, all figures
+# (and the county metrics) of the parts whose results exist in `folder`
+function _rki_figures(folder, s::RKISettings; diagnostics = false)
     _seeding_summary(folder, s)
     _figures_paper(folder, s)
+    if !diagnostics
+        _paper_metrics(folder)
+        return
+    end
     for b in BASES
         _figures_final(folder, s, b)
         _figures_band(folder, s, b)
@@ -616,14 +648,21 @@ end
         population = "DE",
         folder = nothing,
         folder_tag = nothing,
-        parts = FIRST_WAVE_PARTS,
+        parts = FIRST_WAVE_PAPER_PARTS,
+        diagnostics = false,
         test = false)
 
 First wave 2020 in Germany compared with the RKI cases: runs with the contact
 factors calibrated on the cases by symptom onset up to `RKI_CUTOFF` (see
-`calibrate_first_wave`) until `RKI_LAST_DAY`, phase projections,
-counterfactuals, a band of the calibration uncertainty, a robustness run, and
-all figures (see `FIRST_WAVE_PARTS`).
+`calibrate_first_wave`) until `RKI_LAST_DAY`, a band of the calibration
+uncertainty, runs with random seed counties, and the paper figures (see
+`FIRST_WAVE_PAPER_PARTS`). Further parts (phase projections, counterfactuals, a
+robustness run of the seeding) can be selected from `FIRST_WAVE_PARTS`.
+
+By default, only the outputs of the paper are written: cases by reporting date,
+the paper figures, the seeding summary, and the county metrics. With
+`diagnostics`, the comparisons by symptom onset and the figures of all parts are
+written as well.
 
 Single `parts` can be run in a folder of an earlier run. For a state population
 (e.g. "SL"), all data are restricted to its counties. With `test`, every part
@@ -638,7 +677,8 @@ function scenario_first_wave(;
     population = "DE",
     folder = nothing,
     folder_tag = nothing,
-    parts = FIRST_WAVE_PARTS,
+    parts = FIRST_WAVE_PAPER_PARTS,
+    diagnostics = false,
     test = false)
 
     unknown = setdiff(parts, FIRST_WAVE_PARTS)
@@ -650,9 +690,11 @@ function scenario_first_wave(;
     s = _first_wave_settings(configfile, population)
 
     K = length(s.dates) + 1
+    # the paper compares the cases by reporting date
+    bases = diagnostics ? BASES : (:report,)
 
     if :final in parts
-        _rki_final(folder, s, seeds = _seeds(3, test))
+        _rki_final(folder, s, seeds = _seeds(3, test), bases = bases)
     end
     if :projections in parts
         _rki_projections(folder, s, seeds = _seeds(2, test), phases = test ? [K] : 2:K)
@@ -661,16 +703,16 @@ function scenario_first_wave(;
         _rki_counterfactuals(folder, s, seeds = [0], phases = test ? [K - 1] : 1:(K - 1))
     end
     if :band in parts
-        _rki_band(folder, s, runs = test ? 1 : nothing)
+        _rki_band(folder, s, runs = test ? 1 : nothing, bases = bases)
     end
     if :seeds_robustness in parts
         _rki_seeds_robustness(folder, s, seeds = _seeds(3, test))
     end
     if :random_seeds in parts
-        _rki_random_seeds(folder, s, seeds = _seeds(3, test))
+        _rki_random_seeds(folder, s, seeds = _seeds(3, test), bases = bases)
     end
     if :figures in parts
-        _rki_figures(folder, s)
+        _rki_figures(folder, s, diagnostics = diagnostics)
     end
     return folder
 end
