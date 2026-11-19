@@ -321,8 +321,10 @@ function plot_scenario_testing(rd_isolation_only, rd_isolation_and_test, rd_test
             "$(round(Int, t))") |>
         s -> lpad(s, 6)
 
-    # spacing R plot ticks
-    tick_to_R(t) = "        $(round(Int, t))"
+    # R plot ticks: integers without decimals, other ticks (e.g., 0.5) with one decimal,
+    # padded to equal length to align the plots
+    tick_to_R(t) = (isinteger(t) ? "$(round(Int, t))" : "$(round(t, digits = 1))") |>
+        s -> lpad(s, 9)
 
 
     l = @layout [a{0.12h}; b{0.12h}; c{0.12h}; d{0.12h}; e{0.52h}]
