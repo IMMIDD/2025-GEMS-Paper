@@ -177,16 +177,21 @@ end
 """
     settinganalyses(;
         folder = nothing,
+        folder_tag = nothing,
         sim = Simulation(population = "SL"))
 
 Runs all setting-related analyses.
+
+If `folder` is `nothing`, a new result folder is created, with `folder_tag`
+appended to its timestamp-based name (see `result_folder`).
 """
 function settinganalyses(;
         folder = nothing,
+        folder_tag = nothing,
         sim = Simulation(population = "SL", seed = 0))
 
     # create result folder if not passed
-    isnothing(folder) ? folder = result_folder() : nothing
+    isnothing(folder) ? folder = result_folder(folder_tag) : nothing
 
     # calculate muncipality & county setting sizes
     od_m = office_data(sim)

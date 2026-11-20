@@ -184,13 +184,16 @@ end
 # RUN ALL ANALYSES
 
 """
-    benchmark(; folder = nothing)
+    benchmark(; folder = nothing, folder_tag = nothing)
 
 Runs all benchmark-related analyses.
+
+If `folder` is `nothing`, a new result folder is created, with `folder_tag`
+appended to its timestamp-based name (see `result_folder`).
 """
-function benchmark(; folder = nothing)
+function benchmark(; folder = nothing, folder_tag = nothing)
     # create result folder if not passed
-    isnothing(folder) ? folder = result_folder() : nothing
+    isnothing(folder) ? folder = result_folder(folder_tag) : nothing
     
     # run benchmark simulations
     df = run_sims()

@@ -59,16 +59,21 @@ end
 """
     contacts(;
         folder = nothing,
+        folder_tag = nothing,
         sim = Simulation(population = "SL"))
 
 Runs all contact-related analyses.
+
+If `folder` is `nothing`, a new result folder is created, with `folder_tag`
+appended to its timestamp-based name (see `result_folder`).
 """
 function contacts(;
         folder = nothing,
+        folder_tag = nothing,
         sim = Simulation(population = "SL", seed = 0))
 
     # create result folder if not passed
-    isnothing(folder) ? folder = result_folder() : nothing
+    isnothing(folder) ? folder = result_folder(folder_tag) : nothing
 
     # build ResultData Object for contacts only
     rd = ResultData(sim, style = "ContactsOnlyStyle")
