@@ -12,6 +12,11 @@ using StatsBase
 using TOML
 using Revise
 using Reexport
+import Downloads
+import LinearAlgebra
+import Random
+import SHA
+import TOML
 
 @reexport using GEMS
 
@@ -26,22 +31,36 @@ export runall
 
 # COMMON FUNCTIONS
 """
-result_folder()
+    result_folder(folder_tag = nothing)
 
-Creates the path to a new result folder.
+Creates a new result folder `results/<timestamp>` and returns its path.
+If a `folder_tag` is given, it is appended to the timestamp
+(`results/<timestamp>_<folder_tag>`) to make the folder easier to find.
+Whitespace in the tag is replaced by underscores; characters that are not
+allowed in folder names (`\\ / : * ? " < > |`) raise an error.
 """
-function result_folder() 
-    folder = joinpath("results", "$(Dates.format(Dates.now(), "yyyy-mm-dd_HH-MM-SS_sss"))")
+function result_folder(folder_tag = nothing)
+    name = Dates.format(Dates.now(), "yyyy-mm-dd_HH-MM-SS_sss")
+
+    if !isnothing(folder_tag)
+        tag = replace(strip(string(folder_tag)), r"\s+" => "_")
+        isempty(tag) && throw(ArgumentError("The folder tag must not be empty."))
+        occursin(r"[\\/:*?\"<>|]", tag) &&
+            throw(ArgumentError("The folder tag must not contain any of \\ / : * ? \" < > |. Got \"$folder_tag\"."))
+        name *= "_" * tag
+    end
+
+    folder = joinpath("results", name)
     mkpath(folder)
     return folder
 end
 
 """
-    DE_sim(;configfile = "models/DE_model_R0_3.28.toml")
+    DE_sim(;configfile = "models/DE_model_first_wave.toml")
 
 Wrapper for German simulation model.
 """
-DE_sim(;configfile = "models/DE_model_R0_3.28.toml") = Simulation(
+DE_sim(;configfile = "models/DE_model_first_wave.toml") = Simulation(
     configfile=configfile,
     population="DE",
     seed = 0)
@@ -58,22 +77,33 @@ map_legendfontsize() = 24
 # INCLUDE STYLES
 include("styles/rd_contacts_only.jl")
 
+# INCLUDE MODEL EXTENSIONS
+include("infectiousness_profile.jl")
+
 # INCLUDE ANALYSES
 include("demographics.jl")
 include("settings.jl")
 include("mobility.jl")
 include("contacts.jl")
 include("benchmarking.jl")
-include("rki_data.jl")
-include("rki_seeding.jl")
-include("rki_imports.jl")
+
+# INCLUDE RKI DATA AND MODEL (for the first wave scenario)
+include("first_wave/rki_data.jl")
+include("first_wave/rki_imports.jl")
+include("first_wave/rki_seeding.jl")
+include("first_wave/rki_phases.jl")
+include("first_wave/rki_reproduction.jl")
+include("first_wave/rki_simulation.jl")
+include("first_wave/rki_comparison.jl")
+include("first_wave/rki_calibration.jl")
+include("first_wave/rki_figures.jl")
+include("first_wave/rki_paper_figure.jl")
 
 # INCLUDE SCENARIOS
-include("sc_outbreak.jl")
-include("sc_self_isolation.jl")
+include("sc_household_isolation.jl")
 include("sc_sweeping.jl")
 include("sc_testing.jl")
-include("sc_rki_validation.jl")
+include("sc_first_wave.jl")
 
 
 
@@ -81,18 +111,21 @@ include("sc_rki_validation.jl")
 """
     runall(;
         sim_obj = nothing,
-        configfile = "models/DE_model_R0_3.28.toml",
-        population = "DE")
+        configfile = "models/DE_model_first_wave.toml",
+        population = "DE",
+        folder_tag = nothing)
 
-Executes all model analyses.
+Executes all model analyses and writes their results to one new result folder,
+with `folder_tag` appended to its timestamp-based name (see `result_folder`).
 """
 function runall(;
         sim_obj = nothing,
-        configfile = "models/DE_model_R0_3.28.toml",
-        population = "DE")
+        configfile = "models/DE_model_first_wave.toml",
+        population = "DE",
+        folder_tag = nothing)
 
     # create result folder
-    folder = result_folder()
+    folder = result_folder(folder_tag)
 
     # sim object
     sim = isnothing(sim_obj) ? Simulation(configfile=configfile, population=population, seed = 0) : sim_obj
@@ -132,14 +165,8 @@ function runall(;
         return;
     end
 
-    printinfo("### RUNNING OUTBREAK SCENARIO")
-    scenario_outbreak(
-        population = population,
-        folder = folder
-    )
-
     printinfo("### RUNNING SIMPLE INTERVENTION SCENARIO")
-    scenario_self_isolation(
+    scenario_household_isolation(
         population = population,
         folder = folder
     )
@@ -157,6 +184,12 @@ function runall(;
 
     printinfo("### RUNNING PARAMETER SWEEPS")
     scenario_sweeping(
+        folder = folder
+    )
+
+    printinfo("### RUNNING FIRST WAVE SCENARIO")
+    scenario_first_wave(
+        population = population,
         folder = folder
     )
 
