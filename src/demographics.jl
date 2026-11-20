@@ -67,7 +67,7 @@ end
 
 household_df(sim) = households(sim) |>
     hhs -> filter(h -> size(h) <= PRIVATE_HH_MAX, hhs) |>
-    hhs -> DataFrame(state = state_code.(ags.(hhs)), value = size.(hhs), count = size.(hhs))
+    hhs -> DataFrame(state = state_code.(ags.(hhs)), value = size.(hhs), count = 1)
 
 age_df(individual_data_df) = individual_data_df |>
     df -> DataFrame(state = state_code.(df.ags), value = df.age, count = 1)
@@ -113,7 +113,7 @@ end
 
 group_label(lo, hi) = ismissing(hi) ? "$lo+" : lo == hi ? "$lo" : "$(lo)–$(hi)"
 
-# total variation distance: share of persons (or institutions) that would
+# total variation distance: share of households, persons or institutions that would
 # have to change groups for the model to match the reference
 tvd(df) = sum(abs.(df.model .- df.reference)) / 2
 

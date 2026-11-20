@@ -25,7 +25,7 @@
 
 [household_sizes]
 file = "household_sizes_by_state.csv"
-description = "Persons in private households (main residence) by household size and state; must exclude communal establishments such as care homes"
+description = "Private households (main residence) by household size and state; must exclude communal establishments such as care homes"
 label = "PLACEHOLDER"
 publisher = ""
 table_id = ""
