@@ -34,9 +34,11 @@ export plot_age_pyramid, plot_household_size_panel
 # STYLE
 
 const PV_FONT = "Times Roman"
-const PV_FONTSIZE = 8
-const PV_SMALL_FONTSIZE = 7
-const PV_HEADING_FONTSIZE = 9
+const PV_FONTSIZE = 9
+const PV_SMALL_FONTSIZE = 8
+const PV_HEADING_FONTSIZE = 10
+const PV_SECTION_FONTSIZE = 12
+const PV_FONT_BOLD = "Times Bold"
 # GEMS in blue, the reference data in orange (the first two GEMS colors)
 const PV_MODEL_COLOR = gemscolors(2)[1]
 const PV_REFERENCE_COLOR = gemscolors(2)[2]
@@ -47,7 +49,8 @@ const PV_LINE_COLOR = "#9aa0a8"
 const PV_WIDTH_IN = 7.5
 const PV_DPI = 300
 
-const PV_MODEL_LABEL = "GEMS"
+# name of the model data: the default population of GEMS, generated with Gesyland
+const PV_MODEL_LABEL = "GEMS (Gesyland)"
 
 # English state names in the order of the state numbers in the AGS
 const STATE_NAMES_EN = ["Schleswig-Holstein", "Hamburg", "Lower Saxony", "Bremen",
@@ -566,9 +569,9 @@ Household types of Zensus table 5000H-1005 and their GEMS predicates.
 const HOUSEHOLD_TYPES = [
     HouseholdCategory("single", "Single", is_single, "Einpersonenhaushalte (Singlehaushalte)"),
     HouseholdCategory("couple", "Couple", is_couple_without_children, "Paare ohne Kind(er)"),
-    HouseholdCategory("couple_children", "Couple, children", is_couple_with_children, "Paare mit Kind(ern)"),
-    HouseholdCategory("single_mother", "Single mother", is_single_mother, "Alleinerziehende Mütter"),
-    HouseholdCategory("single_father", "Single father", is_single_father, "Alleinerziehende Väter"),
+    HouseholdCategory("couple_children", "Couple, kids", is_couple_with_children, "Paare mit Kind(ern)"),
+    HouseholdCategory("single_mother", "Lone mother", is_single_mother, "Alleinerziehende Mütter"),
+    HouseholdCategory("single_father", "Lone father", is_single_father, "Alleinerziehende Väter"),
     HouseholdCategory("no_core_family", "Other", is_without_core_family, "Mehrpersonenhaushalte ohne Kernfamilie"),
 ]
 
@@ -917,30 +920,48 @@ function classify(s::SchoolProfile, categories)
 end
 
 """
-    model_education(sim)
+    education_institutions(sim)
 
-Participants in the education settings `COMPARED_EDUCATION_SETTINGS` per
-federal state (by location of their school class) and setting: state,
-category, count. Every institution is classified (`EDUCATION_SETTINGS`);
-participants of the other settings are not counted.
+Education institutions (`School` settings) of the simulation's population
+and their classes, as a named tuple:
+- `classes`: all `SchoolClass` settings
+- `institution`: index of the institution of each class
+- `type`: key of the education setting of each institution
+  (`EDUCATION_SETTINGS`, classified by its `SchoolProfile`); `""` for
+  institutions without attendees
+
+GEMS has no institution types, so the type follows from the class sizes
+and ages (see the predicates of `EDUCATION_SETTINGS`).
 """
-function model_education(sim)
+function education_institutions(sim)
     classes, years, schools = settings(sim, SchoolClass), settings(sim, SchoolYear), settings(sim, School)
-    school_of_class = [contained(years[contained(c)]) for c in classes]
+    institution = [contained(years[contained(c)]) for c in classes]
 
     # profile and type of each institution
     sizes = [Int[] for _ in schools]
     ages = [Int[] for _ in schools]
     for (k, c) in enumerate(classes)
-        push!(sizes[school_of_class[k]], size(c))
-        append!(ages[school_of_class[k]], Int.(age.(individuals(c))))
+        push!(sizes[institution[k]], size(c))
+        append!(ages[institution[k]], Int.(age.(individuals(c))))
     end
     type = [isempty(ages[s]) ? "" : classify(SchoolProfile(mode(sizes[s]), median(ages[s])), EDUCATION_SETTINGS)
         for s in eachindex(schools)]
+    return (classes = classes, institution = institution, type = type)
+end
 
+"""
+    model_education(sim)
+
+Participants in the education settings `COMPARED_EDUCATION_SETTINGS` per
+federal state (by location of their school class) and setting: state,
+category, count. Every institution is classified (`education_institutions`);
+participants of the other settings are not counted.
+"""
+function model_education(sim)
+    (; classes, institution, type) = education_institutions(sim)
     education = Dict{Tuple{Int, String}, Int}()
     for (k, c) in enumerate(classes)
-        t = type[school_of_class[k]]
+        t = type[institution[k]]
         t in COMPARED_EDUCATION_SETTINGS || continue
         key = (state_code(ags(c)), t)
         education[key] = get(education, key, 0) + size(c)
@@ -987,6 +1008,7 @@ Model and reference counts in common categories (see
 - `senior_status`: state, category (`SENIOR_STATUS`), model, reference
 - `activity_status`: state, category (`ACTIVITY_STATUS`), model, reference (persons)
 - `education`: state, category (`COMPARED_EDUCATION_SETTINGS`), model, reference (participants, by location)
+- `workplaces`, `universities`, `groups`: setting sizes in Germany (`setting_size_data`)
 - `reference`: name of the reference data set (a key of `VALIDATION_REFERENCES`)
 
 The oldest age and the largest household size are the top groups that
@@ -1016,12 +1038,13 @@ function validation_data(sim;
             ref.senior_status(), [:state, :category]),
         activity_status = join_counts(model_activity_status(sim), ref.activity_status(), [:state, :category]),
         education = join_counts(model_education(sim), ref.education(), [:state, :category]),
+        setting_size_data(sim)...,
         reference = string(reference))
 end
 
 # tables of `validation_data` and their file names
 const VALIDATION_TABLES = (:age_sex, :household_sizes, :household_types, :senior_status, :activity_status,
-    :education)
+    :education, :workplaces, :universities, :groups)
 validation_file(folder, table) = joinpath(folder, "validation_$(table).csv")
 
 """
@@ -1165,10 +1188,14 @@ end
 """
     plot_paired_bars(reference, model, labels;
         title = "", xlabel = "", reference_label = "Reference",
-        legend = :auto, xrotation = 0, kwargs...)
+        legend = :auto, xrotation = 0, shares = true, ytick_step = nothing, kwargs...)
 
-Shares per category as pairs of bars: reference (left) and GEMS (right).
-`reference` and `model` are shares in the order of `labels`.
+Values per category as pairs of bars: reference (left) and GEMS (right).
+`reference` and `model` are given in the order of `labels`: shares (y axis
+in percent, at most 100 %) or, with `shares = false`, other values such as
+group sizes (y axis with whole numbers in steps of `ytick_step`). A
+`missing` reference value is marked "n/a" instead of a bar, so that it
+is not read as zero.
 
 With `legend = :auto`, the legend goes into the upper corner above the
 lower bars (left or right, compared by the two outermost categories on each
@@ -1177,14 +1204,18 @@ y axis leaves room above the highest bar.
 """
 function plot_paired_bars(reference, model, labels;
         title = "", xlabel = "", reference_label = "Reference",
-        legend = :auto, xrotation = 0, kwargs...)
+        legend = :auto, xrotation = 0, shares = true, ytick_step = nothing, kwargs...)
 
     n = length(labels)
     x = collect(1.0:n)
-    ymax = 1.3 * maximum([model; reference])
-    yticks = 0:(ymax > 0.5 ? 0.2 : 0.1):ymax
+    # headroom for the legend; shares never above 100 %
+    ymax = 1.3 * maximum(skipmissing([model; reference]))
+    shares && (ymax = min(ymax, 1.0))
+    step = something(ytick_step, shares ? (ymax > 0.5 ? 0.2 : 0.1) : 5)
+    yticks = 0:step:ymax
+    ylabels = shares ? percent_label.(yticks) : string.(round.(Int, yticks))
     if legend == :auto
-        height(i) = max(reference[i], model[i])
+        height(i) = max(coalesce(reference[i], 0), model[i])
         edge = min(2, n)
         left, right = maximum(height.(1:edge)), maximum(height.((n - edge + 1):n))
         legend = left <= right ? :topleft : :topright
@@ -1198,7 +1229,7 @@ function plot_paired_bars(reference, model, labels;
         ylims = (0, ymax),
         xticks = (x, labels),
         xrotation = xrotation,
-        yticks = (yticks, percent_label.(yticks)),
+        yticks = (yticks, ylabels),
         xlabel = xlabel,
         grid = :y,
         gridalpha = 0.2,
@@ -1213,12 +1244,16 @@ function plot_paired_bars(reference, model, labels;
 
     w = 0.38
     zero = zeros(n)
-    plot!(p, rectangles(x .- w, x, zero, reference),
+    plot!(p, rectangles(x .- w, x, zero, coalesce.(reference, 0.0)),
         seriestype = :shape, fillcolor = PV_REFERENCE_COLOR, fillalpha = PV_REFERENCE_ALPHA,
         linewidth = 0, label = reference_label)
     plot!(p, rectangles(x, x .+ w, zero, model),
         seriestype = :shape, fillcolor = PV_MODEL_COLOR, fillalpha = 0.85,
         linewidth = 0, label = PV_MODEL_LABEL)
+    for i in findall(ismissing, reference)
+        annotate!(p, x[i] - w / 2, 0.02ymax,
+            Plots.text("n/a", PV_SMALL_FONTSIZE, PV_FONT, :left, :vcenter, rotation = 90, color = PV_LINE_COLOR))
+    end
     return p
 end
 
@@ -1355,7 +1390,7 @@ logarithmic. Values are shares and labeled as percentages, unless
 
 `groups` (one integer from 1 to n per point) colors the points by group
 (`group_colors`); without groups, all points have the model color. The
-legend of the groups is drawn separately (`group_legend`), so that panels
+legend of the groups is drawn separately (`legend_strip`), so that panels
 with and without groups keep the same size.
 """
 function plot_agreement(reference, model;
@@ -1413,13 +1448,13 @@ function plot_agreement(reference, model;
     plot!(p, [lo, hi], [lo, hi], linecolor = PV_LINE_COLOR, linewidth = 1.0, label = "")
     if isnothing(groups)
         scatter!(p, reference, model,
-            markercolor = PV_MODEL_COLOR, markerstrokewidth = 0, markersize = 3, markeralpha = 0.8, label = "")
+            markercolor = PV_MODEL_COLOR, markerstrokewidth = 0, markersize = 4, markeralpha = 0.8, label = "")
     else
         colors = group_colors(maximum(groups))
         for g in 1:maximum(groups)
             sel = groups .== g
             scatter!(p, reference[sel], model[sel],
-                markercolor = colors[g], markerstrokewidth = 0, markersize = 3, markeralpha = 0.9, label = "")
+                markercolor = colors[g], markerstrokewidth = 0, markersize = 4, markeralpha = 0.9, label = "")
         end
     end
 
@@ -1431,36 +1466,6 @@ function plot_agreement(reference, model;
 
     isempty(summary) || annotate!(p, unfrac(0.97), unfrac(0.03),
         pv_text(summary, PV_SMALL_FONTSIZE, :right, :bottom))
-    return p
-end
-
-"""
-    group_legend(labels; title = "", rows = length(labels) > 6 ? 2 : 1, width_pt = 145, row_step = 0.32)
-
-Legend of the groups of an agreement plot (colors of `group_colors`) as a
-separate, frameless subplot, to be placed below the plot: the `title`
-followed by the groups in `rows` rows. The entries start after the title
-(its width estimated relative to `width_pt`).
-"""
-function group_legend(labels; title = "", rows = length(labels) > 6 ? 2 : 1, width_pt = 145, row_step = 0.32)
-    n = length(labels)
-    cols = ceil(Int, n / rows)
-    colors = group_colors(n)
-    x0 = isempty(title) ? 0.0 : 0.06 + 0.5 * PV_SMALL_FONTSIZE * length(title) / width_pt
-    colw = (1 - x0) / cols
-    # rows from top to bottom, starting with some distance to the axis label above;
-    # the first row is at the same height in all legends
-    ys = 0.7 .- (0:(rows - 1)) .* row_step
-
-    p = plot(framestyle = :none, legend = false, grid = false,
-        xlims = (0, 1), ylims = (0, 1), margin = 0mm, fontfamily = PV_FONT)
-    isempty(title) || annotate!(p, 0, ys[1], pv_text(title, PV_SMALL_FONTSIZE, :left))
-    for (k, l) in enumerate(labels)
-        r, c = divrem(k - 1, cols)
-        x = x0 + c * colw
-        scatter!(p, [x + 0.02], [ys[r + 1]], markercolor = colors[k], markerstrokewidth = 0, markersize = 3)
-        annotate!(p, x + 0.045, ys[r + 1], pv_text(l, PV_SMALL_FONTSIZE - 1, :left))
-    end
     return p
 end
 
@@ -1628,8 +1633,9 @@ Agreement plots of the federal states: share of the national population,
 age structure (10-year groups), household sizes, household family types,
 household senior status and activity indicators (`ACTIVITY_INDICATORS`),
 each GEMS against the reference (axes labeled with the source names
-of `reference_labels(data)`). Returns the panels and, separately, their
-legends (empty for the population panel), to be placed below the panels.
+of `reference_labels(data)`). Returns the panels and, separately, the
+contents of their color legends (`nothing` for the population panel): the
+group labels and a title.
 """
 function state_agreement_panels(data; first_letter = 'C')
     letter(k) = string(first_letter + k)
@@ -1671,15 +1677,15 @@ function state_agreement_panels(data; first_letter = 'C')
     hh_sizes = 1:maximum(data.household_sizes.size)
     hh_labels = category_label.(hh_sizes, last(hh_sizes))
     p_hh = category_panel(data.household_sizes, :size, hh_sizes, sources.household_sizes,
-        "$(letter(2))) Household sizes")
+        "$(letter(3))) Household sizes")
 
     # family types: shares of all households, "other" = no core family type (see `FAMILY_TYPES`)
     p_types = category_panel(family_type_counts(data.household_types), :category,
-        getfield.(FAMILY_TYPES, :key), sources.household_types, "$(letter(3))) Household family types")
+        getfield.(FAMILY_TYPES, :key), sources.household_types, "$(letter(4))) Household family types")
 
     seniors = getfield.(SENIOR_STATUS, :key)
     p_seniors = category_panel(data.senior_status, :category, seniors, sources.senior_status,
-        "$(letter(4))) Household senior status")
+        "$(letter(5))) Household senior status")
 
     # activity indicators: separate shares of the population, each against its own source
     # (not mutually exclusive in the official data, see `activity_indicators`)
@@ -1693,16 +1699,17 @@ function state_agreement_panels(data; first_letter = 'C')
         summary = "mean |Δ| = $(round(100 * mean(abs.(im .- ir)), digits = 2)) pp",
         reference_label = "Census / Destatis",
         show_ylabel = false,
-        title = "$(letter(5))) Activity")
+        title = "$(letter(2))) Employment and education")
 
-    panels = [p_pop, p_age, p_hh, p_types, p_seniors, p_activity]
+    # persons (population, age, activity), then households (sizes, family types, senior status)
+    panels = [p_pop, p_age, p_activity, p_hh, p_types, p_seniors]
     legends = [
-        plot(framestyle = :none, legend = false, grid = false, margin = 0mm),
-        group_legend(age_labels, title = "Age", rows = 2),
-        group_legend(hh_labels, title = "Persons"),
-        group_legend(getfield.(FAMILY_TYPES, :label), rows = 3),
-        group_legend(getfield.(SENIOR_STATUS, :label), rows = 2),
-        group_legend(getfield.(ACTIVITY_INDICATORS, :label), rows = 3),
+        nothing,
+        (labels = age_labels, title = "Age"),
+        (labels = getfield.(ACTIVITY_INDICATORS, :label), title = ""),
+        (labels = hh_labels, title = "Persons"),
+        (labels = getfield.(FAMILY_TYPES, :label), title = ""),
+        (labels = getfield.(SENIOR_STATUS, :label), title = ""),
     ]
     return panels, legends
 end
@@ -1711,72 +1718,498 @@ end
 # 4. FIGURE
 
 """
-    section_header(txt)
+    section_header(txt; width_in = PV_WIDTH_IN - 4 / 25.4)
 
-Empty subplot carrying the heading of a row of panels and a thin line below it.
+Empty subplot carrying the heading of a section of the figure: centered as
+the section titles of the other figures of the paper (e.g.
+`plot_paper_figure_1`), bold and larger than the panel titles, between two
+thin lines that set it apart from them. `width_in` is the width of the
+heading's plot area.
 """
-section_header(txt) = plot(framestyle = :none, legend = false, grid = false,
-        xlims = (0, 1), ylims = (0, 1), margin = 0mm) |>
-    p -> plot!(p, [0, 1], [0.15, 0.15], linecolor = PV_LINE_COLOR, linewidth = 0.6) |>
-    p -> annotate!(p, 0, 0.3, pv_text(txt, PV_HEADING_FONTSIZE + 1, :left, :bottom))
+function section_header(txt; width_in = PV_WIDTH_IN - 4 / 25.4)
+    p = plot(framestyle = :none, ticks = false, legend = false, grid = false,
+        xlims = (0, 1), ylims = (0, 1), margin = 0mm, top_margin = -2mm, bottom_margin = -2mm,
+        fontfamily = PV_FONT)
+    half = (0.5 * text_width_in(txt, PV_SECTION_FONTSIZE, bold = true) + 0.12) / width_in
+    plot!(p, [0, 0.5 - half, NaN, 0.5 + half, 1], fill(0.5, 5), linecolor = PV_LINE_COLOR, linewidth = 0.6)
+    return annotate!(p, 0.5, 0.5, Plots.text(txt, PV_SECTION_FONTSIZE, PV_FONT_BOLD, :center, :vcenter))
+end
+
+
+# AXIS TEXT, LEGENDS AND LAYOUT OF THE FIGURE
+#
+# GR places tick labels and axis labels at distances relative to the largest
+# dimension of the figure, which leaves wide gaps in a tall figure, and
+# centers rotated tick labels on their length. The figure therefore draws
+# them itself (`axis_text!`), at fixed distances in inches, using the sizes
+# of the plot areas that `fit_validation_layout` measures.
+
+# common angle of rotated tick labels (degrees)
+const PV_TICK_ROTATION = 35
+# distance of tick labels from the axis, and of axis labels from the tick labels (inches)
+const PV_TICK_GAP_IN = 0.03
+const PV_GUIDE_GAP_IN = 0.04
+# distance below a panel title (and below the color legend of an agreement plot, inches)
+const PV_TITLE_GAP_IN = 0.07
+# legend entries: distance from the marker to its label, and between entries (inches)
+const PV_MARKER_GAP_IN = 0.1
+const PV_ENTRY_GAP_IN = 0.14
+# estimated character widths of Times, as shares of the font size (digits and capitals are wider
+# than the average lowercase letter, bold text by about 10 %)
+const PV_CHAR_WIDTH = 0.42
+char_width(c) = c == '%' ? 0.83 : isdigit(c) ? 0.5 : c in "MW" ? 0.89 : isuppercase(c) ? 0.66 : c == ' ' ? 0.25 :
+    c in ".,:;()|/–-" ? 0.33 : c in "ijlftr" ? 0.3 : c in "mw" ? 0.72 : PV_CHAR_WIDTH
+# name of the reference data in the figure (the sources are named in the caption)
+const PV_REFERENCE_NAME = "Official statistics"
+
+text_width_in(s, size; bold = false) = (bold ? 1.1 : 1.0) * sum(char_width, s; init = 0.0) * size / 72
+line_height_in(size) = 1.2 * size / 72
+"""
+    title_text!(p, x, y, title, width_in; size = PV_HEADING_FONTSIZE, valign = :bottom)
+
+Draws a panel title at the relative position (`x`, `y`) of `p`, left
+aligned: its letter ("A)") in bold, as in the other figures of the paper,
+followed by the rest in regular weight. `width_in` is the width of the plot
+area, to place the rest after the letter.
+"""
+function title_text!(p, x, y, title, width_in; size = PV_HEADING_FONTSIZE, valign = :bottom)
+    m = match(r"^([A-Z]\))\s*(.*)$", title)
+    letter, rest = isnothing(m) ? ("", title) : (m.captures[1], m.captures[2])
+    dx = 0.0
+    if !isempty(letter)
+        annotate!(p, (x, y), Plots.text(letter, size, PV_FONT_BOLD, :left, valign))
+        dx = (text_width_in(letter, size, bold = true) + 0.3size / 72) / width_in
+    end
+    return annotate!(p, (x + dx, y), Plots.text(rest, size, PV_FONT, :left, valign))
+end
 
 """
-    validation_figure(data; row_height_in = 3.15, national_height_in = 2.4,
-        legend_height_in = 0.5, columns = 3, dpi = PV_DPI)
+    panel_title!(p, width_in, height_in)
 
-National panels ("Germany") in the top row: age pyramid, household sizes,
-household types and senior status. Below, the agreement plots of the
-federal states (`state_agreement_panels`) in rows of `columns` panels, each
-panel row (`row_height_in`, including its legends) followed by a row of
-legends (`legend_height_in`), so that all agreement plots have the same
-size. Both sections have a heading. The figure height follows from the
-number of rows.
+Replaces the title of the panel `p` by `title_text!` above its plot area
+(`width_in` × `height_in` inches), at the distance `PV_TITLE_GAP_IN`.
+Returns the room the title needs above the plot area (inches).
 """
-function validation_figure(data; row_height_in = 3.15, national_height_in = 2.4,
-        legend_height_in = 0.5, columns = 3, dpi = PV_DPI)
+function panel_title!(p, width_in, height_in)
+    title = p[1][:title]
+    plot!(p, title = "")
+    title_text!(p, 0.0, 1 + PV_TITLE_GAP_IN / height_in, title, width_in)
+    return PV_TITLE_GAP_IN + line_height_in(PV_HEADING_FONTSIZE)
+end
 
-    sources = reference_labels(data)
-    # a line break after the title leaves room between title and plot
-    national = [
-        plot_age_pyramid(data.age_sex, reference_label = sources.age_sex, title = "A) Age and sex\n",
-            show_top_group = false, age_label = "", xtick_step = 0.004, legend = :topright),
-        plot_household_size_panel(data.household_sizes, reference_label = sources.household_sizes,
-            title = "B) Household size\n"),
+"""
+    axis_text!(p, width_in, height_in)
+
+Replaces the tick labels and axis labels that GR would draw for the panel
+`p` (a plot with one subplot whose ticks are given as values and labels) by
+annotations at fixed distances from a plot area of `width_in` × `height_in`
+inches: y tick labels right-aligned next to the axis, the y axis label next
+to them, x tick labels centered below their ticks or, if rotated, ending at
+their ticks, and the x axis label below them. Returns the room the text
+needs left of and below the plot area (inches).
+"""
+function axis_text!(p, width_in, height_in)
+    sp = p[1]
+    xaxis, yaxis = sp[:xaxis], sp[:yaxis]
+    (xt, xl), (yt, yl) = xaxis[:ticks], yaxis[:ticks]
+    xguide, yguide, rot = xaxis[:guide], yaxis[:guide], xaxis[:rotation]
+    (x0, x1), (y0, y1) = xlims(p), ylims(p)
+    relx(v) = (v - x0) / (x1 - x0)
+    rely(v) = (v - y0) / (y1 - y0)
+    s, g = PV_SMALL_FONTSIZE, PV_FONTSIZE
+    plot!(p, xticks = (xt, fill("", length(xt))), yticks = (yt, fill("", length(yt))),
+        xguide = "", yguide = "")
+
+    shown(ticks, labels, lo, hi) = [(v, l) for (v, l) in zip(ticks, labels) if lo <= v <= hi]
+    ys, xs = shown(yt, yl, y0, y1), shown(xt, xl, x0, x1)
+
+    # y axis: tick labels, then the axis label (rotated, bottom toward the axis)
+    for (v, l) in ys
+        annotate!(p, (-PV_TICK_GAP_IN / width_in, rely(v)), Plots.text(l, s, PV_FONT, :right, :vcenter))
+    end
+    left = PV_TICK_GAP_IN + maximum(((_, l),) -> text_width_in(l, s), ys; init = 0.0)
+    if !isempty(yguide)
+        x = -(left + PV_GUIDE_GAP_IN) / width_in
+        annotate!(p, (x, 0.5), Plots.text(yguide, g, PV_FONT, :center, :bottom, rotation = 90))
+        left += PV_GUIDE_GAP_IN + line_height_in(g)
+    end
+
+    # x axis: tick labels (rotated ones end at their tick), then the axis label
+    h = line_height_in(s)
+    if rot == 0
+        for (v, l) in xs
+            annotate!(p, (relx(v), -PV_TICK_GAP_IN / height_in), Plots.text(l, s, PV_FONT, :center, :top))
+        end
+        bottom = PV_TICK_GAP_IN + h
+    else
+        dy = PV_TICK_GAP_IN + 0.5h * cosd(rot)
+        for (v, l) in xs
+            annotate!(p, (relx(v), -dy / height_in), Plots.text(l, s, PV_FONT, :right, :vcenter, rotation = rot))
+        end
+        bottom = dy + maximum(((_, l),) -> text_width_in(l, s) * sind(rot) + 0.5h * cosd(rot), xs; init = 0.0)
+    end
+    if !isempty(xguide)
+        y = -(bottom + PV_GUIDE_GAP_IN) / height_in
+        annotate!(p, (0.5, y), Plots.text(xguide, g, PV_FONT, :center, :top))
+        bottom += PV_GUIDE_GAP_IN + line_height_in(g)
+    end
+    return (left = left, bottom = bottom)
+end
+
+"""
+    reserve!(p, room, figure_width_in, figure_height_in; cushion_mm = 0.5)
+
+Sets the left and bottom margins of the panel `p` so that the room taken by
+the text of `axis_text!` is kept free. Plots adds its own padding for ticks
+(2 mm, plus 1 mm and 1 % of the figure size per axis with ticks), which is
+subtracted.
+"""
+function reserve!(p, room, figure_width_in, figure_height_in; cushion_mm = 0.5)
+    pad(fig_in) = 3.0 + 0.254fig_in
+    plot!(p,
+        left_margin = (25.4room.left - pad(figure_width_in) + cushion_mm) * mm,
+        bottom_margin = (25.4room.bottom - pad(figure_height_in) + cushion_mm) * mm)
+end
+
+"""
+    legend_flow(legend, width_in)
+
+Positions of the entries of a color legend (`legend` from
+`state_agreement_panels`: labels and an optional title) that flow like text
+over a width of `width_in` inches: each entry (marker and label) follows the
+previous one and moves to the next line when the line is full. Lines after
+the first start where the entries of the first line start (after the
+title). Returns the start of the entries (`x0`), the line and position
+(inches) of each entry, and the number of lines.
+"""
+function legend_flow(legend, width_in)
+    s = PV_SMALL_FONTSIZE
+    x0 = isempty(legend.title) ? 0.0 : text_width_in(legend.title, s) + 0.08
+    positions = Tuple{Int, Float64}[]
+    line, x = 1, x0
+    for l in legend.labels
+        w = PV_MARKER_GAP_IN + text_width_in(l, s)
+        if x > x0 && x + w > width_in
+            line, x = line + 1, x0
+        end
+        push!(positions, (line, x))
+        x += w + PV_ENTRY_GAP_IN
+    end
+    return (x0 = x0, positions = positions, lines = isempty(positions) ? 0 : last(positions)[1])
+end
+
+legend_lines(legend, width_in) = isnothing(legend) ? 0 : legend_flow(legend, width_in).lines
+
+"""
+    legend_strip(title, legend, width_in, height_in; flow_width_in = width_in)
+
+Strip above an agreement plot: the panel `title` and, below it, the color
+legend of its groups (`legend` from `state_agreement_panels`, or `nothing`):
+an optional legend title followed by the group labels, flowing like text
+(`legend_flow`) over `flow_width_in` inches, which may reach into the space
+between the columns (the strip's plot area is `width_in` wide).
+"""
+function legend_strip(title, legend, width_in, height_in; flow_width_in = width_in)
+    p = plot(framestyle = :none, ticks = false, legend = false, grid = false,
+        xlims = (0, 1), ylims = (0, 1), margin = 0mm, top_margin = -2mm, bottom_margin = -2mm,
+        fontfamily = PV_FONT)
+    title_text!(p, 0.0, 1.0, title, width_in, valign = :top)
+    isnothing(legend) && return p
+
+    s = PV_SMALL_FONTSIZE
+    line = line_height_in(s) / height_in
+    top = 1 - (line_height_in(PV_HEADING_FONTSIZE) + PV_TITLE_GAP_IN) / height_in
+    line_y(r) = top - (r - 0.5) * line
+    flow = legend_flow(legend, flow_width_in)
+    colors = group_colors(length(legend.labels))
+    isempty(legend.title) || annotate!(p, 0, line_y(1), Plots.text(legend.title, s, PV_FONT, :left, :vcenter))
+    for (k, (l, (r, x))) in enumerate(zip(legend.labels, flow.positions))
+        # a marker, not a text symbol: GR draws text in the nearest color of its color table
+        scatter!(p, [(x + 0.03) / width_in], [line_y(r)], markercolor = colors[k], markerstrokewidth = 0,
+            markersize = 4)
+        annotate!(p, (x + PV_MARKER_GAP_IN) / width_in, line_y(r), Plots.text(l, s, PV_FONT, :left, :vcenter))
+    end
+    return p
+end
+
+# height of a legend strip with `rows` rows of entries (inches)
+strip_height_in(rows) = line_height_in(PV_HEADING_FONTSIZE) + PV_TITLE_GAP_IN +
+    rows * line_height_in(PV_SMALL_FONTSIZE) + PV_TITLE_GAP_IN
+
+"""
+    reference_legend!(p, width_in)
+
+Legend of the colors of the age pyramid and the bar charts, the reference
+data (`PV_REFERENCE_NAME`) and GEMS, drawn next to each other from the left
+edge of the subplot `p` (plot area `width_in` inches wide, x from 0 to 1).
+Returns the width of the legend (inches).
+"""
+function reference_legend!(p, width_in)
+    entries = ((PV_REFERENCE_NAME, PV_REFERENCE_COLOR, PV_REFERENCE_ALPHA), (PV_MODEL_LABEL, PV_MODEL_COLOR, 0.85))
+    entry_width(label) = 0.17 + text_width_in(label, PV_FONTSIZE)
+    total = sum(e -> entry_width(e[1]), entries) + 0.15 * (length(entries) - 1)
+    x = 0.0
+    for (label, color, alpha) in entries
+        scatter!(p, [(x + 0.05) / width_in], [0.5], markershape = :rect, markersize = 6, markercolor = color,
+            markeralpha = alpha, markerstrokewidth = 0)
+        annotate!(p, (x + 0.17) / width_in, 0.5, Plots.text(label, PV_FONTSIZE, PV_FONT, :left, :vcenter))
+        x += entry_width(label) + 0.15
+    end
+    return total
+end
+
+"""
+    ValidationLayout
+
+Sizes of the figure of the population validation (`validation_figure`), in
+inches unless noted:
+- `header_in`: section headers; `bar_row_in`: each of the two rows of bar
+  charts;
+  `state_row_in`: each row of agreement plots (without its legend strip)
+- `pyramid_width`: share of the figure width taken by the age pyramid;
+  `state_widths`: widths of the three columns of agreement plots (shares)
+- `pyramid_left_mm`, `bars_right_mm`: extra margins (mm) that align the
+  pyramid and the rightmost bar charts with the agreement plots;
+  `last_bar_bottom_mm`: extra bottom margin of the lower bar charts, which
+  puts their x axis at the x axis of the pyramid
+- `bar_plot_in`: target height of the plot areas of the bar charts
+- `state_gap_mm`, `state_row_gap_mm`: extra space (mm) between the columns
+  and between the rows of agreement plots
+- `state_scale`: size of the agreement plots relative to the largest size
+  the width allows; the width they leave free goes into the space between
+  the columns (`state_extra_gap_mm`, fitted)
+- measured plot areas (`fit_validation_layout`), used to place the axis
+  text: `pyramid_size`, `bar_width_in`, `state_side_in`
+"""
+Base.@kwdef struct ValidationLayout
+    header_in::Float64 = 0.2
+    bar_row_in::Float64 = 1.7
+    state_row_in::Float64 = 2.4
+    pyramid_width::Float64 = 0.3
+    state_widths::Vector{Float64} = fill(1 / 3, 3)
+    pyramid_left_mm::Float64 = 0.0
+    bars_right_mm::Float64 = 1.0
+    last_bar_bottom_mm::Float64 = 0.0
+    bar_plot_in::Float64 = 0.7
+    pyramid_size::Tuple{Float64, Float64} = (1.8, 2.8)
+    bar_width_in::Float64 = 1.0
+    state_side_in::Float64 = 1.9
+    state_gap_mm::Float64 = 5.0
+    state_scale::Float64 = 0.95
+    state_extra_gap_mm::Float64 = 0.0
+    state_row_gap_mm::Float64 = 1.5
+end
+
+with_layout(l::ValidationLayout; changes...) = ValidationLayout(;
+    (f => get(changes, f, getfield(l, f)) for f in fieldnames(ValidationLayout))...)
+
+"""
+    build_validation_figure(data, layout::ValidationLayout; dpi = PV_DPI)
+
+Composes the figure of `validation_figure` with the sizes of `layout`.
+Each panel carries an empty series named after its letter (`panel_mark`),
+so that `plot_areas` finds it in the figure.
+"""
+function build_validation_figure(data, layout::ValidationLayout; dpi = PV_DPI)
+    l = layout
+
+    # the agreement plots first, as their axis text and legend strips set the height of the figure;
+    # the first column labels the y axis, the last row the x axis
+    panels, legends = state_agreement_panels(data, first_letter = 'H')
+    panel_right_mm(k) = mod1(k, 3) < 3 ? l.state_gap_mm + l.state_extra_gap_mm : 1.0
+    titles = [p[1][:title] for p in panels]
+    rooms = map(enumerate(panels)) do (k, p)
+        plot!(p, title = "", xlabel = k > 3 ? PV_REFERENCE_NAME : "", ylabel = mod1(k, 3) == 1 ? PV_MODEL_LABEL : "",
+            # square by the layout (`fit_validation_layout`); a fixed aspect ratio would shrink
+            # the plot areas while the layout is fitted
+            aspect_ratio = :auto, top_margin = -2mm,
+            right_margin = panel_right_mm(k) * mm)
+        axis_text!(p, l.state_side_in, l.state_side_in)
+    end
+    # legend strips in rows of their own, so that their plot areas reach across the space between
+    # the columns (markers outside a plot area are clipped). Plots divides a row by the widths of
+    # the plot areas, so each strip gets the width of its panel's plot area plus the space right
+    # of it (Plots adds 2 mm to each side of a plot area): the cells of both rows coincide. Each
+    # strip starts where its panel's plot area starts (`reserve!` leaves `room.left` plus its
+    # cushion of 0.5 mm left of it).
+    strip_left_in(k) = rooms[k].left + 0.5 / 25.4
+    strip_width_in(k) = l.state_side_in + (2 + panel_right_mm(k)) / 25.4
+    strip_rows = [maximum(k -> legend_lines(legends[k], strip_width_in(k) - 0.05), r .+ (1:3)) for r in (0, 3)]
+    strips_in = strip_height_in.(strip_rows)
+    rows = [strips_in[1], l.state_row_in, strips_in[2], l.state_row_in]
+    heights = [l.header_in, 2l.bar_row_in, l.header_in, sum(rows)]
+    width_in, height_in = PV_WIDTH_IN, sum(heights)
+
+    # Germany: age pyramid with the reference legend below it, bar charts of households and settings
+    pyramid = plot_age_pyramid(data.age_sex, title = "A) Age and sex", show_top_group = true, age_label = "Age", xlabel = "Share of population",
+        xtick_step = 0.004, legend = false)
+    households = [
+        plot_household_size_panel(data.household_sizes, title = "B) Household size"),
         plot_household_category_panel(family_type_counts(data.household_types), FAMILY_TYPES,
-            reference_label = sources.household_types, title = "C) Household family type\n",
-            xrotation = 40),
-        plot_household_category_panel(data.senior_status, SENIOR_STATUS,
-            reference_label = sources.senior_status, title = "D) Household senior status\n",
-            xrotation = 40, legend = false),
+            title = "C) Family type"),
+        plot_household_category_panel(data.senior_status, SENIOR_STATUS, title = "D) Senior status"),
     ]
-    panels, legends = state_agreement_panels(data, first_letter = 'A' + length(national))
-    foreach(p -> plot!(p, title = p[1][:title] * "\n"), panels)
+    foreach(p -> plot!(p, ylabel = "Share of households"), households)
+    bars = [households; setting_size_panels(data, letters = ('E', 'F', 'G'))]
+    for p in bars
+        rotated = p[1][:xaxis][:rotation] != 0 || p === households[2] || p === households[3]
+        plot!(p, legend = false, xrotation = rotated ? PV_TICK_ROTATION : 0)
+    end
+    # titles and axis text drawn by the figure; Plots adds 2 mm above a plot area without title
+    title_margin(p, w, h) = plot!(p, top_margin = (25.4panel_title!(p, w, h) - 2 + 0.5) * mm)
+    title_margin(pyramid, l.pyramid_size...)
+    # below the axis label of the pyramid: the legend of the reference data and GEMS (an inset, see
+    # below); the room is reserved here, so the pyramid keeps the x axis of the lower bar charts
+    pyramid_room = axis_text!(pyramid, l.pyramid_size...)
+    legend_top_in = pyramid_room.bottom + PV_TITLE_GAP_IN
+    legend_height_in = line_height_in(PV_FONTSIZE) + 0.04
+    reserve!(pyramid, (left = pyramid_room.left, bottom = legend_top_in + legend_height_in), width_in, height_in)
+    plot!(pyramid, left_margin = pyramid[1][:left_margin] + l.pyramid_left_mm * mm)
+    for (k, p) in enumerate(bars)
+        title_margin(p, l.bar_width_in, l.bar_plot_in)
+        reserve!(p, axis_text!(p, l.bar_width_in, l.bar_plot_in), width_in, height_in)
+        k > 3 && plot!(p, bottom_margin = p[1][:bottom_margin] + l.last_bar_bottom_mm * mm)
+        k in (3, 6) && plot!(p, right_margin = l.bars_right_mm * mm)
+    end
+    mark_panel!(pyramid, "A")
+    foreach(((k, p),) -> mark_panel!(p, string('B' + k - 1)), enumerate(bars))
 
-    # rows of agreement plots, each followed by its legends; empty cells fill the last row
-    empty() = plot(framestyle = :none, legend = false, grid = false, margin = 0mm)
-    nrows = ceil(Int, length(panels) / columns)
-    padded(v) = [v; [empty() for _ in 1:(nrows * columns - length(v))]]
-    panels, legends = padded(panels), padded(legends)
-    header = 0.25
-    row_height = row_height_in
-    height_in = 2header + national_height_in + nrows * row_height
-    legend_share = legend_height_in / row_height
-    state_rows = [plot(panels[(r - 1) * columns .+ (1:columns)]..., legends[(r - 1) * columns .+ (1:columns)]...,
-            layout = grid(2, columns, heights = [1 - legend_share, legend_share]), top_margin = -5mm)
-        for r in 1:nrows]
+    # the pyramid spans both rows of bar charts (Plots gives it the bottom padding of the lower row)
+    top = plot(pyramid, plot(bars..., layout = grid(2, 3)),
+        layout = grid(1, 2, widths = [l.pyramid_width, 1 - l.pyramid_width]))
 
-    heights = [header; national_height_in; header; fill(row_height, nrows)] ./ height_in
-    return plot(
-        section_header("Germany"),
-        plot(national..., layout = grid(1, length(national), widths = [0.31; fill(0.23, length(national) - 1)]),
-            top_margin = -5mm, left_margin = -1mm),
-        section_header("Federal states"),
-        state_rows...,
-        layout = grid(length(heights), 1, heights = heights),
-        size = (100PV_WIDTH_IN, 100height_in),
+    # State level: agreement plots in two rows of three, each with a strip of title and color
+    # legend above it
+    strips = map(enumerate(panels)) do (k, p)
+        reserve!(p, rooms[k], width_in, height_in)
+        k <= 3 && plot!(p, bottom_margin = p[1][:bottom_margin] + l.state_row_gap_mm * mm)
+        mark_panel!(p, string('H' + k - 1))
+        s = legend_strip(titles[k], legends[k], strip_width_in(k), strips_in[k <= 3 ? 1 : 2],
+            flow_width_in = strip_width_in(k) - 0.05)
+        # Plots adds 2 mm on each side of a plot area
+        plot!(s, left_margin = (25.4strip_left_in(k) - 2) * mm, right_margin = -2mm)
+    end
+    row(v) = plot(v..., layout = grid(1, 3, widths = l.state_widths))
+    strip_widths = strip_width_in.(1:3) ./ sum(strip_width_in.(1:3))
+    strip_row(v) = plot(v..., layout = grid(1, 3, widths = strip_widths))
+    bottom = plot(strip_row(strips[1:3]), row(panels[1:3]), strip_row(strips[4:6]), row(panels[4:6]),
+        layout = grid(4, 1, heights = rows ./ sum(rows)))
+
+    figure = plot(section_header("National level"), top, section_header("State level"), bottom,
+        layout = grid(4, 1, heights = heights ./ sum(heights)),
+        size = (100width_in, 100height_in),
         dpi = dpi,
         fontfamily = PV_FONT)
+
+    # legend of the reference data and GEMS below the pyramid: an inset, positioned relative to the
+    # plot area of the pyramid and therefore outside the alignment of the grid
+    a = findfirst(sp -> any(sr -> sr[:label] == panel_mark("A"), sp.series_list), figure.subplots)
+    k = length(figure.subplots) + 1
+    h = l.pyramid_size[2]
+    plot!(figure, inset = (a, bbox(0.0, 1 + legend_top_in / h, 1.0, legend_height_in / h)), subplot = k,
+        framestyle = :none, ticks = false, legend = false, grid = false, xlims = (0, 1), ylims = (0, 1))
+    reference_legend!(figure[k], l.pyramid_size[1])
+    return figure
 end
+
+# empty series that names a panel by its letter (subplots are copied when plots are combined)
+panel_mark(letter) = "panel $letter"
+mark_panel!(p, letter) = plot!(p, Float64[], Float64[], label = panel_mark(letter))
+
+"""
+    plot_areas(figure)
+
+Plot areas (in inches) of the panels of `figure` (marked by `mark_panel!`),
+by panel letter: left, right, top, width, height.
+"""
+function plot_areas(figure)
+    Plots.prepare_output(figure)
+    inch(x) = x.value / 25.4
+    areas = Dict{String, NamedTuple}()
+    for sp in figure.subplots, series in sp.series_list
+        m = match(r"^panel ([A-Z])$", string(series[:label]))
+        isnothing(m) && continue
+        a = Plots.plotarea(sp)
+        areas[m.captures[1]] = (left = inch(Plots.left(a)), right = inch(Plots.right(a)), top = inch(Plots.top(a)),
+            width = inch(Plots.width(a)), height = inch(Plots.height(a)))
+    end
+    return areas
+end
+
+"""
+    fit_validation_layout(data; layout = ValidationLayout(), iterations = 8, tolerance_in = 0.005)
+
+Adjusts `layout` to the plot areas that Plots computes for the figure
+(`plot_areas`), until all deviations are below `tolerance_in`:
+- the three columns of agreement plots have plot areas of the same width,
+  and their rows are as high as these are wide (square plots: the axes have
+  the same limits)
+- the plot area of the age pyramid starts where those of the agreement
+  plots in the first column start
+- the plot areas of the rightmost bar charts end where those of the
+  agreement plots in the last column end
+- the plot areas of the bar charts are `layout.bar_plot_in` high
+- the x axis of the lower bar charts is at the height of the x axis of the
+  age pyramid
+- the sizes used to place the axis text are the measured ones
+"""
+function fit_validation_layout(data; layout = ValidationLayout(), iterations = 8, tolerance_in = 0.005)
+    l = layout
+    for _ in 1:iterations
+        a = plot_areas(build_validation_figure(data, l))
+        widths = [a[k].width for k in ("H", "I", "J")]
+        # padding of the columns without the fitted extra gaps; the plots take `state_scale` of the
+        # largest side the width allows, the rest goes into the two gaps between the columns
+        extra = [1, 1, 0] .* l.state_extra_gap_mm ./ 25.4
+        padding = l.state_widths .* PV_WIDTH_IN .- widths .- extra
+        side = l.state_scale * (PV_WIDTH_IN - sum(padding)) / 3
+        extra_gap_in = (PV_WIDTH_IN - sum(padding) - 3side) / 2
+        shift_left = a["H"].left - a["A"].left
+        shift_right = a["J"].right - max(a["D"].right, a["G"].right)
+        # x axis of the lower bar charts at the x axis of the pyramid
+        shift_bottom = (a["E"].top + a["E"].height) - (a["A"].top + a["A"].height)
+        pyramid = (a["A"].width, a["A"].height)
+        deviation = maximum(abs, [widths .- side; a["H"].height - side; a["B"].height - l.bar_plot_in;
+            extra_gap_in - l.state_extra_gap_mm / 25.4;
+            shift_left; shift_right; shift_bottom; collect(pyramid .- l.pyramid_size); a["B"].width - l.bar_width_in;
+            side - l.state_side_in])
+        deviation < tolerance_in && return l
+        l = with_layout(l,
+            bar_row_in = l.bar_row_in - a["B"].height + l.bar_plot_in,
+            state_widths = (padding .+ [1, 1, 0] .* extra_gap_in .+ side) ./ PV_WIDTH_IN,
+            state_extra_gap_mm = 25.4extra_gap_in,
+            state_row_in = l.state_row_in - a["H"].height + side,
+            pyramid_left_mm = l.pyramid_left_mm + 25.4shift_left,
+            bars_right_mm = l.bars_right_mm - 25.4shift_right,
+            last_bar_bottom_mm = l.last_bar_bottom_mm + 25.4shift_bottom,
+            pyramid_size = pyramid,
+            bar_width_in = a["B"].width,
+            state_side_in = side)
+    end
+    @warn "The layout of the validation figure did not converge in $iterations iterations."
+    return l
+end
+
+"""
+    validation_figure(data; layout = fit_validation_layout(data), dpi = PV_DPI)
+
+Figure of the population validation at the print width of a PLOS figure
+(`PV_WIDTH_IN`):
+- "National level": the age pyramid (A) with the legend of the reference data and
+  GEMS below it; to its right the household panels (B–D: size, family type,
+  senior status; shares of households) and the setting panels (E–G,
+  `setting_size_panels`)
+- "State level": the agreement plots (`state_agreement_panels`, H–M) in
+  two rows of three, each with its title and color legend above it; the
+  first column labels the y axis (GEMS), the last row the x axis
+
+The reference data are named `PV_REFERENCE_NAME`; the sources belong in the
+caption. The sizes come from `fit_validation_layout`: square agreement plots
+that use the full width, a pyramid that starts at their left edge and bar
+charts that end at their right edge. The height of the figure follows.
+"""
+validation_figure(data; layout = fit_validation_layout(data), dpi = PV_DPI) =
+    build_validation_figure(data, layout, dpi = dpi)
 
 """
     population_validation(;

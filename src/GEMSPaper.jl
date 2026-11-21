@@ -10,6 +10,7 @@ using Proj
 using Statistics
 using StatsBase
 using TOML
+using XLSX
 using Revise
 using Reexport
 import Downloads
@@ -83,6 +84,7 @@ include("infectiousness_profile.jl")
 # INCLUDE ANALYSES
 include("demographics.jl")
 include("population_validation.jl")
+include("setting_validation.jl")
 include("settings.jl")
 include("mobility.jl")
 include("contacts.jl")
