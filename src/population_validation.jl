@@ -1379,6 +1379,9 @@ end
         title = "",
         panel_width_pt = 145,
         panel_height_pt = 150,
+        markersize = 4,
+        markeralpha = nothing,
+        reverse_groups = false,
         kwargs...)
 
 Scatter plot of model values (y) against reference values (x), with the
@@ -1391,7 +1394,10 @@ logarithmic. Values are shares and labeled as percentages, unless
 `groups` (one integer from 1 to n per point) colors the points by group
 (`group_colors`); without groups, all points have the model color. The
 legend of the groups is drawn separately (`legend_strip`), so that panels
-with and without groups keep the same size.
+with and without groups keep the same size. `markersize` and `markeralpha`
+(default 0.8 without groups, 0.9 with groups) set the points, e.g. small and
+transparent for many points. The groups are drawn in their order, the last
+on top, or with `reverse_groups = true` the first on top.
 """
 function plot_agreement(reference, model;
         labels = String[],
@@ -1408,6 +1414,9 @@ function plot_agreement(reference, model;
         title = "",
         panel_width_pt = 145,
         panel_height_pt = 150,
+        markersize = 4,
+        markeralpha = nothing,
+        reverse_groups = false,
         kwargs...)
 
     vals = [reference; model]
@@ -1448,13 +1457,15 @@ function plot_agreement(reference, model;
     plot!(p, [lo, hi], [lo, hi], linecolor = PV_LINE_COLOR, linewidth = 1.0, label = "")
     if isnothing(groups)
         scatter!(p, reference, model,
-            markercolor = PV_MODEL_COLOR, markerstrokewidth = 0, markersize = 4, markeralpha = 0.8, label = "")
+            markercolor = PV_MODEL_COLOR, markerstrokewidth = 0, markersize = markersize,
+            markeralpha = something(markeralpha, 0.8), label = "")
     else
         colors = group_colors(maximum(groups))
-        for g in 1:maximum(groups)
+        for g in (reverse_groups ? (maximum(groups):-1:1) : (1:maximum(groups)))
             sel = groups .== g
             scatter!(p, reference[sel], model[sel],
-                markercolor = colors[g], markerstrokewidth = 0, markersize = 4, markeralpha = 0.9, label = "")
+                markercolor = colors[g], markerstrokewidth = 0, markersize = markersize,
+                markeralpha = something(markeralpha, 0.9), label = "")
         end
     end
 
@@ -1798,24 +1809,27 @@ function panel_title!(p, width_in, height_in)
 end
 
 """
-    axis_text!(p, width_in, height_in)
+    axis_text!(p, width_in, height_in; guide_gap_in = PV_GUIDE_GAP_IN)
 
 Replaces the tick labels and axis labels that GR would draw for the panel
 `p` (a plot with one subplot whose ticks are given as values and labels) by
 annotations at fixed distances from a plot area of `width_in` × `height_in`
 inches: y tick labels right-aligned next to the axis, the y axis label next
-to them, x tick labels centered below their ticks or, if rotated, ending at
-their ticks, and the x axis label below them. Returns the room the text
-needs left of and below the plot area (inches).
+to them (`guide_gap_in` beyond the estimated width of the tick labels), x
+tick labels centered below their ticks or, if rotated, ending at their
+ticks, and the x axis label below them. Returns the room the text needs
+left of and below the plot area (inches).
 """
-function axis_text!(p, width_in, height_in)
+function axis_text!(p, width_in, height_in; guide_gap_in = PV_GUIDE_GAP_IN)
     sp = p[1]
     xaxis, yaxis = sp[:xaxis], sp[:yaxis]
     (xt, xl), (yt, yl) = xaxis[:ticks], yaxis[:ticks]
     xguide, yguide, rot = xaxis[:guide], yaxis[:guide], xaxis[:rotation]
     (x0, x1), (y0, y1) = xlims(p), ylims(p)
-    relx(v) = (v - x0) / (x1 - x0)
-    rely(v) = (v - y0) / (y1 - y0)
+    # positions as fractions of the axis, linear or logarithmic
+    scaled(axis, v) = axis[:scale] == :log10 ? log10(v) : v
+    relx(v) = (scaled(xaxis, v) - scaled(xaxis, x0)) / (scaled(xaxis, x1) - scaled(xaxis, x0))
+    rely(v) = (scaled(yaxis, v) - scaled(yaxis, y0)) / (scaled(yaxis, y1) - scaled(yaxis, y0))
     s, g = PV_SMALL_FONTSIZE, PV_FONTSIZE
     plot!(p, xticks = (xt, fill("", length(xt))), yticks = (yt, fill("", length(yt))),
         xguide = "", yguide = "")
@@ -1829,9 +1843,9 @@ function axis_text!(p, width_in, height_in)
     end
     left = PV_TICK_GAP_IN + maximum(((_, l),) -> text_width_in(l, s), ys; init = 0.0)
     if !isempty(yguide)
-        x = -(left + PV_GUIDE_GAP_IN) / width_in
+        x = -(left + guide_gap_in) / width_in
         annotate!(p, (x, 0.5), Plots.text(yguide, g, PV_FONT, :center, :bottom, rotation = 90))
-        left += PV_GUIDE_GAP_IN + line_height_in(g)
+        left += guide_gap_in + line_height_in(g)
     end
 
     # x axis: tick labels (rotated ones end at their tick), then the axis label
@@ -1857,18 +1871,19 @@ function axis_text!(p, width_in, height_in)
 end
 
 """
-    reserve!(p, room, figure_width_in, figure_height_in; cushion_mm = 0.5)
+    reserve!(p, room, figure_width_in, figure_height_in; cushion_mm = 0.5, bottom_cushion_mm = cushion_mm)
 
 Sets the left and bottom margins of the panel `p` so that the room taken by
-the text of `axis_text!` is kept free. Plots adds its own padding for ticks
-(2 mm, plus 1 mm and 1 % of the figure size per axis with ticks), which is
+the text of `axis_text!` is kept free, plus a cushion (`cushion_mm` left,
+`bottom_cushion_mm` below). Plots adds its own padding for ticks (2 mm,
+plus 1 mm and 1 % of the figure size per axis with ticks), which is
 subtracted.
 """
-function reserve!(p, room, figure_width_in, figure_height_in; cushion_mm = 0.5)
+function reserve!(p, room, figure_width_in, figure_height_in; cushion_mm = 0.5, bottom_cushion_mm = cushion_mm)
     pad(fig_in) = 3.0 + 0.254fig_in
     plot!(p,
         left_margin = (25.4room.left - pad(figure_width_in) + cushion_mm) * mm,
-        bottom_margin = (25.4room.bottom - pad(figure_height_in) + cushion_mm) * mm)
+        bottom_margin = (25.4room.bottom - pad(figure_height_in) + bottom_cushion_mm) * mm)
 end
 
 """
@@ -2114,7 +2129,7 @@ end
 
 # empty series that names a panel by its letter (subplots are copied when plots are combined)
 panel_mark(letter) = "panel $letter"
-mark_panel!(p, letter) = plot!(p, Float64[], Float64[], label = panel_mark(letter))
+mark_panel!(p, letter) = plot!(p, Float64[], Float64[], label = panel_mark(letter), primary = false)
 
 """
     plot_areas(figure)

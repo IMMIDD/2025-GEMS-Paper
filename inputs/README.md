@@ -82,6 +82,23 @@ Raw downloads from [GENESIS-Online](https://www-genesis.destatis.de/datenbank/on
 - License: BA terms (see above), as stated in the file: storing, copying and redistributing, also in excerpts, with a source note; the contents must not be altered; own calculations must be marked; online, link to the [homepage of the BA statistics](https://statistik.arbeitsagentur.de/).
 - Changes: the raw file is unchanged. The extract contains the row 30.06.2019 of sheet 2.3 with unchanged values (renamed columns, class bounds added), because the code cannot read the old Excel format. Its header names the source, the license and the changes.
 
+### `commuters/`: reference data for the validation of commuting
+
+Raw downloads from the employment statistics of the [Statistik der Bundesagentur für Arbeit (BA)](https://statistik.arbeitsagentur.de/DE/Navigation/Statistiken/Themen-im-Fokus/Regionale-Mobilitaet/Regionale-Mobilitaet-Nav.html), unchanged, and CSV extracts of them. All files count employees subject to social insurance (SvB) on the reference date 30.06.2019. A person commutes if the place of work differs from the place of residence.
+
+| File | Table | Content | Reference date | Retrieved |
+|---|---|---|---|---|
+| `gemband_dlk_0.xlsb` | [Gemeindedaten der sozialversicherungspflichtig Beschäftigten nach Wohn- und Arbeitsort](https://statistik.arbeitsagentur.de/Statistikdaten/Detail/201912/iiia6/beschaeftigung-sozbe-gemband/gemband-dlk-0-201906-zip.zip?__blob=publicationFile) (Deutschland, Länder, Regierungsbezirke, Kreise und Gemeinden; created 15.01.2020) | SvB by place of residence and by place of work, SvB living and working in the same municipality, in-commuters, out-commuters and establishments, per municipality, district, administrative district and state | 30.06.2019 | 21.11.2026 |
+| `krpend_01_0.xlsb` to `krpend_16_0.xlsb` | [Pendlerverflechtungen der sozialversicherungspflichtig Beschäftigten nach Kreisen](https://statistik.arbeitsagentur.de/SiteGlobals/Forms/Suche/Einzelheftsuche/Einzelheftsuche_Formular.html?topic_f=beschaeftigung-pendler-krpend), one file per state (01 Schleswig-Holstein to 16 Thüringen; created February 2020) | Out-commuters per district of residence and district of work, and in-commuters per district of work and district of residence; small flows only in aggregates ("Übrige Kreise", "Übrige Regierungsbezirke", "Übrige Bundesländer") | 30.06.2019 | 21.11.2026 |
+| `ba_commuters_by_area_2019.csv` | Extract of `gemband_dlk_0.xlsb`, sheet "Gemeindedaten" | As the sheet: one row per municipality, district, administrative district and state | 30.06.2019 | – |
+| `ba_commuter_flows_by_county_2019.csv` | Extract of `krpend_01_0.xlsb` to `krpend_16_0.xlsb`, sheets "Auspendler Kreise" | Out-commuters per district of residence and district or aggregate of work | 30.06.2019 | – |
+| `extract_ba_commuters.ps1` | Script that writes the two extracts (PowerShell, requires Microsoft Excel) | – | – | – |
+
+- Source note: "© Statistik der Bundesagentur für Arbeit"; citations as given in the files: "Statistik der Bundesagentur für Arbeit, Tabellen, Gemeindedaten der sozialversicherungspflichtig Beschäftigten nach Wohn- und Arbeitsort, Nürnberg, Stichtag 30. Juni 2019" and "Statistik der Bundesagentur für Arbeit, Tabellen, Pendlerverflechtungen der sozialversicherungspflichtig Beschäftigten nach Kreisen, Nürnberg, Stichtag 30. Juni 2019".
+- License: BA terms (see above).
+- Notes of the BA: values of 1 or 2 are anonymized ("*"). Commuters abroad are not included. In Thüringen, SvB by place of residence in the districts 16063 Wartburgkreis, 16068 Sömmerda and 16073 Saalfeld-Rudolstadt are incomplete in the first half of 2019 (area reforms), so their out-commuters may be too low. The data use the districts of 2019, including 16056 Eisenach (merged into 16063 Wartburgkreis in 2021).
+- Changes: the raw files are unchanged. The extracts contain the rows of the named sheets with unchanged values (renamed columns; in the flows, the district of residence repeated in each row), because the code cannot read the binary Excel format. Their headers name the source, the license, the changes and the meaning of the codes.
+
 ### Downloaded at runtime (not in the repository)
 
 These files are not part of the repository, because their license does not permit redistribution (KMK) or because they are too large (RKI). The code downloads them into the gitignored `data/` folder when they are missing and warns if their checksum differs from the version used in the paper.

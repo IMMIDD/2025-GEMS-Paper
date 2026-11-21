@@ -87,6 +87,7 @@ include("population_validation.jl")
 include("setting_validation.jl")
 include("settings.jl")
 include("mobility.jl")
+include("commuter_validation.jl")
 include("contacts.jl")
 include("benchmarking.jl")
 

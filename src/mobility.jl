@@ -319,4 +319,11 @@ function mobility(;
 
     p_comb = plot_county_commutes_combined(p_in_cc, p_out_cc)
     png(p_comb, joinpath(folder, "in_and_out_commuter_fraction_per_county.png"))
+
+    # compare the commutes with the BA commuter statistics (needs all 16 federal states)
+    if length(unique(state.(cc.hh_ags))) == 16
+        commuter_validation(folder = folder, county_commutes_df = cc)
+    else
+        @warn "Commuter validation skipped: it compares all 16 federal states, but the population does not cover them."
+    end
 end
