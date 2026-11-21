@@ -1,12 +1,12 @@
 ###
 ### POPULATION VALIDATION: GEMS POPULATION VS. OFFICIAL STATISTICS
 ###
-# National panels (top) and a table of the federal states (bottom).
+# National panels (top) and agreement plots of the federal states (bottom).
 # The code is split into four parts that can be reused separately:
 #   1. reading the reference tables in `inputs/population/` (GENESIS-Online
 #      and Zensus 2022 database exports)
 #   2. aggregating the simulation's population in the same categories
-#   3. drawing the panels and the state table (a Plots recipe)
+#   3. drawing the panels (national bars, age pyramid, agreement plots)
 #   4. composing and saving the figure
 # All sizes are given in print units: the figure is drawn at its print size
 # (100 px per inch) with font sizes in pt, and the resolution is only raised
@@ -14,21 +14,21 @@
 
 export population_validation
 export validation_data, save_validation_data, load_validation_data
-export validation_figure, validation_figure_agreement
+export validation_figure
 export plot_agreement, state_agreement_panels
 export read_genesis_csv
-export zensus_age_sex, zensus_household_sizes
 export destatis_age_sex, mikrozensus_household_sizes
 export zensus_household_types, zensus_senior_status
 export HouseholdComposition, HouseholdCategory, HOUSEHOLD_TYPES, CORE_FAMILY_TYPES, FAMILY_TYPES, SENIOR_STATUS, classify
 export is_other_family_type, family_type_counts
-export PersonActivity, PersonCategory, ACTIVITY_STATUS, zensus_activity_status
-export is_below_minimum_age, is_employed, is_in_education, is_other_activity
+export PersonActivity, PersonCategory, ACTIVITY_STATUS, zensus_activity_status, ACTIVITY_INDICATORS, activity_indicators
+export is_below_minimum_age, is_employed, is_in_education, is_not_working, is_retired
+export SchoolProfile, EDUCATION_SETTINGS, COMPARED_EDUCATION_SETTINGS, is_daycare, is_primary_school, is_special_school, is_secondary_school, is_university
+export official_education_settings, official_daycare_by_age
 export is_single_senior, is_two_seniors_only, is_three_plus_seniors_only, is_seniors_and_younger, is_without_seniors
 export is_single, is_couple_without_children, is_couple_with_children, is_single_mother, is_single_father,
     is_without_core_family
 export plot_age_pyramid, plot_household_size_panel
-export StateTable, state_table
 
 
 # STYLE
@@ -42,11 +42,9 @@ const PV_MODEL_COLOR = gemscolors(2)[1]
 const PV_REFERENCE_COLOR = gemscolors(2)[2]
 const PV_REFERENCE_ALPHA = 0.45
 const PV_LINE_COLOR = "#9aa0a8"
-const PV_CELL_LINE_COLOR = "#dfe2e6"
 
-# print size (inches) and export resolution
+# print width (inches; the height follows from the layout) and export resolution
 const PV_WIDTH_IN = 7.5
-const PV_HEIGHT_IN = 8.75
 const PV_DPI = 300
 
 const PV_MODEL_LABEL = "GEMS"
@@ -148,45 +146,6 @@ size_from_label(label) = parse(Int, match(r"\d+", label).match)
 const SEX_LABELS = Dict("männlich" => "male", "weiblich" => "female")
 
 """
-    zensus_age_sex(file = joinpath(REFERENCE_DIR, "1000A-2027_de.csv"))
-
-Persons per federal state, sex (`"male"`, `"female"`) and single year of
-age (0 to 100, where 100 means 100 and older) on 15.05.2022 from Zensus
-table 1000A-2027.
-
-Only the state rows are used; national values are their sum. The Zensus
-perturbs counts for statistical confidentiality, so the sum of the states
-differs slightly from the published total for Germany (by about 0.01 %).
-"""
-function zensus_age_sex(file = joinpath(REFERENCE_DIR, "1000A-2027_de.csv"))
-    df = read_genesis_csv(file)
-    df.state = state_number.(df.col1)
-    df = df[(df.col3 .== "Anzahl") .& haskey.(Ref(SEX_LABELS), lowercase.(df.row2)) .&
-            (df.row3 .!= "Insgesamt") .& (df.state .> 0), :]
-    return DataFrame(
-        state = df.state,
-        sex = getindex.(Ref(SEX_LABELS), lowercase.(df.row2)),
-        age = age_from_label.(df.row3),
-        count = df.value)
-end
-
-"""
-    zensus_household_sizes(file = joinpath(REFERENCE_DIR, "5000H-1001_de.csv"))
-
-Private households per federal state and size (1 to 6, where 6 means six
-or more persons) on 15.05.2022 from Zensus table 5000H-1001.
-"""
-function zensus_household_sizes(file = joinpath(REFERENCE_DIR, "5000H-1001_de.csv"))
-    df = read_genesis_csv(file)
-    df.state = state_number.(df.col1)
-    df = df[(df.col3 .== "Anzahl") .& (df.row2 .!= "Insgesamt") .& (df.state .> 0), :]
-    return DataFrame(
-        state = df.state,
-        size = size_from_label.(df.row2),
-        count = df.value)
-end
-
-"""
     destatis_age_sex(file = joinpath(REFERENCE_DIR, "12411-0013_de.csv");
         date = "31.12.2019")
 
@@ -281,6 +240,64 @@ function zensus_activity_status(file = joinpath(REFERENCE_DIR, "2000S-1002_de.cs
 end
 
 """
+    official_daycare_by_age(file = joinpath(REFERENCE_DIR, "22541-0112_de.csv"); date = "01.03.2019")
+
+Children in daycare who do not attend school yet, per federal state (by
+location of the facility) and single year of age (0 to 6) on `date`, from
+GENESIS table 22541-0112. School children in after-school care (Hort) and
+the open-ended group "7 Jahre und mehr" are left out.
+"""
+function official_daycare_by_age(file = joinpath(REFERENCE_DIR, "22541-0112_de.csv"); date = "01.03.2019")
+    df = read_genesis_csv(file)
+    df = df[(df.row1 .== date) .& (df.col1 .== "Alter der Nichtschulkinder") .&
+            (df.col2 .!= "Insgesamt") .& .!startswith.(df.col2, "7"), :]
+    isempty(df) && error("No data for $date in $file.")
+    return DataFrame(state = state_number.(df.row2), age = age_from_label.(df.col2), count = df.value)
+end
+
+"""
+    official_education_settings(; school_year = "2019/20", date = "01.03.2019")
+
+Participants per federal state (by location of the institution) and
+education setting (`COMPARED_EDUCATION_SETTINGS`), combined from three
+GENESIS tables:
+- daycare: children not attending school yet (22541-0112, see `official_daycare_by_age`)
+- primary: Grundschulen, Vorklassen and Schulkindergärten (21111-0011)
+- special: Förderschulen (21111-0011)
+- secondary: all other general schools (21111-0011) and all vocational
+  schools (21121-0010)
+"""
+function official_education_settings(; school_year = "2019/20", date = "01.03.2019")
+    rows = DataFrame(state = Int[], category = String[], count = Float64[])
+    add!(states, category, counts) = append!(rows, DataFrame(state = states, category = category, count = counts))
+
+    daycare = combine(groupby(official_daycare_by_age(date = date), :state), :count => (c -> sum(skipmissing(c))) => :count)
+    add!(daycare.state, "daycare", daycare.count)
+
+    general = read_genesis_csv(joinpath(REFERENCE_DIR, "21111-0011_de.csv"))
+    general = general[(general.col2 .== school_year) .& (general.col4 .== "Insgesamt") .& (general.row3 .== "Insgesamt"), :]
+    isempty(general) && error("No general school data for $school_year.")
+    general.state = state_number.(general.row1)
+    count_of(types) = combine(groupby(general[in.(general.row2, Ref(types)), :], :state),
+        :value => (v -> sum(skipmissing(v))) => :count)
+    primary_types = ["Grundschulen", "Vorklassen", "Schulkindergärten"]
+    primary, special = count_of(primary_types), count_of(["Förderschulen"])
+    all_general = count_of(["Insgesamt"])
+    add!(primary.state, "primary", primary.count)
+    add!(special.state, "special", special.count)
+
+    vocational = read_genesis_csv(joinpath(REFERENCE_DIR, "21121-0010_de.csv"))
+    vocational = vocational[(vocational.row1 .== school_year) .& (vocational.row2 .== "Insgesamt"), :]
+    isempty(vocational) && error("No vocational school data for $school_year.")
+    vocational.state = state_number.(vocational.col2)
+    secondary = innerjoin(innerjoin(all_general, primary, on = :state, makeunique = true),
+        special, on = :state, makeunique = true)
+    secondary = innerjoin(secondary, DataFrame(state = vocational.state, vocational = coalesce.(vocational.value, 0.0)), on = :state)
+    add!(secondary.state, "secondary", secondary.count .- secondary.count_1 .- secondary.count_2 .+ secondary.vocational)
+    return rows
+end
+
+"""
     VALIDATION_REFERENCES
 
 Reference data sets for the validation: functions returning the reference
@@ -288,9 +305,11 @@ tables, and the names of their sources for figures (without reference
 dates, which belong in the caption).
 - `:official2019`: population on 31.12.2019 (Destatis, 12411-0013) and
   households 2019 (Microcensus, 12211-9034); household types, senior status
-  and activity status from the Zensus 2022, as no matching tables exist for 2019
-- `:zensus2022`: Zensus 2022 (1000A-2027, 5000H-1001, 5000H-1005, 5000H-1003,
-  2000S-1002)
+  and activity status from the Zensus 2022, as no matching tables exist for
+  2019; education settings from the school and daycare statistics 2019
+
+Further data sets (e.g. for a later version of the population) are added
+as further entries with the same fields.
 """
 const VALIDATION_REFERENCES = Dict(
     :official2019 => (
@@ -299,22 +318,23 @@ const VALIDATION_REFERENCES = Dict(
         household_types = zensus_household_types,
         senior_status = zensus_senior_status,
         activity_status = zensus_activity_status,
+        education = official_education_settings,
         labels = (age_sex = "Destatis", household_sizes = "Microcensus",
-            household_types = "Census", senior_status = "Census", activity_status = "Census")),
-    :zensus2022 => (
-        age_sex = zensus_age_sex,
-        household_sizes = zensus_household_sizes,
-        household_types = zensus_household_types,
-        senior_status = zensus_senior_status,
-        activity_status = zensus_activity_status,
-        labels = (age_sex = "Census", household_sizes = "Census",
-            household_types = "Census", senior_status = "Census", activity_status = "Census")))
+            household_types = "Census", senior_status = "Census", activity_status = "Census",
+            education = "Destatis")))
 
 # source names of the reference data of `validation_data` (see `VALIDATION_REFERENCES`)
 reference_labels(data) = VALIDATION_REFERENCES[Symbol(data.reference)].labels
 
 
 # 2. MODEL DATA
+
+# Gesyland models care homes as households of 90+ residents (sizes 10-89
+# do not occur); official household statistics cover private households only
+const PRIVATE_HH_MAX = 9
+
+# federal state number (first two AGS digits) of an AGS
+state_code(a) = id(a) ÷ 10^6
 
 """
     GESYLAND_SEX
@@ -671,15 +691,39 @@ including those who would work in reality (working students, apprentices).
 is_in_education(p::PersonActivity) = p.age >= MINIMUM_WORKING_AGE && p.school && !p.workplace
 
 """
-    is_other_activity(p)
+    RETIREMENT_AGE
 
-Zensus: the remaining persons aged 15 and older: "Erwerbslose"
-(unemployed), "Empfänger/-innen von Ruhegehalt/Kapitalerträgen" (pensions,
-capital income) and "Sonstige" (others). GEMS: aged 15 or older and
-assigned to neither a workplace nor a school setting. GEMS cannot tell
-these three groups apart, so they form one category.
+Age from which persons without a workplace and without an education
+setting count as retired in GEMS (statutory retirement age).
 """
-is_other_activity(p::PersonActivity) = p.age >= MINIMUM_WORKING_AGE && !p.workplace && !p.school
+const RETIREMENT_AGE = 65
+
+"""
+    is_not_working(p)
+
+Zensus: "Erwerbslose" (unemployed: not employed, looking for work and
+available) and "Sonstige" (others not in the labour force, e.g. homemakers,
+carers, persons unable to work). GEMS: aged 15 to under `RETIREMENT_AGE`,
+assigned to neither a workplace nor an education setting.
+
+Deviations: GEMS has no attribute for retirement, unemployment or other
+reasons for not working, so age separates this category from the retired.
+Early retirees under 65, who are retired in the Zensus, are here in GEMS;
+"Sonstige" aged 65 and older are retired in GEMS.
+"""
+is_not_working(p::PersonActivity) =
+    MINIMUM_WORKING_AGE <= p.age < RETIREMENT_AGE && !p.workplace && !p.school
+
+"""
+    is_retired(p)
+
+Zensus: "Empfänger/-innen von Ruhegehalt/Kapitalerträgen", persons living
+on pensions or capital income (at any age). GEMS: aged `RETIREMENT_AGE`
+or older, assigned to neither a workplace nor an education setting.
+
+Deviations: see `is_not_working` (early retirees under 65 are not here).
+"""
+is_retired(p::PersonActivity) = p.age >= RETIREMENT_AGE && !p.workplace && !p.school
 
 """
     PersonCategory(key, label, predicate, census_labels)
@@ -700,15 +744,15 @@ end
     ACTIVITY_STATUS
 
 Activity status of Zensus table 2000S-1002 (Erwerbsstatus, ausführlich)
-and the GEMS predicates.
+and the GEMS predicates; every person matches exactly one.
 """
 const ACTIVITY_STATUS = [
     PersonCategory("below_15", "Under 15", is_below_minimum_age, ["Personen unterhalb des Mindestalters"]),
     PersonCategory("employed", "Employed", is_employed, ["Erwerbstätige"]),
     PersonCategory("in_education", "In education", is_in_education,
         ["Schüler/-innen u. Studierende (nicht erwerbsaktiv)"]),
-    PersonCategory("other", "Other", is_other_activity,
-        ["Erwerbslose", "Empfänger/-innen von Ruhegehalt/Kapitalerträgen", "Sonstige"]),
+    PersonCategory("not_working", "Not working (15–64)", is_not_working, ["Erwerbslose", "Sonstige"]),
+    PersonCategory("retired", "Retired (65+)", is_retired, ["Empfänger/-innen von Ruhegehalt/Kapitalerträgen"]),
 ]
 
 """
@@ -743,6 +787,166 @@ function model_activity_status(sim)
         end
     end
     return combine(groupby(DataFrame(state = states, category = keys), [:state, :category]), nrow => :count)
+end
+
+
+# EDUCATION SETTINGS
+#
+# Gesyland does not label the type of an education institution (GEMS
+# "School"). Each type has a fixed class capacity, though (crèche 12,
+# daycare 20, primary school 20, special school 15, orientation stage 25,
+# secondary and vocational schools 30, universities of applied sciences 50,
+# universities 90), so the most common class size of an institution and the
+# median age of its attendees identify its type. Official statistics count
+# participants at the location of the institution, so GEMS counts them at
+# the location of their school class, too.
+
+"""
+    SchoolProfile(class_size, median_age)
+
+Most common class size of an education institution and the median age of
+its attendees.
+"""
+struct SchoolProfile
+    class_size::Int
+    median_age::Float64
+end
+
+# class sizes that identify an institution type
+const KNOWN_CLASS_SIZES = (12, 15, 20, 25, 30, 50, 90)
+known_class_size(s::SchoolProfile) = s.class_size in KNOWN_CLASS_SIZES
+
+"""
+    is_daycare(s)
+
+Official: children in daycare who do not attend school yet (crèche and
+Kita). GEMS: class size 12 (crèche) or 20 with a median age under 6 (Kita);
+institutions without a known class size (all classes not full) with a
+median age under 6.
+
+Deviations: after-school care (Hort) is not assigned in GEMS and not
+counted in the reference.
+"""
+is_daycare(s::SchoolProfile) = s.class_size == 12 || (s.class_size == 20 && s.median_age < 6) ||
+    (!known_class_size(s) && s.median_age < 6)
+
+"""
+    is_primary_school(s)
+
+Official: Grundschulen, Vorklassen and Schulkindergärten. GEMS: class size
+20 with a median age of 6 or older; institutions without a known class
+size with a median age from 6 to under 10.
+"""
+is_primary_school(s::SchoolProfile) = (s.class_size == 20 && s.median_age >= 6) ||
+    (!known_class_size(s) && 6 <= s.median_age < 10)
+
+"""
+    is_special_school(s)
+
+Official: Förderschulen. GEMS: class size 15. Pupils with special needs
+taught in regular schools count in their school type in both.
+"""
+is_special_school(s::SchoolProfile) = s.class_size == 15
+
+"""
+    is_secondary_school(s)
+
+Official: all general schools except primary and special schools
+(Gymnasium, Realschule, Hauptschule, schools with several tracks, Waldorf
+schools, evening schools) and all vocational schools. GEMS: class size 30
+(all secondary and vocational school types) or 25 (orientation stage);
+institutions without a known class size with a median age from 10 to under 19.
+
+Deviations: GEMS cannot tell the secondary and vocational school types
+apart, as they share the class size; Waldorf schools also teach primary
+grades but count here entirely.
+"""
+is_secondary_school(s::SchoolProfile) = s.class_size in (25, 30) ||
+    (!known_class_size(s) && 10 <= s.median_age < 19)
+
+"""
+    is_university(s)
+
+GEMS: class size 90 (universities) or 50 (universities of applied
+sciences); institutions without a known class size with a median age of 19
+or older.
+
+Universities are classified so that every institution has exactly one
+category, but not compared with official statistics (see
+`COMPARED_EDUCATION_SETTINGS`).
+"""
+is_university(s::SchoolProfile) = s.class_size in (50, 90) ||
+    (!known_class_size(s) && s.median_age >= 19)
+
+"""
+    EDUCATION_SETTINGS
+
+Education settings and their GEMS predicates (on `SchoolProfile`s); the
+official counts are combined in `official_education_settings`.
+"""
+const EDUCATION_SETTINGS = [
+    PersonCategory("daycare", "Daycare", is_daycare, String[]),
+    PersonCategory("primary", "Primary", is_primary_school, String[]),
+    PersonCategory("special", "Special", is_special_school, String[]),
+    PersonCategory("secondary", "Secondary, vocational", is_secondary_school, String[]),
+    PersonCategory("university", "University", is_university, String[]),
+]
+
+"""
+    COMPARED_EDUCATION_SETTINGS
+
+Keys of the education settings compared with official statistics. Not
+universities: the official statistics count students at the location of
+the university, but GEMS assigns students to universities regardless of
+distance, so shares per state would reflect this assignment rather than
+enrollment.
+"""
+const COMPARED_EDUCATION_SETTINGS = ("daycare", "primary", "special", "secondary")
+
+"""
+    classify(s, categories)
+
+Key of the education setting of an institution with profile `s`. Each
+profile must match exactly one predicate of `categories`.
+"""
+function classify(s::SchoolProfile, categories)
+    hits = filter(c -> c.predicate(s), categories)
+    length(hits) == 1 ||
+        error("Institution $(s) matches $(length(hits)) categories: $(getfield.(hits, :key)).")
+    return only(hits).key
+end
+
+"""
+    model_education(sim)
+
+Participants in the education settings `COMPARED_EDUCATION_SETTINGS` per
+federal state (by location of their school class) and setting: state,
+category, count. Every institution is classified (`EDUCATION_SETTINGS`);
+participants of the other settings are not counted.
+"""
+function model_education(sim)
+    classes, years, schools = settings(sim, SchoolClass), settings(sim, SchoolYear), settings(sim, School)
+    school_of_class = [contained(years[contained(c)]) for c in classes]
+
+    # profile and type of each institution
+    sizes = [Int[] for _ in schools]
+    ages = [Int[] for _ in schools]
+    for (k, c) in enumerate(classes)
+        push!(sizes[school_of_class[k]], size(c))
+        append!(ages[school_of_class[k]], Int.(age.(individuals(c))))
+    end
+    type = [isempty(ages[s]) ? "" : classify(SchoolProfile(mode(sizes[s]), median(ages[s])), EDUCATION_SETTINGS)
+        for s in eachindex(schools)]
+
+    education = Dict{Tuple{Int, String}, Int}()
+    for (k, c) in enumerate(classes)
+        t = type[school_of_class[k]]
+        t in COMPARED_EDUCATION_SETTINGS || continue
+        key = (state_code(ags(c)), t)
+        education[key] = get(education, key, 0) + size(c)
+    end
+    return DataFrame(state = first.(keys(education)), category = last.(keys(education)),
+        count = collect(values(education)))
 end
 
 """
@@ -782,6 +986,7 @@ Model and reference counts in common categories (see
 - `household_types`: state, category (`HOUSEHOLD_TYPES`), model, reference
 - `senior_status`: state, category (`SENIOR_STATUS`), model, reference
 - `activity_status`: state, category (`ACTIVITY_STATUS`), model, reference (persons)
+- `education`: state, category (`COMPARED_EDUCATION_SETTINGS`), model, reference (participants, by location)
 - `reference`: name of the reference data set (a key of `VALIDATION_REFERENCES`)
 
 The oldest age and the largest household size are the top groups that
@@ -810,11 +1015,13 @@ function validation_data(sim;
         senior_status = join_counts(model_household_categories(states, comps, SENIOR_STATUS),
             ref.senior_status(), [:state, :category]),
         activity_status = join_counts(model_activity_status(sim), ref.activity_status(), [:state, :category]),
+        education = join_counts(model_education(sim), ref.education(), [:state, :category]),
         reference = string(reference))
 end
 
 # tables of `validation_data` and their file names
-const VALIDATION_TABLES = (:age_sex, :household_sizes, :household_types, :senior_status, :activity_status)
+const VALIDATION_TABLES = (:age_sex, :household_sizes, :household_types, :senior_status, :activity_status,
+    :education)
 validation_file(folder, table) = joinpath(folder, "validation_$(table).csv")
 
 """
@@ -882,15 +1089,6 @@ pv_text(s, size = PV_FONTSIZE, args...) = Plots.text(s, size, PV_FONT, args...)
 
 percent_label(x; digits = 0) = string(round(100x, digits = digits) |> (v -> digits == 0 ? Int(v) : v), "%")
 
-# fixed number of decimals for non-negative values (e.g. 3.6 -> "3.60")
-function fixed_decimals(v, digits = 2)
-    r = round(Int, v * 10^digits)
-    return string(r ÷ 10^digits, ".", lpad(r % 10^digits, digits, '0'))
-end
-
-# signed percentage with one decimal and a typographic minus (e.g. "−3.1 %")
-signed_percent(d) = (d >= 0 ? "+" : "−") * string(abs(round(100d, digits = 1))) * " %"
-
 # label of a top-coded category (e.g. "5+")
 category_label(v, top) = v == top ? "$(v)+" : string(v)
 
@@ -908,7 +1106,7 @@ function national_shares(df, keys)
 end
 
 """
-    plot_age_pyramid(age_sex; title = "A  Age and sex", reference_label = "Reference",
+    plot_age_pyramid(age_sex; title = "A) Age and sex", reference_label = "Reference",
         show_top_group = true, kwargs...)
 
 Population pyramid of Germany: shares of the total population per sex and
@@ -917,7 +1115,7 @@ top-coded group (e.g. 90 and older), which appears as a wide bar; with
 `show_top_group = false` it is not drawn (shares still refer to the whole
 population).
 """
-function plot_age_pyramid(age_sex; title = "A  Age and sex", reference_label = "Reference",
+function plot_age_pyramid(age_sex; title = "A) Age and sex", reference_label = "Reference",
         show_top_group = true, age_label = "Age", xtick_step = 0.002, legend = false, kwargs...)
 
     nat = national_shares(age_sex, [:sex, :age])
@@ -1025,13 +1223,13 @@ function plot_paired_bars(reference, model, labels;
 end
 
 """
-    plot_household_size_panel(household_sizes; title = "B  Household size",
+    plot_household_size_panel(household_sizes; title = "B) Household size",
         reference_label = "Reference", kwargs...)
 
 Shares of private households per size in Germany: reference and GEMS as
 pairs of bars.
 """
-function plot_household_size_panel(household_sizes; title = "B  Household size",
+function plot_household_size_panel(household_sizes; title = "B) Household size",
         reference_label = "Reference", kwargs...)
     nat = national_shares(household_sizes, [:size])
     return plot_paired_bars(nat.reference, nat.model, category_label.(nat.size, maximum(nat.size));
@@ -1114,243 +1312,6 @@ function plot_household_category_panel(df, categories; title, reference_label = 
 end
 
 
-# STATE TABLE
-
-"""
-    TableBlock(title, labels, model, reference; limit = deviation_limit(model, reference))
-
-One block of columns in a `StateTable`: a title, one label per column, and
-the model and reference values (rows × columns, shares). `limit` is the
-largest deviation (model − reference, in percentage points) that fits into
-a deviation cell; larger deviations are drawn at the edge of the cell.
-"""
-struct TableBlock
-    title::String
-    labels::Vector{String}
-    model::Matrix{Float64}
-    reference::Matrix{Float64}
-    limit::Float64
-end
-
-"""
-    deviation_limit(model, reference; quantile_level = 0.95)
-
-Cell limit of a deviation block in percentage points: the `quantile_level`
-quantile of all absolute deviations, rounded up to a whole point (at least
-1 pp), so that single outliers do not compress all other cells.
-"""
-deviation_limit(model, reference; quantile_level = 0.95) =
-    max(1.0, ceil(quantile(vec(abs.(model .- reference)) .* 100, quantile_level)))
-
-TableBlock(title, labels, model, reference; limit = deviation_limit(model, reference)) =
-    TableBlock(title, labels, model, reference, limit)
-
-"""
-    StateTable(rows, textcolumns, blocks; footer = nothing)
-
-Table with one row per entry in `rows`. `textcolumns` are pairs of a
-header and one string per row; `blocks` are `TableBlock`s drawn as small
-cells. `footer` is an optional last row: a label, one string per text
-column and one per block.
-
-Cell styles (`cell_style`):
-- `:deviation` (default): a reference tick in the middle of the cell and a
-  model dot at model − reference (in percentage points, on a common scale
-  of ±`limit` per block), connected by a line
-- `:level`: reference as bar, model as dot; each column has its own scale
-  (its largest value fills the cell), `cell_scale = :block` uses one scale
-  per block instead
-
-Plotted with `plot(table)` like any other series, so that it can be
-combined with other plots in a layout.
-"""
-struct StateTable
-    rows::Vector{String}
-    textcolumns::Vector{Pair{String, Vector{String}}}
-    blocks::Vector{TableBlock}
-    footer::Union{Nothing, Tuple{String, Vector{String}, Vector{String}}}
-end
-
-StateTable(rows, textcolumns, blocks; footer = nothing) = StateTable(rows, textcolumns, blocks, footer)
-
-@recipe function f(t::StateTable;
-        rowlabel_width = 3.4,
-        textcolumn_width = 1.5,
-        cell_width = 1.0,
-        block_gap = 0.5,
-        bar_height = 0.45,
-        cell_fill = 0.85,
-        marker_size = 2.5,
-        cell_style = :deviation,
-        cell_scale = :column,
-        fontsize = PV_SMALL_FONTSIZE,
-        header_fontsize = PV_FONTSIZE,
-        reference_label = "Reference",
-        model_label = PV_MODEL_LABEL)
-
-    nrows = length(t.rows)
-    nfooter = isnothing(t.footer) ? 0 : 1
-    # y: two header lines (block titles, column labels), then the rows
-    yrow(i) = i + 1.5
-    ytitle, ylabel = 0.0, 1.0
-    ybottom = yrow(nrows + nfooter) + 0.5
-
-    # x positions of all columns
-    xtext = [rowlabel_width + (k - 0.5) * textcolumn_width for k in eachindex(t.textcolumns)]
-    xblock = Float64[]
-    xpos = rowlabel_width + length(t.textcolumns) * textcolumn_width
-    for b in t.blocks
-        push!(xblock, xpos + block_gap)
-        xpos += block_gap + length(b.labels) * cell_width
-    end
-    xright = xpos
-
-    framestyle := :none
-    legend := false
-    grid := false
-    yflip := true
-    xlims := (0, xright)
-    ylims := (-0.6, ybottom)
-    fontfamily := PV_FONT
-
-    anns = Tuple{Float64, Float64, Plots.PlotText}[]
-    font(s, size = fontsize, args...) = Plots.text(s, size, PV_FONT, args...)
-
-    # row labels and text columns
-    for (i, r) in enumerate(t.rows)
-        push!(anns, (0.1, yrow(i), font(r, fontsize, :left)))
-        for (k, (_, values)) in enumerate(t.textcolumns)
-            push!(anns, (xtext[k] + 0.4textcolumn_width, yrow(i), font(values[i], fontsize, :right)))
-        end
-    end
-    for (k, (header, _)) in enumerate(t.textcolumns)
-        push!(anns, (xtext[k] + 0.4textcolumn_width, ylabel, font(header, fontsize, :right)))
-    end
-
-    # blocks: title, column labels, cells
-    bar_x0, bar_x1, bar_y0, bar_y1 = Float64[], Float64[], Float64[], Float64[]
-    dots_x, dots_y = Float64[], Float64[]
-    clipped_x, clipped_y, clipped_shape = Float64[], Float64[], Symbol[]
-    stems_x, stems_y = Float64[], Float64[]        # model dot to reference tick
-    ticks_x, ticks_y = Float64[], Float64[]        # reference ticks
-    guides_x, guides_y = Float64[], Float64[]      # faint cell axes
-    for (b, x0) in zip(t.blocks, xblock)
-        n = length(b.labels)
-        push!(anns, (x0 + n * cell_width / 2, ytitle, font(b.title, header_fontsize, :center)))
-        for (j, l) in enumerate(b.labels)
-            push!(anns, (x0 + (j - 0.5) * cell_width, ylabel, font(l, fontsize, :center)))
-        end
-
-        if cell_style == :level
-            colmax = cell_scale == :block ?
-                fill(maximum([b.model; b.reference]), n) :
-                vec(maximum([b.model; b.reference], dims = 1))
-            for i in 1:nrows, j in 1:n
-                left = x0 + (j - 1) * cell_width + (1 - cell_fill) / 2 * cell_width
-                unit = cell_fill * cell_width / colmax[j]
-                push!(bar_x0, left)
-                push!(bar_x1, left + unit * b.reference[i, j])
-                push!(bar_y0, yrow(i) - bar_height / 2)
-                push!(bar_y1, yrow(i) + bar_height / 2)
-                push!(dots_x, left + unit * b.model[i, j])
-                push!(dots_y, yrow(i))
-            end
-        else
-            half = cell_fill * cell_width / 2
-            for i in 1:nrows, j in 1:n
-                xc = x0 + (j - 0.5) * cell_width
-                y = yrow(i)
-                d = 100 * (b.model[i, j] - b.reference[i, j]) / b.limit
-                append!(guides_x, [xc - half, xc + half, NaN])
-                append!(guides_y, [y, y, NaN])
-                append!(ticks_x, [xc, xc, NaN])
-                append!(ticks_y, [y - bar_height / 2, y + bar_height / 2, NaN])
-                xd = xc + clamp(d, -1, 1) * half
-                append!(stems_x, [xc, xd, NaN])
-                append!(stems_y, [y, y, NaN])
-                if abs(d) > 1
-                    push!(clipped_x, xd)
-                    push!(clipped_y, y)
-                    push!(clipped_shape, d > 0 ? :rtriangle : :ltriangle)
-                else
-                    push!(dots_x, xd)
-                    push!(dots_y, y)
-                end
-            end
-        end
-    end
-
-    # footer row
-    if !isnothing(t.footer)
-        label, texts, blocktexts = t.footer
-        yf = yrow(nrows + 1)
-        push!(anns, (0.1, yf, font(label, fontsize, :left)))
-        for (k, s) in enumerate(texts)
-            push!(anns, (xtext[k] + 0.4textcolumn_width, yf, font(s, fontsize, :right)))
-        end
-        for (b, x0, s) in zip(t.blocks, xblock, blocktexts)
-            push!(anns, (x0 + length(b.labels) * cell_width / 2, yf, font(s, fontsize, :center)))
-        end
-    end
-    annotations := anns
-
-    # separator lines below the header and above the footer
-    @series begin
-        seriestype := :path
-        linecolor := PV_LINE_COLOR
-        linewidth := 0.5
-        label := ""
-        ysep = [ylabel + 0.6; nfooter > 0 ? [yrow(nrows) + 0.5] : Float64[]]
-        xs = reduce(vcat, [[0.0, xright, NaN] for _ in ysep])
-        ys = reduce(vcat, [[y, y, NaN] for y in ysep])
-        xs, ys
-    end
-
-    if cell_style == :level
-        @series begin
-            seriestype := :shape
-            fillcolor := PV_REFERENCE_COLOR
-            fillalpha := PV_REFERENCE_ALPHA
-            linewidth := 0
-            label := reference_label
-            rectangles(bar_x0, bar_x1, bar_y0, bar_y1)
-        end
-    else
-        for (xs, ys, color, width, lab) in (
-                (guides_x, guides_y, PV_CELL_LINE_COLOR, 0.5, ""),
-                (ticks_x, ticks_y, PV_REFERENCE_COLOR, 1.2, reference_label),
-                (stems_x, stems_y, PV_MODEL_COLOR, 1.0, ""))
-            @series begin
-                seriestype := :path
-                linecolor := color
-                linewidth := width
-                label := lab
-                xs, ys
-            end
-        end
-        if !isempty(clipped_x)
-            @series begin
-                seriestype := :scatter
-                markershape := clipped_shape
-                markercolor := PV_MODEL_COLOR
-                markerstrokewidth := 0
-                markersize := marker_size + 0.5
-                label := ""
-                clipped_x, clipped_y
-            end
-        end
-    end
-
-    @series begin
-        seriestype := :scatter
-        markercolor := PV_MODEL_COLOR
-        markerstrokewidth := 0
-        markersize := marker_size
-        label := model_label
-        dots_x, dots_y
-    end
-end
-
 """
     state_shares(df, key, categories)
 
@@ -1365,54 +1326,6 @@ function state_shares(df, key, categories)
     return shares(:model), shares(:reference)
 end
 
-# mean absolute deviation of shares in percentage points
-mean_abs_pp(model, reference) = string(round(100 * mean(abs.(model .- reference)), digits = 2), " pp")
-
-# limit of a deviation block as text (e.g. "±3 pp")
-limit_label(limit) = string("±", round(Int, limit), " pp")
-
-"""
-    state_table(data)
-
-`StateTable` of the federal states: relative deviation of the state's share
-of the national population in GEMS (the GEMS population is scaled to a
-different national total, so totals are not compared), and the deviations
-of the age structure (10-year groups) and the household sizes in
-percentage points.
-"""
-function state_table(data)
-    # population per state and deviation of its share of the national population
-    pop = combine(groupby(data.age_sex, :state), :model => sum => :model, :reference => sum => :reference)
-    sort!(pop, :state)
-    delta = (pop.model ./ sum(pop.model)) ./ (pop.reference ./ sum(pop.reference)) .- 1
-
-    # age in 10-year groups (last group: 80+)
-    age = transform(data.age_sex, :age => (a -> min.(a .÷ 10, 8)) => :group)
-    age_m, age_r = state_shares(age, :group, 0:8)
-    age_labels = [[string(10g, "–", 10g + 9) for g in 0:7]; "80+"]
-    age_limit = deviation_limit(age_m, age_r)
-
-    # household sizes
-    hh_sizes = 1:maximum(data.household_sizes.size)
-    hh_m, hh_r = state_shares(data.household_sizes, :size, hh_sizes)
-    hh_labels = category_label.(hh_sizes, last(hh_sizes))
-    hh_limit = deviation_limit(hh_m, hh_r)
-
-    return StateTable(
-        STATE_NAMES_EN,
-        ["Δ pop. share" => signed_percent.(delta)],
-        [
-            TableBlock("Age ($(limit_label(age_limit)))",
-                age_labels, age_m, age_r, limit = age_limit),
-            TableBlock("Household size ($(limit_label(hh_limit)))",
-                hh_labels, hh_m, hh_r, limit = hh_limit),
-        ],
-        footer = ("Mean |Δ|",
-            [string(round(100 * mean(abs.(delta)), digits = 1), " %")],
-            [mean_abs_pp(age_m, age_r), mean_abs_pp(hh_m, hh_r)]))
-end
-
-
 # AGREEMENT PLOTS
 
 """
@@ -1424,6 +1337,8 @@ end
         summary = "",
         log_axes = false,
         ticks = nothing,
+        tick_step = nothing,
+        tick_label = nothing,
         reference_label = "Reference",
         show_ylabel = true,
         title = "",
@@ -1435,7 +1350,8 @@ Scatter plot of model values (y) against reference values (x), with the
 diagonal of perfect agreement (grey). The `nlabels` points with the largest
 `deviation` are labeled with their `labels` (see `place_labels!`); `summary`
 is printed in the lower right corner. With `log_axes = true`, both axes are
-logarithmic. Values are shares and labeled as percentages.
+logarithmic. Values are shares and labeled as percentages, unless
+`tick_label` formats the ticks otherwise (e.g. for counts, with `tick_step`).
 
 `groups` (one integer from 1 to n per point) colors the points by group
 (`group_colors`); without groups, all points have the model color. The
@@ -1450,6 +1366,8 @@ function plot_agreement(reference, model;
         summary = "",
         log_axes = false,
         ticks = nothing,
+        tick_step = nothing,
+        tick_label = nothing,
         reference_label = "Reference",
         show_ylabel = true,
         title = "",
@@ -1461,9 +1379,10 @@ function plot_agreement(reference, model;
     # linear axes start at 0/0
     lo = log_axes ? 0.8 * minimum(vals) : 0.0
     hi = log_axes ? 1.25 * maximum(vals) : 1.05 * maximum(vals)
-    step = hi - lo > 0.6 ? 0.2 : hi - lo > 0.3 ? 0.1 : 0.05
+    step = something(tick_step, hi - lo > 0.6 ? 0.2 : hi - lo > 0.3 ? 0.1 : 0.05)
     ticks = isnothing(ticks) ? collect((step * ceil(lo / step)):step:hi) : filter(t -> lo <= t <= hi, ticks)
-    ticklabels = percent_label.(ticks, digits = any(t -> 0 < t < 0.01, ticks) ? 1 : 0)
+    ticklabels = isnothing(tick_label) ? percent_label.(ticks, digits = any(t -> 0 < t < 0.01, ticks) ? 1 : 0) :
+        tick_label.(ticks)
 
     # positions on the axes as fractions (0 to 1), for label placement
     frac(v) = log_axes ? log(v / lo) / log(hi / lo) : (v - lo) / (hi - lo)
@@ -1638,11 +1557,77 @@ end
 group_colors(n) = gemscolors(n)
 
 """
+    ACTIVITY_INDICATORS
+
+Indicators of activity, each a share of a federal state's population:
+- employed: Zensus "Erwerbstätige" (including working students and
+  apprentices) / GEMS persons with a workplace; by place of residence,
+  shares of the persons in the Zensus table (private households)
+- daycare: children in daycare (22541-0112, without after-school care) /
+  GEMS persons in daycare settings (`is_daycare`)
+- pupils: pupils at general and vocational schools (school statistics
+  21111-0011 and 21121-0010; primary, special and secondary/vocational
+  education settings) / GEMS persons in these settings
+- daycare and pupils are counted by location of the institution,
+  as shares of the population (Destatis 31.12.2019, GEMS population); the
+  education settings of GEMS are identified by `EDUCATION_SETTINGS`
+- not working (15–64): Zensus "Erwerbslose" and "Sonstige" / GEMS
+  `is_not_working`; by place of residence, as for the employed
+- retired (65+): Zensus "Empfänger/-innen von Ruhegehalt/Kapitalerträgen" /
+  GEMS `is_retired`; by place of residence, as for the employed
+
+University students are not an indicator: the official statistics count
+them at the location of the university, but GEMS assigns students to
+universities regardless of distance, so the shares per state reflect this
+assignment rather than enrollment.
+
+The indicators are not mutually exclusive in the official data (apprentices
+and working students are both employed and pupils), so they do not add up,
+and no remainder is derived from them. In GEMS, apprentices and working
+students are pupils or students only.
+"""
+const ACTIVITY_INDICATORS = [
+    (key = "employed", label = "Employed"),
+    (key = "daycare", label = "Daycare"),
+    (key = "pupils", label = "Pupils"),
+    (key = "not_working", label = "Not working (15–64)"),
+    (key = "retired", label = "Retired (65+)"),
+]
+
+"""
+    activity_indicators(data)
+
+Shares of `ACTIVITY_INDICATORS` per federal state for the model and the
+reference, from the `activity_status`, `education` and `age_sex` tables of
+`validation_data`, as dictionaries indexed by (state, key).
+"""
+function activity_indicators(data)
+    out = (model = Dict{Tuple{Int, String}, Float64}(), reference = Dict{Tuple{Int, String}, Float64}())
+    # education indicators and the education settings (`EDUCATION_SETTINGS`) they count
+    education_indicators = ("daycare" => ("daycare",), "pupils" => ("primary", "special", "secondary"))
+    for s in 1:16, (col, d) in ((:model, out.model), (:reference, out.reference))
+        act = data.activity_status[data.activity_status.state .== s, :]
+        persons = sum(act[!, col])
+        share(k) = sum(act[act.category .== k, col]) / persons
+        d[(s, "employed")] = share("employed")
+        d[(s, "not_working")] = share("not_working")
+        d[(s, "retired")] = share("retired")
+        population = sum(data.age_sex[data.age_sex.state .== s, col])
+        for (key, categories) in education_indicators
+            edu = data.education[(data.education.state .== s) .& in.(data.education.category, Ref(categories)), :]
+            d[(s, key)] = sum(edu[!, col]) / population
+        end
+    end
+    return out
+end
+
+"""
     state_agreement_panels(data; first_letter = 'C')
 
 Agreement plots of the federal states: share of the national population,
-age structure (10-year groups), household sizes, household types and senior
-status, each GEMS against the reference (axes labeled with the source names
+age structure (10-year groups), household sizes, household family types,
+household senior status and activity indicators (`ACTIVITY_INDICATORS`),
+each GEMS against the reference (axes labeled with the source names
 of `reference_labels(data)`). Returns the panels and, separately, their
 legends (empty for the population panel), to be placed below the panels.
 """
@@ -1660,7 +1645,7 @@ function state_agreement_panels(data; first_letter = 'C')
         deviation = abs.(rel),
         summary = "mean |Δ| = $(round(100 * mean(abs.(rel)), digits = 1))%",
         reference_label = sources.age_sex,
-        title = "$(letter(0))  Population")
+        title = "$(letter(0))) Population")
 
     # shares of categories per state, flattened to one point per state and
     # category, colored by category (labels name the state; the color names the category)
@@ -1681,24 +1666,34 @@ function state_agreement_panels(data; first_letter = 'C')
     age = transform(data.age_sex, :age => (a -> min.(a .÷ 10, 8)) => :group)
     # decades (the oldest group is open-ended); the caption names the 10-year groups
     age_labels = ["<10"; [string(10g, "s") for g in 1:7]; "80+"]
-    p_age = category_panel(age, :group, 0:8, sources.age_sex, "$(letter(1))  Age groups", nlabels = 4)
+    p_age = category_panel(age, :group, 0:8, sources.age_sex, "$(letter(1))) Age groups", nlabels = 4)
 
     hh_sizes = 1:maximum(data.household_sizes.size)
     hh_labels = category_label.(hh_sizes, last(hh_sizes))
     p_hh = category_panel(data.household_sizes, :size, hh_sizes, sources.household_sizes,
-        "$(letter(2))  Household sizes")
+        "$(letter(2))) Household sizes")
 
     # family types: shares of all households, "other" = no core family type (see `FAMILY_TYPES`)
     p_types = category_panel(family_type_counts(data.household_types), :category,
-        getfield.(FAMILY_TYPES, :key), sources.household_types, "$(letter(3))  Household family types")
+        getfield.(FAMILY_TYPES, :key), sources.household_types, "$(letter(3))) Household family types")
 
     seniors = getfield.(SENIOR_STATUS, :key)
     p_seniors = category_panel(data.senior_status, :category, seniors, sources.senior_status,
-        "$(letter(4))  Household senior status")
+        "$(letter(4))) Household senior status")
 
-    activity = getfield.(ACTIVITY_STATUS, :key)
-    p_activity = category_panel(data.activity_status, :category, activity, sources.activity_status,
-        "$(letter(5))  Activity status")
+    # activity indicators: separate shares of the population, each against its own source
+    # (not mutually exclusive in the official data, see `activity_indicators`)
+    ind = activity_indicators(data)
+    keys_ind = getfield.(ACTIVITY_INDICATORS, :key)
+    im = [ind.model[s, k] for s in 1:16, k in keys_ind]
+    ir = [ind.reference[s, k] for s in 1:16, k in keys_ind]
+    p_activity = plot_agreement(vec(ir), vec(im),
+        labels = vec([STATE_NAMES_EN[s] for s in 1:16, _ in keys_ind]),
+        groups = vec([j for _ in 1:16, j in eachindex(keys_ind)]),
+        summary = "mean |Δ| = $(round(100 * mean(abs.(im .- ir)), digits = 2)) pp",
+        reference_label = "Census / Destatis",
+        show_ylabel = false,
+        title = "$(letter(5))) Activity")
 
     panels = [p_pop, p_age, p_hh, p_types, p_seniors, p_activity]
     legends = [
@@ -1707,40 +1702,13 @@ function state_agreement_panels(data; first_letter = 'C')
         group_legend(hh_labels, title = "Persons"),
         group_legend(getfield.(FAMILY_TYPES, :label), rows = 3),
         group_legend(getfield.(SENIOR_STATUS, :label), rows = 2),
-        group_legend(getfield.(ACTIVITY_STATUS, :label), rows = 2),
+        group_legend(getfield.(ACTIVITY_INDICATORS, :label), rows = 3),
     ]
     return panels, legends
 end
 
 
 # 4. FIGURE
-
-"""
-    validation_figure(data; national_height = 0.32, dpi = PV_DPI)
-
-National panels in the top row and the state table below, drawn at the
-print size of a full-page PLOS figure.
-"""
-function validation_figure(data; national_height = 0.32, dpi = PV_DPI)
-    sources = reference_labels(data)
-    national = [
-        plot_age_pyramid(data.age_sex, reference_label = sources.age_sex),
-        plot_household_size_panel(data.household_sizes, reference_label = sources.household_sizes),
-    ]
-    top = plot(national..., layout = (1, length(national)))
-    table = plot(state_table(data),
-        reference_label = "Reference",
-        title = "$(('A':'Z')[length(national) + 1])  Federal states",
-        titlelocation = :left,
-        titlefontsize = PV_HEADING_FONTSIZE,
-        top_margin = -3mm)
-
-    return plot(top, table,
-        layout = grid(2, 1, heights = [national_height, 1 - national_height]),
-        size = (100PV_WIDTH_IN, 100PV_HEIGHT_IN),
-        dpi = dpi,
-        fontfamily = PV_FONT)
-end
 
 """
     section_header(txt)
@@ -1753,31 +1721,32 @@ section_header(txt) = plot(framestyle = :none, legend = false, grid = false,
     p -> annotate!(p, 0, 0.3, pv_text(txt, PV_HEADING_FONTSIZE + 1, :left, :bottom))
 
 """
-    validation_figure_agreement(data; height_in = 8.7, national_height_in = 2.4,
+    validation_figure(data; row_height_in = 3.15, national_height_in = 2.4,
         legend_height_in = 0.5, columns = 3, dpi = PV_DPI)
 
 National panels ("Germany") in the top row: age pyramid, household sizes,
 household types and senior status. Below, the agreement plots of the
-federal states (population, age groups, household sizes, household types,
-senior status) in rows of `columns` panels, each panel row followed by a
-row of legends (`legend_height_in`), so that all agreement plots have the
-same size. Both sections have a heading.
+federal states (`state_agreement_panels`) in rows of `columns` panels, each
+panel row (`row_height_in`, including its legends) followed by a row of
+legends (`legend_height_in`), so that all agreement plots have the same
+size. Both sections have a heading. The figure height follows from the
+number of rows.
 """
-function validation_figure_agreement(data; height_in = 8.7, national_height_in = 2.4,
+function validation_figure(data; row_height_in = 3.15, national_height_in = 2.4,
         legend_height_in = 0.5, columns = 3, dpi = PV_DPI)
 
     sources = reference_labels(data)
     # a line break after the title leaves room between title and plot
     national = [
-        plot_age_pyramid(data.age_sex, reference_label = sources.age_sex, title = "A  Age and sex\n",
+        plot_age_pyramid(data.age_sex, reference_label = sources.age_sex, title = "A) Age and sex\n",
             show_top_group = false, age_label = "", xtick_step = 0.004, legend = :topright),
         plot_household_size_panel(data.household_sizes, reference_label = sources.household_sizes,
-            title = "B  Household size\n"),
+            title = "B) Household size\n"),
         plot_household_category_panel(family_type_counts(data.household_types), FAMILY_TYPES,
-            reference_label = sources.household_types, title = "C  Household family type\n",
+            reference_label = sources.household_types, title = "C) Household family type\n",
             xrotation = 40),
         plot_household_category_panel(data.senior_status, SENIOR_STATUS,
-            reference_label = sources.senior_status, title = "D  Household senior status\n",
+            reference_label = sources.senior_status, title = "D) Household senior status\n",
             xrotation = 40, legend = false),
     ]
     panels, legends = state_agreement_panels(data, first_letter = 'A' + length(national))
@@ -1789,7 +1758,8 @@ function validation_figure_agreement(data; height_in = 8.7, national_height_in =
     padded(v) = [v; [empty() for _ in 1:(nrows * columns - length(v))]]
     panels, legends = padded(panels), padded(legends)
     header = 0.25
-    row_height = (height_in - 2header - national_height_in) / nrows
+    row_height = row_height_in
+    height_in = 2header + national_height_in + nrows * row_height
     legend_share = legend_height_in / row_height
     state_rows = [plot(panels[(r - 1) * columns .+ (1:columns)]..., legends[(r - 1) * columns .+ (1:columns)]...,
             layout = grid(2, columns, heights = [1 - legend_share, legend_share]), top_margin = -5mm)
@@ -1814,13 +1784,16 @@ end
         folder_tag = nothing,
         sim = nothing,
         reference = :official2019,
-        data = nothing)
+        data = nothing,
+        individual_data_df = nothing)
 
 Compares the GEMS population with official statistics (`reference`, see
 `VALIDATION_REFERENCES`) and saves the figure (PNG) and its data (CSV) to
 `folder`. Pass `data` (from `validation_data` or
 `load_validation_data`) to redraw the figure without loading the
 population; otherwise `sim` (default: the German population) is used.
+Pass `individual_data_df` to reuse an already computed
+`individual_data(sim)`.
 
 If `folder` is `nothing`, a new result folder is created, with
 `folder_tag` appended to its timestamp-based name (see `result_folder`).
@@ -1830,19 +1803,19 @@ function population_validation(;
         folder_tag = nothing,
         sim = nothing,
         reference = :official2019,
-        data = nothing)
+        data = nothing,
+        individual_data_df = nothing)
 
     isnothing(folder) ? folder = result_folder(folder_tag) : mkpath(folder)
 
     if isnothing(data)
         sim = isnothing(sim) ? Simulation(population = "DE", seed = 0) : sim
-        data = validation_data(sim, reference = reference)
+        data = validation_data(sim, reference = reference,
+            individual_data_df = something(individual_data_df, individual_data(sim)))
     end
     save_validation_data(data, folder)
 
     p = validation_figure(data)
     png(p, joinpath(folder, "population_validation.png"))
-    # second layout with agreement plots instead of the state table, for comparison
-    png(validation_figure_agreement(data), joinpath(folder, "population_validation_agreement.png"))
     return p
 end
