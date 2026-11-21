@@ -82,6 +82,7 @@ include("infectiousness_profile.jl")
 
 # INCLUDE ANALYSES
 include("demographics.jl")
+include("population_validation.jl")
 include("settings.jl")
 include("mobility.jl")
 include("contacts.jl")

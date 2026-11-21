@@ -1,0 +1,1848 @@
+###
+### POPULATION VALIDATION: GEMS POPULATION VS. OFFICIAL STATISTICS
+###
+# National panels (top) and a table of the federal states (bottom).
+# The code is split into four parts that can be reused separately:
+#   1. reading the reference tables in `inputs/population/` (GENESIS-Online
+#      and Zensus 2022 database exports)
+#   2. aggregating the simulation's population in the same categories
+#   3. drawing the panels and the state table (a Plots recipe)
+#   4. composing and saving the figure
+# All sizes are given in print units: the figure is drawn at its print size
+# (100 px per inch) with font sizes in pt, and the resolution is only raised
+# when saving.
+
+export population_validation
+export validation_data, save_validation_data, load_validation_data
+export validation_figure, validation_figure_agreement
+export plot_agreement, state_agreement_panels
+export read_genesis_csv
+export zensus_age_sex, zensus_household_sizes
+export destatis_age_sex, mikrozensus_household_sizes
+export zensus_household_types, zensus_senior_status
+export HouseholdComposition, HouseholdCategory, HOUSEHOLD_TYPES, CORE_FAMILY_TYPES, FAMILY_TYPES, SENIOR_STATUS, classify
+export is_other_family_type, family_type_counts
+export PersonActivity, PersonCategory, ACTIVITY_STATUS, zensus_activity_status
+export is_below_minimum_age, is_employed, is_in_education, is_other_activity
+export is_single_senior, is_two_seniors_only, is_three_plus_seniors_only, is_seniors_and_younger, is_without_seniors
+export is_single, is_couple_without_children, is_couple_with_children, is_single_mother, is_single_father,
+    is_without_core_family
+export plot_age_pyramid, plot_household_size_panel
+export StateTable, state_table
+
+
+# STYLE
+
+const PV_FONT = "Times Roman"
+const PV_FONTSIZE = 8
+const PV_SMALL_FONTSIZE = 7
+const PV_HEADING_FONTSIZE = 9
+# GEMS in blue, the reference data in orange (the first two GEMS colors)
+const PV_MODEL_COLOR = gemscolors(2)[1]
+const PV_REFERENCE_COLOR = gemscolors(2)[2]
+const PV_REFERENCE_ALPHA = 0.45
+const PV_LINE_COLOR = "#9aa0a8"
+const PV_CELL_LINE_COLOR = "#dfe2e6"
+
+# print size (inches) and export resolution
+const PV_WIDTH_IN = 7.5
+const PV_HEIGHT_IN = 8.75
+const PV_DPI = 300
+
+const PV_MODEL_LABEL = "GEMS"
+
+# English state names in the order of the state numbers in the AGS
+const STATE_NAMES_EN = ["Schleswig-Holstein", "Hamburg", "Lower Saxony", "Bremen",
+    "North Rhine-Westphalia", "Hesse", "Rhineland-Palatinate", "Baden-Württemberg",
+    "Bavaria", "Saarland", "Berlin", "Brandenburg",
+    "Mecklenburg-Vorpommern", "Saxony", "Saxony-Anhalt", "Thuringia"]
+
+# German state names in the order of the state numbers in the AGS
+const STATE_NAMES_DE = ["Schleswig-Holstein", "Hamburg", "Niedersachsen", "Bremen",
+    "Nordrhein-Westfalen", "Hessen", "Rheinland-Pfalz", "Baden-Württemberg",
+    "Bayern", "Saarland", "Berlin", "Brandenburg",
+    "Mecklenburg-Vorpommern", "Sachsen", "Sachsen-Anhalt", "Thüringen"]
+
+
+# 1. REFERENCE DATA
+
+const REFERENCE_DIR = joinpath("inputs", "population")
+
+"""
+    read_genesis_csv(file)
+
+Reads a table exported as CSV from GENESIS-Online or the Zensus 2022
+database (semicolon-separated, decimal commas, title rows above and notes
+below the table, a value flag after every value) and returns it in long
+format:
+- `row1`, `row2`, ...: the row labels (e.g. reference date, age)
+- `col1`, `col2`, ...: the column labels, one per header row from the top
+  (e.g. region, sex, unit)
+- `value`: the value (`missing` for suppressed values such as `-`)
+
+Value flags are dropped.
+"""
+function read_genesis_csv(file)
+    rows = split.(readlines(file), ';')
+    rows[1][1] = lstrip(rows[1][1], '﻿')
+
+    # column header rows start with an empty field; the data follows below them
+    first_header = findfirst(r -> length(r) > 1 && isempty(r[1]), rows)
+    isnothing(first_header) && error("No table found in $file.")
+    last_header = first_header
+    while isempty(rows[last_header + 1][1])
+        last_header += 1
+    end
+    headers = rows[first_header:last_header]
+    nlabels = findfirst(!isempty, headers[1]) - 1
+
+    # data rows: up to the first row without a label (notes start with "____")
+    last_data = last_header
+    while last_data < length(rows) && length(rows[last_data + 1]) > nlabels &&
+            !isempty(rows[last_data + 1][1]) && !startswith(rows[last_data + 1][1], "_")
+        last_data += 1
+    end
+
+    rowlabels = [String[] for _ in 1:nlabels]
+    collabels = [String[] for _ in headers]
+    value = Union{Float64, Missing}[]
+    for r in rows[(last_header + 1):last_data], j in (nlabels + 1):2:length(r)
+        isempty(headers[1][j]) && continue
+        for k in 1:nlabels
+            push!(rowlabels[k], r[k])
+        end
+        for (k, h) in enumerate(headers)
+            push!(collabels[k], h[j])
+        end
+        v = tryparse(Float64, replace(r[j], "," => "."))
+        push!(value, isnothing(v) ? missing : v)
+    end
+
+    return DataFrame(
+        ["row$k" => l for (k, l) in enumerate(rowlabels)]...,
+        ["col$k" => l for (k, l) in enumerate(collabels)]...,
+        "value" => value)
+end
+
+"""
+    state_number(region)
+
+State number of a region label: `"01 Schleswig-Holstein"` (Zensus) or
+`"Schleswig-Holstein"` (GENESIS) -> 1, `"Deutschland"` -> 0.
+"""
+function state_number(region)
+    region == "Deutschland" && return 0
+    m = match(r"^(\d+) ", region)
+    !isnothing(m) && return parse(Int, m.captures[1])
+    i = findfirst(==(region), STATE_NAMES_DE)
+    isnothing(i) && error("Unknown region \"$region\".")
+    return i
+end
+
+# "Unter 1 Jahr"/"unter 1 Jahr" -> 0, "1 Jahr"/"1-Jährige" -> 1, "90 Jahre und mehr" -> 90
+age_from_label(label) = startswith(lowercase(label), "unter") ? 0 : parse(Int, match(r"\d+", label).match)
+
+# "1 Person", "Haushalte mit 5 und mehr Personen" -> 1, 5
+size_from_label(label) = parse(Int, match(r"\d+", label).match)
+
+const SEX_LABELS = Dict("männlich" => "male", "weiblich" => "female")
+
+"""
+    zensus_age_sex(file = joinpath(REFERENCE_DIR, "1000A-2027_de.csv"))
+
+Persons per federal state, sex (`"male"`, `"female"`) and single year of
+age (0 to 100, where 100 means 100 and older) on 15.05.2022 from Zensus
+table 1000A-2027.
+
+Only the state rows are used; national values are their sum. The Zensus
+perturbs counts for statistical confidentiality, so the sum of the states
+differs slightly from the published total for Germany (by about 0.01 %).
+"""
+function zensus_age_sex(file = joinpath(REFERENCE_DIR, "1000A-2027_de.csv"))
+    df = read_genesis_csv(file)
+    df.state = state_number.(df.col1)
+    df = df[(df.col3 .== "Anzahl") .& haskey.(Ref(SEX_LABELS), lowercase.(df.row2)) .&
+            (df.row3 .!= "Insgesamt") .& (df.state .> 0), :]
+    return DataFrame(
+        state = df.state,
+        sex = getindex.(Ref(SEX_LABELS), lowercase.(df.row2)),
+        age = age_from_label.(df.row3),
+        count = df.value)
+end
+
+"""
+    zensus_household_sizes(file = joinpath(REFERENCE_DIR, "5000H-1001_de.csv"))
+
+Private households per federal state and size (1 to 6, where 6 means six
+or more persons) on 15.05.2022 from Zensus table 5000H-1001.
+"""
+function zensus_household_sizes(file = joinpath(REFERENCE_DIR, "5000H-1001_de.csv"))
+    df = read_genesis_csv(file)
+    df.state = state_number.(df.col1)
+    df = df[(df.col3 .== "Anzahl") .& (df.row2 .!= "Insgesamt") .& (df.state .> 0), :]
+    return DataFrame(
+        state = df.state,
+        size = size_from_label.(df.row2),
+        count = df.value)
+end
+
+"""
+    destatis_age_sex(file = joinpath(REFERENCE_DIR, "12411-0013_de.csv");
+        date = "31.12.2019")
+
+Persons per federal state, sex and single year of age (0 to 90, where 90
+means 90 and older) on `date` from GENESIS table 12411-0013 (Fortschreibung
+des Bevölkerungsstandes).
+"""
+function destatis_age_sex(file = joinpath(REFERENCE_DIR, "12411-0013_de.csv"); date = "31.12.2019")
+    df = read_genesis_csv(file)
+    df = df[(df.row1 .== date) .& haskey.(Ref(SEX_LABELS), df.col2) .& (df.row2 .!= "Insgesamt"), :]
+    isempty(df) && error("No data for $date in $file.")
+    return DataFrame(
+        state = state_number.(df.col1),
+        sex = getindex.(Ref(SEX_LABELS), df.col2),
+        age = age_from_label.(df.row2),
+        count = df.value)
+end
+
+"""
+    mikrozensus_household_sizes(file = joinpath(REFERENCE_DIR, "12211-9034_de.csv");
+        year = "2019")
+
+Private households per federal state and size (1 to 5, where 5 means five
+or more persons) in `year` from GENESIS table 12211-9034 (Mikrozensus).
+The table gives thousands of households; they are converted to counts.
+"""
+function mikrozensus_household_sizes(file = joinpath(REFERENCE_DIR, "12211-9034_de.csv"); year = "2019")
+    df = read_genesis_csv(file)
+    df = df[(df.row1 .== year) .& (df.col2 .!= "Insgesamt"), :]
+    isempty(df) && error("No data for $year in $file.")
+    return DataFrame(
+        state = state_number.(df.col1),
+        size = size_from_label.(df.col2),
+        count = 1000 .* df.value)
+end
+
+"""
+    zensus_household_categories(file, categories)
+
+Private households per federal state and category from a Zensus 2022
+household table (e.g. 5000H-1005, 5000H-1003). `categories` is a list of
+`HouseholdCategory`s (see `HOUSEHOLD_TYPES`, `SENIOR_STATUS`); each one names
+the row of the table it corresponds to (`census_label`). Totals and other
+rows are dropped.
+"""
+function zensus_household_categories(file, categories)
+    keys = Dict(c.census_label => c.key for c in categories)
+    df = read_genesis_csv(file)
+    df.state = state_number.(df.col1)
+    df.label = strip.(df.row2)
+    df = df[(df.col3 .== "Anzahl") .& haskey.(Ref(keys), df.label) .& (df.state .> 0), :]
+    length(unique(df.label)) == length(categories) ||
+        error("Not all categories found in $file: $(setdiff(keys |> Base.keys |> collect, df.label)).")
+    return DataFrame(state = df.state, category = getindex.(Ref(keys), df.label), count = df.value)
+end
+
+"""
+    zensus_household_types(file = joinpath(REFERENCE_DIR, "5000H-1005_de.csv"))
+
+Private households per federal state and household type (`HOUSEHOLD_TYPES`)
+on 15.05.2022 from Zensus table 5000H-1005.
+"""
+zensus_household_types(file = joinpath(REFERENCE_DIR, "5000H-1005_de.csv")) =
+    zensus_household_categories(file, HOUSEHOLD_TYPES)
+
+"""
+    zensus_senior_status(file = joinpath(REFERENCE_DIR, "5000H-1003_de.csv"))
+
+Private households per federal state and senior status (`SENIOR_STATUS`)
+on 15.05.2022 from Zensus table 5000H-1003 (detailed senior status).
+"""
+zensus_senior_status(file = joinpath(REFERENCE_DIR, "5000H-1003_de.csv")) =
+    zensus_household_categories(file, SENIOR_STATUS)
+
+"""
+    zensus_activity_status(file = joinpath(REFERENCE_DIR, "2000S-1002_de.csv"))
+
+Persons per federal state and activity status (`ACTIVITY_STATUS`) on
+15.05.2022 from Zensus table 2000S-1002 (Erwerbsstatus, ausführlich). Each
+category sums the table rows it corresponds to (`census_labels`).
+"""
+function zensus_activity_status(file = joinpath(REFERENCE_DIR, "2000S-1002_de.csv"))
+    keys = Dict(l => c.key for c in ACTIVITY_STATUS for l in c.census_labels)
+    df = read_genesis_csv(file)
+    df.state = state_number.(df.col1)
+    df.label = strip.(df.row2)
+    df = df[(df.col3 .== "Anzahl") .& haskey.(Ref(keys), df.label) .& (df.state .> 0), :]
+    length(unique(df.label)) == length(keys) ||
+        error("Not all categories found in $file: $(setdiff(collect(Base.keys(keys)), df.label)).")
+    df.category = getindex.(Ref(keys), df.label)
+    return combine(groupby(df, [:state, :category]), :value => sum => :count)
+end
+
+"""
+    VALIDATION_REFERENCES
+
+Reference data sets for the validation: functions returning the reference
+tables, and the names of their sources for figures (without reference
+dates, which belong in the caption).
+- `:official2019`: population on 31.12.2019 (Destatis, 12411-0013) and
+  households 2019 (Microcensus, 12211-9034); household types, senior status
+  and activity status from the Zensus 2022, as no matching tables exist for 2019
+- `:zensus2022`: Zensus 2022 (1000A-2027, 5000H-1001, 5000H-1005, 5000H-1003,
+  2000S-1002)
+"""
+const VALIDATION_REFERENCES = Dict(
+    :official2019 => (
+        age_sex = destatis_age_sex,
+        household_sizes = mikrozensus_household_sizes,
+        household_types = zensus_household_types,
+        senior_status = zensus_senior_status,
+        activity_status = zensus_activity_status,
+        labels = (age_sex = "Destatis", household_sizes = "Microcensus",
+            household_types = "Census", senior_status = "Census", activity_status = "Census")),
+    :zensus2022 => (
+        age_sex = zensus_age_sex,
+        household_sizes = zensus_household_sizes,
+        household_types = zensus_household_types,
+        senior_status = zensus_senior_status,
+        activity_status = zensus_activity_status,
+        labels = (age_sex = "Census", household_sizes = "Census",
+            household_types = "Census", senior_status = "Census", activity_status = "Census")))
+
+# source names of the reference data of `validation_data` (see `VALIDATION_REFERENCES`)
+reference_labels(data) = VALIDATION_REFERENCES[Symbol(data.reference)].labels
+
+
+# 2. MODEL DATA
+
+"""
+    GESYLAND_SEX
+
+Sex codes of the Gesyland population. Gesyland follows the microcensus
+(1 = male, 2 = female), while GEMS defines `FEMALE = 1` and `MALE = 2`.
+The Gesyland convention is confirmed by the population: code 2 dominates
+at ages 85 and older, as women do in the official statistics.
+"""
+const GESYLAND_SEX = Dict(1 => "male", 2 => "female")
+
+"""
+    model_age_sex(individual_data_df; sex_codes = GESYLAND_SEX)
+
+Persons per federal state, sex and single year of age in the simulation's
+population (`individual_data_df = individual_data(sim)`).
+"""
+function model_age_sex(individual_data_df; sex_codes = GESYLAND_SEX)
+    df = DataFrame(
+        state = state_code.(individual_data_df.ags),
+        sex = getindex.(Ref(sex_codes), Int.(individual_data_df.sex)),
+        age = Int.(individual_data_df.age))
+    return combine(groupby(df, [:state, :sex, :age]), nrow => :count)
+end
+
+"""
+    model_household_sizes(sim)
+
+Private households (up to `PRIVATE_HH_MAX` members) per federal state and
+size in the simulation's population. Larger households are care homes.
+"""
+function model_household_sizes(sim)
+    hhs = filter(h -> size(h) <= PRIVATE_HH_MAX, households(sim))
+    df = DataFrame(state = state_code.(ags.(hhs)), size = size.(hhs))
+    return combine(groupby(df, [:state, :size]), nrow => :count)
+end
+
+
+# HOUSEHOLD COMPOSITION
+#
+# The Zensus classifies households by the relationships of their members
+# (couples, parents, children). GEMS only knows the members' ages and sexes,
+# so each Zensus category is approximated by a predicate on these. Every
+# predicate documents the Zensus definition and the approximation.
+
+"""
+    HouseholdComposition(ages, sexes)
+
+Ages and sexes (`"male"`, `"female"`) of the members of one household.
+"""
+struct HouseholdComposition
+    ages::Vector{Int}
+    sexes::Vector{String}
+end
+
+members(h::HouseholdComposition) = length(h.ages)
+
+"""
+    SENIOR_AGE
+
+Age from which a person counts as a senior (Zensus: 65 years and older).
+"""
+const SENIOR_AGE = 65
+
+"""
+    GENERATION_GAP
+
+Minimum age difference between parents and children (years). Members at
+least this much younger than the oldest member count as children; all
+others (the oldest member and anyone less than this much younger) form
+the parent generation.
+"""
+const GENERATION_GAP = 18
+
+is_senior(age) = age >= SENIOR_AGE
+
+"""
+    parent_generation(h)
+
+Indices of the members within `GENERATION_GAP` years of the oldest member.
+"""
+parent_generation(h::HouseholdComposition) = findall(a -> maximum(h.ages) - a < GENERATION_GAP, h.ages)
+
+"""
+    children(h)
+
+Indices of the members at least `GENERATION_GAP` years younger than the
+oldest member. Like the Zensus, this includes adult children.
+"""
+children(h::HouseholdComposition) = findall(a -> maximum(h.ages) - a >= GENERATION_GAP, h.ages)
+
+
+# Senior status (Zensus 5000H-1003): purely age-based, reproduced exactly.
+
+"""
+    is_single_senior(h)
+
+Zensus: "Singlehaushalte mit Senior/-in", a single-person household whose
+member is a senior. GEMS: one member, aged `SENIOR_AGE` or older. Exact.
+"""
+is_single_senior(h::HouseholdComposition) = members(h) == 1 && is_senior(h.ages[1])
+
+"""
+    is_two_seniors_only(h)
+
+Zensus: "Zweipersonenhaushalte mit ausschließlich Senioren/-innen". GEMS:
+two members, both seniors. Exact.
+"""
+is_two_seniors_only(h::HouseholdComposition) = members(h) == 2 && all(is_senior, h.ages)
+
+"""
+    is_three_plus_seniors_only(h)
+
+Zensus: "Mehrpersonenhaushalte mit ausschließlich Senioren/-innen" (three or
+more members). GEMS: three or more members, all seniors. Exact.
+"""
+is_three_plus_seniors_only(h::HouseholdComposition) = members(h) >= 3 && all(is_senior, h.ages)
+
+"""
+    is_seniors_and_younger(h)
+
+Zensus: "Haushalte mit Senioren/-innen und Jüngeren". GEMS: at least one
+senior and at least one younger member. Exact.
+"""
+is_seniors_and_younger(h::HouseholdComposition) = any(is_senior, h.ages) && !all(is_senior, h.ages)
+
+"""
+    is_without_seniors(h)
+
+Zensus: "Haushalte ohne Senioren/-innen". GEMS: no member is a senior. Exact.
+"""
+is_without_seniors(h::HouseholdComposition) = !any(is_senior, h.ages)
+
+
+# Household type (Zensus 5000H-1005): based on relationships, approximated
+# by ages (children = members at least `GENERATION_GAP` years younger than
+# the oldest member) and sexes.
+
+"""
+    is_single(h)
+
+Zensus: "Einpersonenhaushalte (Singlehaushalte)". GEMS: one member. Exact.
+"""
+is_single(h::HouseholdComposition) = members(h) == 1
+
+"""
+    is_couple_without_children(h)
+
+Zensus: "Paare ohne Kind(er)", a married or unmarried couple (of any sex)
+without children in the household. GEMS: two members of the parent
+generation and no children.
+
+Deviations: two adults of similar age who are not a couple (e.g. a flat
+share of two, two siblings) count as a couple.
+"""
+is_couple_without_children(h::HouseholdComposition) =
+    members(h) >= 2 && isempty(children(h)) && length(parent_generation(h)) == 2
+
+"""
+    is_couple_with_children(h)
+
+Zensus: "Paare mit Kind(ern)", a couple with at least one unmarried child
+of any age in the household. GEMS: two members of the parent generation
+and at least one child.
+
+Deviations: a single parent living with a sibling or a flatmate of similar
+age counts as a couple; a couple whose youngest member is less than
+`GENERATION_GAP` years younger than the oldest (e.g. a young stepchild of
+a much younger partner) may be misclassified.
+"""
+is_couple_with_children(h::HouseholdComposition) =
+    !isempty(children(h)) && length(parent_generation(h)) == 2
+
+"""
+    is_single_mother(h)
+
+Zensus: "Alleinerziehende Mütter", a mother without a partner in the
+household, living with at least one unmarried child of any age. GEMS: one
+member of the parent generation, who is female, and at least one child.
+
+Deviations: in three-generation households (e.g. grandmother, mother,
+child), the grandmother is the only member of the parent generation, and
+the household counts as a single mother.
+"""
+is_single_mother(h::HouseholdComposition) =
+    !isempty(children(h)) && length(parent_generation(h)) == 1 && h.sexes[only(parent_generation(h))] == "female"
+
+"""
+    is_single_father(h)
+
+Zensus: "Alleinerziehende Väter". GEMS: as `is_single_mother`, with a male
+member of the parent generation. Same deviations.
+"""
+is_single_father(h::HouseholdComposition) =
+    !isempty(children(h)) && length(parent_generation(h)) == 1 && h.sexes[only(parent_generation(h))] == "male"
+
+"""
+    is_without_core_family(h)
+
+Zensus: "Mehrpersonenhaushalte ohne Kernfamilie", several members but no
+couple and no parent-child relationship (e.g. flat shares, siblings).
+GEMS: several members and three or more members in the parent generation.
+
+Deviations: flat shares of two count as couples (see
+`is_couple_without_children`); couples living with a third adult of similar
+age (e.g. a parent of one partner within `GENERATION_GAP` years) count here.
+"""
+is_without_core_family(h::HouseholdComposition) = members(h) >= 2 && length(parent_generation(h)) >= 3
+
+"""
+    HouseholdCategory(key, label, predicate, census_label)
+
+One category of a household classification: an identifier, a short label
+for figures, the predicate deciding whether a household belongs to it, and
+the label of the corresponding row in the Zensus table.
+"""
+struct HouseholdCategory
+    key::String
+    label::String
+    predicate::Function
+    census_label::String
+end
+
+"""
+    HOUSEHOLD_TYPES
+
+Household types of Zensus table 5000H-1005 and their GEMS predicates.
+"""
+const HOUSEHOLD_TYPES = [
+    HouseholdCategory("single", "Single", is_single, "Einpersonenhaushalte (Singlehaushalte)"),
+    HouseholdCategory("couple", "Couple", is_couple_without_children, "Paare ohne Kind(er)"),
+    HouseholdCategory("couple_children", "Couple, children", is_couple_with_children, "Paare mit Kind(ern)"),
+    HouseholdCategory("single_mother", "Single mother", is_single_mother, "Alleinerziehende Mütter"),
+    HouseholdCategory("single_father", "Single father", is_single_father, "Alleinerziehende Väter"),
+    HouseholdCategory("no_core_family", "Other", is_without_core_family, "Mehrpersonenhaushalte ohne Kernfamilie"),
+]
+
+"""
+    SENIOR_STATUS
+
+Senior status of Zensus table 5000H-1003 (detailed) and the GEMS predicates.
+"""
+const SENIOR_STATUS = [
+    HouseholdCategory("single_senior", "1 senior", is_single_senior, "Singlehaushalte mit Senior/-in"),
+    HouseholdCategory("two_seniors", "2 seniors", is_two_seniors_only,
+        "Zweipersonenhaushalte mit ausschl. Senioren/-innen"),
+    HouseholdCategory("three_plus_seniors", "3+ seniors", is_three_plus_seniors_only,
+        "Mehrpersonenhaushalte mit ausschl. Senioren/-innen"),
+    HouseholdCategory("seniors_and_younger", "Mixed", is_seniors_and_younger,
+        "Haushalte mit Senioren/-innen und Jüngeren"),
+    HouseholdCategory("no_seniors", "No seniors", is_without_seniors, "Haushalte ohne Senioren/-innen"),
+]
+
+"""
+    classify(h, categories)
+
+Key of the category of household `h`. Each household must match exactly one
+predicate of `categories`; an error names the household otherwise, so that
+gaps and overlaps of the predicates are found.
+"""
+function classify(h::HouseholdComposition, categories)
+    hits = filter(c -> c.predicate(h), categories)
+    length(hits) == 1 ||
+        error("Household with ages $(h.ages) and sexes $(h.sexes) matches $(length(hits)) categories: $(getfield.(hits, :key)).")
+    return only(hits).key
+end
+
+"""
+    household_compositions(sim; sex_codes = GESYLAND_SEX)
+
+Federal state and `HouseholdComposition` of every private household (up to
+`PRIVATE_HH_MAX` members) in the simulation's population.
+"""
+function household_compositions(sim; sex_codes = GESYLAND_SEX)
+    hhs = filter(h -> size(h) <= PRIVATE_HH_MAX, households(sim))
+    comps = map(hhs) do h
+        inds = individuals(h)
+        HouseholdComposition(Int.(age.(inds)), getindex.(Ref(sex_codes), Int.(sex.(inds))))
+    end
+    return state_code.(ags.(hhs)), comps
+end
+
+"""
+    model_household_categories(states, compositions, categories)
+
+Private households per federal state and category (see `classify`).
+"""
+function model_household_categories(states, compositions, categories)
+    df = DataFrame(state = states, category = classify.(compositions, Ref(categories)))
+    return combine(groupby(df, [:state, :category]), nrow => :count)
+end
+
+
+# ACTIVITY STATUS
+#
+# The Zensus classifies persons by the labour-force concept: employment
+# comes first (anyone with paid work in the reference week, including
+# working students and apprentices), then unemployment, then the groups of
+# persons not in the labour force. GEMS knows whether a person is assigned
+# to a workplace or to a school setting (daycare, school, university), and
+# no person has both.
+
+"""
+    PersonActivity(age, workplace, school)
+
+Age of a person and whether they are assigned to a workplace (an office)
+and to a school setting (a school class).
+"""
+struct PersonActivity
+    age::Int
+    workplace::Bool
+    school::Bool
+end
+
+"""
+    MINIMUM_WORKING_AGE
+
+Age from which persons are part of the labour-force classification
+(Zensus: "Personen unterhalb des Mindestalters" are those under 15).
+"""
+const MINIMUM_WORKING_AGE = 15
+
+"""
+    is_below_minimum_age(p)
+
+Zensus: "Personen unterhalb des Mindestalters", persons under 15 (whether
+in daycare, school or neither). GEMS: age under `MINIMUM_WORKING_AGE`. Exact.
+"""
+is_below_minimum_age(p::PersonActivity) = p.age < MINIMUM_WORKING_AGE
+
+"""
+    is_employed(p)
+
+Zensus: "Erwerbstätige", persons aged 15 and older with paid work in the
+reference week, including working students and apprentices in dual
+vocational training. GEMS: aged 15 or older and assigned to a workplace.
+
+Deviations: GEMS assigns nobody to both a workplace and a school setting,
+so working students and apprentices (who attend vocational school) are in
+education in GEMS (see `is_in_education`).
+"""
+is_employed(p::PersonActivity) = p.age >= MINIMUM_WORKING_AGE && p.workplace
+
+"""
+    is_in_education(p)
+
+Zensus: "Schüler/-innen u. Studierende (nicht erwerbsaktiv)", pupils and
+students aged 15 and older who are neither employed nor unemployed. GEMS:
+aged 15 or older, assigned to a school setting and not to a workplace.
+
+Deviations: GEMS counts all pupils and students aged 15 or older here,
+including those who would work in reality (working students, apprentices).
+"""
+is_in_education(p::PersonActivity) = p.age >= MINIMUM_WORKING_AGE && p.school && !p.workplace
+
+"""
+    is_other_activity(p)
+
+Zensus: the remaining persons aged 15 and older: "Erwerbslose"
+(unemployed), "Empfänger/-innen von Ruhegehalt/Kapitalerträgen" (pensions,
+capital income) and "Sonstige" (others). GEMS: aged 15 or older and
+assigned to neither a workplace nor a school setting. GEMS cannot tell
+these three groups apart, so they form one category.
+"""
+is_other_activity(p::PersonActivity) = p.age >= MINIMUM_WORKING_AGE && !p.workplace && !p.school
+
+"""
+    PersonCategory(key, label, predicate, census_labels)
+
+One category of a classification of persons: an identifier, a short label
+for figures, the predicate deciding whether a person belongs to it, and
+the labels of the rows of the Zensus table it corresponds to (their counts
+are summed).
+"""
+struct PersonCategory
+    key::String
+    label::String
+    predicate::Function
+    census_labels::Vector{String}
+end
+
+"""
+    ACTIVITY_STATUS
+
+Activity status of Zensus table 2000S-1002 (Erwerbsstatus, ausführlich)
+and the GEMS predicates.
+"""
+const ACTIVITY_STATUS = [
+    PersonCategory("below_15", "Under 15", is_below_minimum_age, ["Personen unterhalb des Mindestalters"]),
+    PersonCategory("employed", "Employed", is_employed, ["Erwerbstätige"]),
+    PersonCategory("in_education", "In education", is_in_education,
+        ["Schüler/-innen u. Studierende (nicht erwerbsaktiv)"]),
+    PersonCategory("other", "Other", is_other_activity,
+        ["Erwerbslose", "Empfänger/-innen von Ruhegehalt/Kapitalerträgen", "Sonstige"]),
+]
+
+"""
+    classify(p, categories)
+
+Key of the category of person `p`. Each person must match exactly one
+predicate of `categories`; an error names the person otherwise.
+"""
+function classify(p::PersonActivity, categories)
+    hits = filter(c -> c.predicate(p), categories)
+    length(hits) == 1 ||
+        error("Person $(p) matches $(length(hits)) categories: $(getfield.(hits, :key)).")
+    return only(hits).key
+end
+
+"""
+    model_activity_status(sim)
+
+Persons in private households (up to `PRIVATE_HH_MAX` members, as in the
+Zensus table) per federal state and activity status (`ACTIVITY_STATUS`).
+"""
+function model_activity_status(sim)
+    unset = GEMS.DEFAULT_SETTING_ID
+    states, keys = Int[], String[]
+    for h in households(sim)
+        size(h) <= PRIVATE_HH_MAX || continue
+        st = state_code(ags(h))
+        for i in individuals(h)
+            p = PersonActivity(Int(age(i)), office_id(i) != unset, class_id(i) != unset)
+            push!(states, st)
+            push!(keys, classify(p, ACTIVITY_STATUS))
+        end
+    end
+    return combine(groupby(DataFrame(state = states, category = keys), [:state, :category]), nrow => :count)
+end
+
+"""
+    topcode(df, col, top)
+
+Merges all values of `col` above `top` into `top` and sums their counts.
+"""
+topcode(df, col, top) = combine(
+    groupby(transform(df, col => (x -> min.(x, top)) => col), setdiff(names(df), ["count"])),
+    :count => (c -> sum(skipmissing(c))) => :count)
+
+"""
+    join_counts(model, reference, keys)
+
+Joins model and reference counts on `keys` into one table with the
+columns `model` and `reference` (missing combinations count as 0).
+"""
+function join_counts(model, reference, keys)
+    df = outerjoin(
+        rename(model, :count => :model),
+        rename(reference, :count => :reference),
+        on = keys)
+    df.model = coalesce.(df.model, 0)
+    df.reference = coalesce.(df.reference, 0)
+    return sort!(df, keys)
+end
+
+"""
+    validation_data(sim;
+        reference = :official2019,
+        individual_data_df = individual_data(sim))
+
+Model and reference counts in common categories (see
+`VALIDATION_REFERENCES`), as a named tuple:
+- `age_sex`: state, sex, age, model, reference
+- `household_sizes`: state, size, model, reference
+- `household_types`: state, category (`HOUSEHOLD_TYPES`), model, reference
+- `senior_status`: state, category (`SENIOR_STATUS`), model, reference
+- `activity_status`: state, category (`ACTIVITY_STATUS`), model, reference (persons)
+- `reference`: name of the reference data set (a key of `VALIDATION_REFERENCES`)
+
+The oldest age and the largest household size are the top groups that
+both the model and the reference provide (e.g. 90 and older, 5 and more).
+"""
+function validation_data(sim;
+        reference = :official2019,
+        individual_data_df = individual_data(sim))
+
+    ref = VALIDATION_REFERENCES[reference]
+    model_ages, ref_ages = model_age_sex(individual_data_df), ref.age_sex()
+    model_hh, ref_hh = model_household_sizes(sim), ref.household_sizes()
+
+    top_age = min(maximum(model_ages.age), maximum(ref_ages.age))
+    top_size = min(maximum(model_hh.size), maximum(ref_hh.size))
+
+    states, comps = household_compositions(sim)
+
+    return (
+        age_sex = join_counts(topcode(model_ages, :age, top_age), topcode(ref_ages, :age, top_age),
+            [:state, :sex, :age]),
+        household_sizes = join_counts(topcode(model_hh, :size, top_size), topcode(ref_hh, :size, top_size),
+            [:state, :size]),
+        household_types = join_counts(model_household_categories(states, comps, HOUSEHOLD_TYPES),
+            ref.household_types(), [:state, :category]),
+        senior_status = join_counts(model_household_categories(states, comps, SENIOR_STATUS),
+            ref.senior_status(), [:state, :category]),
+        activity_status = join_counts(model_activity_status(sim), ref.activity_status(), [:state, :category]),
+        reference = string(reference))
+end
+
+# tables of `validation_data` and their file names
+const VALIDATION_TABLES = (:age_sex, :household_sizes, :household_types, :senior_status, :activity_status)
+validation_file(folder, table) = joinpath(folder, "validation_$(table).csv")
+
+"""
+    save_validation_data(data, folder)
+
+Writes the tables of `validation_data` as CSV files and the name of the
+reference data set to `folder`.
+"""
+function save_validation_data(data, folder)
+    mkpath(folder)
+    foreach(t -> CSV.write(validation_file(folder, t), getproperty(data, t)), VALIDATION_TABLES)
+    open(io -> TOML.print(io, Dict("reference" => data.reference)),
+        joinpath(folder, "validation_reference.toml"), "w")
+end
+
+"""
+    load_validation_data(folder)
+
+Reads the data written by `save_validation_data`, so that the figure can
+be redrawn without loading the population again. Categories are read as
+strings, as written.
+"""
+function load_validation_data(folder)
+    tables = map(VALIDATION_TABLES) do t
+        t => CSV.read(validation_file(folder, t), DataFrame,
+            types = Dict(:category => String, :sex => String), validate = false)
+    end
+    reference = TOML.parsefile(joinpath(folder, "validation_reference.toml"))["reference"]
+    return (; tables..., reference = reference)
+end
+
+
+# 3. PANELS
+
+"""
+    rectangles(x0, x1, y0, y1)
+
+Coordinates of axis-aligned rectangles, separated by `NaN`, so that all of
+them can be drawn as one `:shape` series (one legend entry, no seams).
+"""
+function rectangles(x0, x1, y0, y1)
+    xs, ys = Float64[], Float64[]
+    for i in eachindex(x0)
+        append!(xs, [x0[i], x1[i], x1[i], x0[i], x0[i], NaN])
+        append!(ys, [y0[i], y0[i], y1[i], y1[i], y0[i], NaN])
+    end
+    return xs, ys
+end
+
+"""
+    staircase(values, positions; closed = false)
+
+Outline of horizontal bars of length `values` at `positions` (spaced by 1),
+as one line from bottom to top. With `closed = true`, the outline starts and
+ends on the axis, so that it can be filled as one area.
+"""
+function staircase(values, positions; closed = false)
+    xs = repeat(values, inner = 2)
+    ys = vec([positions' .- 0.5; positions' .+ 0.5])
+    closed || return xs, ys
+    return [0.0; xs; 0.0], [first(ys); ys; last(ys)]
+end
+
+pv_text(s, size = PV_FONTSIZE, args...) = Plots.text(s, size, PV_FONT, args...)
+
+percent_label(x; digits = 0) = string(round(100x, digits = digits) |> (v -> digits == 0 ? Int(v) : v), "%")
+
+# fixed number of decimals for non-negative values (e.g. 3.6 -> "3.60")
+function fixed_decimals(v, digits = 2)
+    r = round(Int, v * 10^digits)
+    return string(r ÷ 10^digits, ".", lpad(r % 10^digits, digits, '0'))
+end
+
+# signed percentage with one decimal and a typographic minus (e.g. "−3.1 %")
+signed_percent(d) = (d >= 0 ? "+" : "−") * string(abs(round(100d, digits = 1))) * " %"
+
+# label of a top-coded category (e.g. "5+")
+category_label(v, top) = v == top ? "$(v)+" : string(v)
+
+"""
+    national_shares(df, keys)
+
+Sums the counts of all states per `keys` and converts model and reference
+counts into shares of their totals.
+"""
+function national_shares(df, keys)
+    nat = combine(groupby(df, keys), :model => sum => :model, :reference => sum => :reference)
+    nat.model = nat.model ./ sum(nat.model)
+    nat.reference = nat.reference ./ sum(nat.reference)
+    return sort!(nat, keys)
+end
+
+"""
+    plot_age_pyramid(age_sex; title = "A  Age and sex", reference_label = "Reference",
+        show_top_group = true, kwargs...)
+
+Population pyramid of Germany: shares of the total population per sex and
+single year of age. Reference as area, GEMS as a line. The oldest age is a
+top-coded group (e.g. 90 and older), which appears as a wide bar; with
+`show_top_group = false` it is not drawn (shares still refer to the whole
+population).
+"""
+function plot_age_pyramid(age_sex; title = "A  Age and sex", reference_label = "Reference",
+        show_top_group = true, age_label = "Age", xtick_step = 0.002, legend = false, kwargs...)
+
+    nat = national_shares(age_sex, [:sex, :age])
+    show_top_group || (nat = nat[nat.age .< maximum(nat.age), :])
+    top_age = maximum(nat.age)
+    side(sex) = sex == "male" ? -1 : 1
+    xmax = 1.1 * maximum([nat.model; nat.reference])
+    xticks = collect(xtick_step:xtick_step:xmax)
+    yticks = 0:10:top_age
+
+    p = plot(
+        title = title,
+        titlelocation = :left,
+        titlefontsize = PV_HEADING_FONTSIZE,
+        xlims = (-xmax, xmax),
+        ylims = (-0.5, top_age + 0.5),
+        xticks = ([-reverse(xticks); 0; xticks], percent_label.(abs.([-reverse(xticks); 0; xticks]), digits = 1)),
+        yticks = (yticks, category_label.(yticks, top_age)),
+        ylabel = age_label,
+        grid = :x,
+        gridalpha = 0.2,
+        legend = legend,
+        legendfontsize = PV_SMALL_FONTSIZE,
+        foreground_color_legend = nothing,
+        background_color_legend = nothing,
+        tickfontsize = PV_SMALL_FONTSIZE,
+        guidefontsize = PV_FONTSIZE,
+        fontfamily = PV_FONT;
+        kwargs...)
+
+    for sex in ("male", "female")
+        sub = nat[nat.sex .== sex, :]
+        plot!(p, staircase(side(sex) .* sub.reference, sub.age, closed = true),
+            seriestype = :shape, fillcolor = PV_REFERENCE_COLOR, fillalpha = PV_REFERENCE_ALPHA,
+            linewidth = 0, label = sex == "male" ? reference_label : "")
+        plot!(p, staircase(side(sex) .* sub.model, sub.age),
+            linecolor = PV_MODEL_COLOR, linewidth = 1, label = sex == "male" ? PV_MODEL_LABEL : "")
+    end
+
+    vline!(p, [0], linecolor = :black, linewidth = 0.5, label = "")
+    # sex labels in the lower corners, which the youngest ages leave free
+    annotate!(p, -0.95xmax, 3, pv_text("Men", PV_FONTSIZE, :left, :bottom))
+    annotate!(p, 0.95xmax, 3, pv_text("Women", PV_FONTSIZE, :right, :bottom))
+    return p
+end
+
+"""
+    plot_paired_bars(reference, model, labels;
+        title = "", xlabel = "", reference_label = "Reference",
+        legend = :auto, xrotation = 0, kwargs...)
+
+Shares per category as pairs of bars: reference (left) and GEMS (right).
+`reference` and `model` are shares in the order of `labels`.
+
+With `legend = :auto`, the legend goes into the upper corner above the
+lower bars (left or right, compared by the two outermost categories on each
+side); its background is transparent, so it never hides a bar, and the
+y axis leaves room above the highest bar.
+"""
+function plot_paired_bars(reference, model, labels;
+        title = "", xlabel = "", reference_label = "Reference",
+        legend = :auto, xrotation = 0, kwargs...)
+
+    n = length(labels)
+    x = collect(1.0:n)
+    ymax = 1.3 * maximum([model; reference])
+    yticks = 0:(ymax > 0.5 ? 0.2 : 0.1):ymax
+    if legend == :auto
+        height(i) = max(reference[i], model[i])
+        edge = min(2, n)
+        left, right = maximum(height.(1:edge)), maximum(height.((n - edge + 1):n))
+        legend = left <= right ? :topleft : :topright
+    end
+
+    p = plot(
+        title = title,
+        titlelocation = :left,
+        titlefontsize = PV_HEADING_FONTSIZE,
+        xlims = (0.4, n + 0.6),
+        ylims = (0, ymax),
+        xticks = (x, labels),
+        xrotation = xrotation,
+        yticks = (yticks, percent_label.(yticks)),
+        xlabel = xlabel,
+        grid = :y,
+        gridalpha = 0.2,
+        legend = legend,
+        legendfontsize = PV_SMALL_FONTSIZE,
+        foreground_color_legend = nothing,
+        background_color_legend = nothing,
+        tickfontsize = PV_SMALL_FONTSIZE,
+        guidefontsize = PV_FONTSIZE,
+        fontfamily = PV_FONT;
+        kwargs...)
+
+    w = 0.38
+    zero = zeros(n)
+    plot!(p, rectangles(x .- w, x, zero, reference),
+        seriestype = :shape, fillcolor = PV_REFERENCE_COLOR, fillalpha = PV_REFERENCE_ALPHA,
+        linewidth = 0, label = reference_label)
+    plot!(p, rectangles(x, x .+ w, zero, model),
+        seriestype = :shape, fillcolor = PV_MODEL_COLOR, fillalpha = 0.85,
+        linewidth = 0, label = PV_MODEL_LABEL)
+    return p
+end
+
+"""
+    plot_household_size_panel(household_sizes; title = "B  Household size",
+        reference_label = "Reference", kwargs...)
+
+Shares of private households per size in Germany: reference and GEMS as
+pairs of bars.
+"""
+function plot_household_size_panel(household_sizes; title = "B  Household size",
+        reference_label = "Reference", kwargs...)
+    nat = national_shares(household_sizes, [:size])
+    return plot_paired_bars(nat.reference, nat.model, category_label.(nat.size, maximum(nat.size));
+        title = title, xlabel = "Persons per household", reference_label = reference_label, kwargs...)
+end
+
+"""
+    only_categories(df, categories)
+
+Rows of `df` that belong to one of `categories`, so that shares computed
+from the result refer to these categories only.
+"""
+only_categories(df, categories) = df[in.(df.category, Ref(getfield.(categories, :key))), :]
+
+"""
+    CORE_FAMILY_TYPES
+
+The household types (`HOUSEHOLD_TYPES`) of households with a core family:
+couples without children, couples with children, single mothers and single
+fathers.
+"""
+const CORE_FAMILY_TYPES = filter(c -> !(c.key in ("single", "no_core_family")), HOUSEHOLD_TYPES)
+
+"""
+    is_other_family_type(h)
+
+All households that match none of the `CORE_FAMILY_TYPES` predicates.
+Since every household matches exactly one predicate of `HOUSEHOLD_TYPES`
+(see `classify`), these are single-person households (`is_single`) and
+multi-person households without a core family (`is_without_core_family`).
+
+Zensus: the total number of households minus the four core family types of
+table 5000H-1005, i.e. "Einpersonenhaushalte (Singlehaushalte)" and
+"Mehrpersonenhaushalte ohne Kernfamilie", whose rows add up with the core
+family types to the total.
+
+Deviations: two-person flat shares count as couples in GEMS (see
+`is_couple_without_children`) but belong here in the Zensus.
+"""
+is_other_family_type(h::HouseholdComposition) = !any(c -> c.predicate(h), CORE_FAMILY_TYPES)
+
+"""
+    FAMILY_TYPES
+
+Family types of all households: the `CORE_FAMILY_TYPES` and "Other" for all
+remaining households (`is_other_family_type`). Their shares refer to all
+private households. The counts are derived from the household types with
+`family_type_counts`.
+"""
+const FAMILY_TYPES = [CORE_FAMILY_TYPES;
+    HouseholdCategory("other", "Other", is_other_family_type,
+        "Einpersonenhaushalte (Singlehaushalte) + Mehrpersonenhaushalte ohne Kernfamilie")]
+
+"""
+    family_type_counts(household_types)
+
+Counts per federal state and family type (`FAMILY_TYPES`) from the counts
+per household type (the `household_types` table of `validation_data`): all
+household types that are not a core family type are summed up as "other",
+for the model and the reference alike.
+"""
+function family_type_counts(household_types)
+    core = getfield.(CORE_FAMILY_TYPES, :key)
+    df = transform(household_types, :category => ByRow(c -> c in core ? c : "other") => :category)
+    return combine(groupby(df, [:state, :category]), :model => sum => :model, :reference => sum => :reference)
+end
+
+"""
+    plot_household_category_panel(df, categories; title, reference_label = "Reference", kwargs...)
+
+Shares of private households per category (`HOUSEHOLD_TYPES`,
+`FAMILY_TYPES`, `SENIOR_STATUS`) in Germany: reference and GEMS as pairs of
+bars. Shares refer to the households in `categories`.
+"""
+function plot_household_category_panel(df, categories; title, reference_label = "Reference", kwargs...)
+    nat = national_shares(only_categories(df, categories), [:category])
+    order = [findfirst(==(c.key), nat.category) for c in categories]
+    return plot_paired_bars(nat.reference[order], nat.model[order], getfield.(categories, :label);
+        title = title, reference_label = reference_label, kwargs...)
+end
+
+
+# STATE TABLE
+
+"""
+    TableBlock(title, labels, model, reference; limit = deviation_limit(model, reference))
+
+One block of columns in a `StateTable`: a title, one label per column, and
+the model and reference values (rows × columns, shares). `limit` is the
+largest deviation (model − reference, in percentage points) that fits into
+a deviation cell; larger deviations are drawn at the edge of the cell.
+"""
+struct TableBlock
+    title::String
+    labels::Vector{String}
+    model::Matrix{Float64}
+    reference::Matrix{Float64}
+    limit::Float64
+end
+
+"""
+    deviation_limit(model, reference; quantile_level = 0.95)
+
+Cell limit of a deviation block in percentage points: the `quantile_level`
+quantile of all absolute deviations, rounded up to a whole point (at least
+1 pp), so that single outliers do not compress all other cells.
+"""
+deviation_limit(model, reference; quantile_level = 0.95) =
+    max(1.0, ceil(quantile(vec(abs.(model .- reference)) .* 100, quantile_level)))
+
+TableBlock(title, labels, model, reference; limit = deviation_limit(model, reference)) =
+    TableBlock(title, labels, model, reference, limit)
+
+"""
+    StateTable(rows, textcolumns, blocks; footer = nothing)
+
+Table with one row per entry in `rows`. `textcolumns` are pairs of a
+header and one string per row; `blocks` are `TableBlock`s drawn as small
+cells. `footer` is an optional last row: a label, one string per text
+column and one per block.
+
+Cell styles (`cell_style`):
+- `:deviation` (default): a reference tick in the middle of the cell and a
+  model dot at model − reference (in percentage points, on a common scale
+  of ±`limit` per block), connected by a line
+- `:level`: reference as bar, model as dot; each column has its own scale
+  (its largest value fills the cell), `cell_scale = :block` uses one scale
+  per block instead
+
+Plotted with `plot(table)` like any other series, so that it can be
+combined with other plots in a layout.
+"""
+struct StateTable
+    rows::Vector{String}
+    textcolumns::Vector{Pair{String, Vector{String}}}
+    blocks::Vector{TableBlock}
+    footer::Union{Nothing, Tuple{String, Vector{String}, Vector{String}}}
+end
+
+StateTable(rows, textcolumns, blocks; footer = nothing) = StateTable(rows, textcolumns, blocks, footer)
+
+@recipe function f(t::StateTable;
+        rowlabel_width = 3.4,
+        textcolumn_width = 1.5,
+        cell_width = 1.0,
+        block_gap = 0.5,
+        bar_height = 0.45,
+        cell_fill = 0.85,
+        marker_size = 2.5,
+        cell_style = :deviation,
+        cell_scale = :column,
+        fontsize = PV_SMALL_FONTSIZE,
+        header_fontsize = PV_FONTSIZE,
+        reference_label = "Reference",
+        model_label = PV_MODEL_LABEL)
+
+    nrows = length(t.rows)
+    nfooter = isnothing(t.footer) ? 0 : 1
+    # y: two header lines (block titles, column labels), then the rows
+    yrow(i) = i + 1.5
+    ytitle, ylabel = 0.0, 1.0
+    ybottom = yrow(nrows + nfooter) + 0.5
+
+    # x positions of all columns
+    xtext = [rowlabel_width + (k - 0.5) * textcolumn_width for k in eachindex(t.textcolumns)]
+    xblock = Float64[]
+    xpos = rowlabel_width + length(t.textcolumns) * textcolumn_width
+    for b in t.blocks
+        push!(xblock, xpos + block_gap)
+        xpos += block_gap + length(b.labels) * cell_width
+    end
+    xright = xpos
+
+    framestyle := :none
+    legend := false
+    grid := false
+    yflip := true
+    xlims := (0, xright)
+    ylims := (-0.6, ybottom)
+    fontfamily := PV_FONT
+
+    anns = Tuple{Float64, Float64, Plots.PlotText}[]
+    font(s, size = fontsize, args...) = Plots.text(s, size, PV_FONT, args...)
+
+    # row labels and text columns
+    for (i, r) in enumerate(t.rows)
+        push!(anns, (0.1, yrow(i), font(r, fontsize, :left)))
+        for (k, (_, values)) in enumerate(t.textcolumns)
+            push!(anns, (xtext[k] + 0.4textcolumn_width, yrow(i), font(values[i], fontsize, :right)))
+        end
+    end
+    for (k, (header, _)) in enumerate(t.textcolumns)
+        push!(anns, (xtext[k] + 0.4textcolumn_width, ylabel, font(header, fontsize, :right)))
+    end
+
+    # blocks: title, column labels, cells
+    bar_x0, bar_x1, bar_y0, bar_y1 = Float64[], Float64[], Float64[], Float64[]
+    dots_x, dots_y = Float64[], Float64[]
+    clipped_x, clipped_y, clipped_shape = Float64[], Float64[], Symbol[]
+    stems_x, stems_y = Float64[], Float64[]        # model dot to reference tick
+    ticks_x, ticks_y = Float64[], Float64[]        # reference ticks
+    guides_x, guides_y = Float64[], Float64[]      # faint cell axes
+    for (b, x0) in zip(t.blocks, xblock)
+        n = length(b.labels)
+        push!(anns, (x0 + n * cell_width / 2, ytitle, font(b.title, header_fontsize, :center)))
+        for (j, l) in enumerate(b.labels)
+            push!(anns, (x0 + (j - 0.5) * cell_width, ylabel, font(l, fontsize, :center)))
+        end
+
+        if cell_style == :level
+            colmax = cell_scale == :block ?
+                fill(maximum([b.model; b.reference]), n) :
+                vec(maximum([b.model; b.reference], dims = 1))
+            for i in 1:nrows, j in 1:n
+                left = x0 + (j - 1) * cell_width + (1 - cell_fill) / 2 * cell_width
+                unit = cell_fill * cell_width / colmax[j]
+                push!(bar_x0, left)
+                push!(bar_x1, left + unit * b.reference[i, j])
+                push!(bar_y0, yrow(i) - bar_height / 2)
+                push!(bar_y1, yrow(i) + bar_height / 2)
+                push!(dots_x, left + unit * b.model[i, j])
+                push!(dots_y, yrow(i))
+            end
+        else
+            half = cell_fill * cell_width / 2
+            for i in 1:nrows, j in 1:n
+                xc = x0 + (j - 0.5) * cell_width
+                y = yrow(i)
+                d = 100 * (b.model[i, j] - b.reference[i, j]) / b.limit
+                append!(guides_x, [xc - half, xc + half, NaN])
+                append!(guides_y, [y, y, NaN])
+                append!(ticks_x, [xc, xc, NaN])
+                append!(ticks_y, [y - bar_height / 2, y + bar_height / 2, NaN])
+                xd = xc + clamp(d, -1, 1) * half
+                append!(stems_x, [xc, xd, NaN])
+                append!(stems_y, [y, y, NaN])
+                if abs(d) > 1
+                    push!(clipped_x, xd)
+                    push!(clipped_y, y)
+                    push!(clipped_shape, d > 0 ? :rtriangle : :ltriangle)
+                else
+                    push!(dots_x, xd)
+                    push!(dots_y, y)
+                end
+            end
+        end
+    end
+
+    # footer row
+    if !isnothing(t.footer)
+        label, texts, blocktexts = t.footer
+        yf = yrow(nrows + 1)
+        push!(anns, (0.1, yf, font(label, fontsize, :left)))
+        for (k, s) in enumerate(texts)
+            push!(anns, (xtext[k] + 0.4textcolumn_width, yf, font(s, fontsize, :right)))
+        end
+        for (b, x0, s) in zip(t.blocks, xblock, blocktexts)
+            push!(anns, (x0 + length(b.labels) * cell_width / 2, yf, font(s, fontsize, :center)))
+        end
+    end
+    annotations := anns
+
+    # separator lines below the header and above the footer
+    @series begin
+        seriestype := :path
+        linecolor := PV_LINE_COLOR
+        linewidth := 0.5
+        label := ""
+        ysep = [ylabel + 0.6; nfooter > 0 ? [yrow(nrows) + 0.5] : Float64[]]
+        xs = reduce(vcat, [[0.0, xright, NaN] for _ in ysep])
+        ys = reduce(vcat, [[y, y, NaN] for y in ysep])
+        xs, ys
+    end
+
+    if cell_style == :level
+        @series begin
+            seriestype := :shape
+            fillcolor := PV_REFERENCE_COLOR
+            fillalpha := PV_REFERENCE_ALPHA
+            linewidth := 0
+            label := reference_label
+            rectangles(bar_x0, bar_x1, bar_y0, bar_y1)
+        end
+    else
+        for (xs, ys, color, width, lab) in (
+                (guides_x, guides_y, PV_CELL_LINE_COLOR, 0.5, ""),
+                (ticks_x, ticks_y, PV_REFERENCE_COLOR, 1.2, reference_label),
+                (stems_x, stems_y, PV_MODEL_COLOR, 1.0, ""))
+            @series begin
+                seriestype := :path
+                linecolor := color
+                linewidth := width
+                label := lab
+                xs, ys
+            end
+        end
+        if !isempty(clipped_x)
+            @series begin
+                seriestype := :scatter
+                markershape := clipped_shape
+                markercolor := PV_MODEL_COLOR
+                markerstrokewidth := 0
+                markersize := marker_size + 0.5
+                label := ""
+                clipped_x, clipped_y
+            end
+        end
+    end
+
+    @series begin
+        seriestype := :scatter
+        markercolor := PV_MODEL_COLOR
+        markerstrokewidth := 0
+        markersize := marker_size
+        label := model_label
+        dots_x, dots_y
+    end
+end
+
+"""
+    state_shares(df, key, categories)
+
+Matrix of shares (16 states × categories) for model and reference.
+"""
+function state_shares(df, key, categories)
+    shares(col) = [begin
+            sub = df[df.state .== s, :]
+            tot = sum(sub[!, col])
+            [sum(sub[sub[!, key] .== c, col]) / tot for c in categories]
+        end for s in 1:16] |> rows -> permutedims(reduce(hcat, rows))
+    return shares(:model), shares(:reference)
+end
+
+# mean absolute deviation of shares in percentage points
+mean_abs_pp(model, reference) = string(round(100 * mean(abs.(model .- reference)), digits = 2), " pp")
+
+# limit of a deviation block as text (e.g. "±3 pp")
+limit_label(limit) = string("±", round(Int, limit), " pp")
+
+"""
+    state_table(data)
+
+`StateTable` of the federal states: relative deviation of the state's share
+of the national population in GEMS (the GEMS population is scaled to a
+different national total, so totals are not compared), and the deviations
+of the age structure (10-year groups) and the household sizes in
+percentage points.
+"""
+function state_table(data)
+    # population per state and deviation of its share of the national population
+    pop = combine(groupby(data.age_sex, :state), :model => sum => :model, :reference => sum => :reference)
+    sort!(pop, :state)
+    delta = (pop.model ./ sum(pop.model)) ./ (pop.reference ./ sum(pop.reference)) .- 1
+
+    # age in 10-year groups (last group: 80+)
+    age = transform(data.age_sex, :age => (a -> min.(a .÷ 10, 8)) => :group)
+    age_m, age_r = state_shares(age, :group, 0:8)
+    age_labels = [[string(10g, "–", 10g + 9) for g in 0:7]; "80+"]
+    age_limit = deviation_limit(age_m, age_r)
+
+    # household sizes
+    hh_sizes = 1:maximum(data.household_sizes.size)
+    hh_m, hh_r = state_shares(data.household_sizes, :size, hh_sizes)
+    hh_labels = category_label.(hh_sizes, last(hh_sizes))
+    hh_limit = deviation_limit(hh_m, hh_r)
+
+    return StateTable(
+        STATE_NAMES_EN,
+        ["Δ pop. share" => signed_percent.(delta)],
+        [
+            TableBlock("Age ($(limit_label(age_limit)))",
+                age_labels, age_m, age_r, limit = age_limit),
+            TableBlock("Household size ($(limit_label(hh_limit)))",
+                hh_labels, hh_m, hh_r, limit = hh_limit),
+        ],
+        footer = ("Mean |Δ|",
+            [string(round(100 * mean(abs.(delta)), digits = 1), " %")],
+            [mean_abs_pp(age_m, age_r), mean_abs_pp(hh_m, hh_r)]))
+end
+
+
+# AGREEMENT PLOTS
+
+"""
+    plot_agreement(reference, model;
+        labels = String[],
+        nlabels = 3,
+        deviation = abs.(model .- reference),
+        groups = nothing,
+        summary = "",
+        log_axes = false,
+        ticks = nothing,
+        reference_label = "Reference",
+        show_ylabel = true,
+        title = "",
+        panel_width_pt = 145,
+        panel_height_pt = 150,
+        kwargs...)
+
+Scatter plot of model values (y) against reference values (x), with the
+diagonal of perfect agreement (grey). The `nlabels` points with the largest
+`deviation` are labeled with their `labels` (see `place_labels!`); `summary`
+is printed in the lower right corner. With `log_axes = true`, both axes are
+logarithmic. Values are shares and labeled as percentages.
+
+`groups` (one integer from 1 to n per point) colors the points by group
+(`group_colors`); without groups, all points have the model color. The
+legend of the groups is drawn separately (`group_legend`), so that panels
+with and without groups keep the same size.
+"""
+function plot_agreement(reference, model;
+        labels = String[],
+        nlabels = 3,
+        deviation = abs.(model .- reference),
+        groups = nothing,
+        summary = "",
+        log_axes = false,
+        ticks = nothing,
+        reference_label = "Reference",
+        show_ylabel = true,
+        title = "",
+        panel_width_pt = 145,
+        panel_height_pt = 150,
+        kwargs...)
+
+    vals = [reference; model]
+    # linear axes start at 0/0
+    lo = log_axes ? 0.8 * minimum(vals) : 0.0
+    hi = log_axes ? 1.25 * maximum(vals) : 1.05 * maximum(vals)
+    step = hi - lo > 0.6 ? 0.2 : hi - lo > 0.3 ? 0.1 : 0.05
+    ticks = isnothing(ticks) ? collect((step * ceil(lo / step)):step:hi) : filter(t -> lo <= t <= hi, ticks)
+    ticklabels = percent_label.(ticks, digits = any(t -> 0 < t < 0.01, ticks) ? 1 : 0)
+
+    # positions on the axes as fractions (0 to 1), for label placement
+    frac(v) = log_axes ? log(v / lo) / log(hi / lo) : (v - lo) / (hi - lo)
+    unfrac(f) = log_axes ? lo * (hi / lo)^f : lo + f * (hi - lo)
+
+    p = plot(
+        title = title,
+        titlelocation = :left,
+        titlefontsize = PV_HEADING_FONTSIZE,
+        xlims = (lo, hi),
+        ylims = (lo, hi),
+        xscale = log_axes ? :log10 : :identity,
+        yscale = log_axes ? :log10 : :identity,
+        xticks = (ticks, ticklabels),
+        yticks = (ticks, ticklabels),
+        xlabel = reference_label,
+        ylabel = show_ylabel ? PV_MODEL_LABEL : "",
+        aspect_ratio = :equal,               # same limits on both axes: always square
+        grid = true,
+        gridalpha = 0.15,
+        tick_direction = :in,
+        legend = false,
+        tickfontsize = PV_SMALL_FONTSIZE,
+        guidefontsize = PV_FONTSIZE,
+        fontfamily = PV_FONT;
+        kwargs...)
+
+    plot!(p, [lo, hi], [lo, hi], linecolor = PV_LINE_COLOR, linewidth = 1.0, label = "")
+    if isnothing(groups)
+        scatter!(p, reference, model,
+            markercolor = PV_MODEL_COLOR, markerstrokewidth = 0, markersize = 3, markeralpha = 0.8, label = "")
+    else
+        colors = group_colors(maximum(groups))
+        for g in 1:maximum(groups)
+            sel = groups .== g
+            scatter!(p, reference[sel], model[sel],
+                markercolor = colors[g], markerstrokewidth = 0, markersize = 3, markeralpha = 0.9, label = "")
+        end
+    end
+
+    # the summary text (lower right corner) must not be covered by labels
+    summary_width = 0.6 * PV_SMALL_FONTSIZE * length(summary) / panel_width_pt
+    blocked = isempty(summary) ? [] : [(0.95 - summary_width, 1.0, 0.0, 0.03 + 1.3 * PV_SMALL_FONTSIZE / panel_height_pt)]
+    place_labels!(p, frac.(reference), frac.(model), labels, deviation, unfrac;
+        nlabels = nlabels, blocked = blocked, panel_width_pt = panel_width_pt, panel_height_pt = panel_height_pt)
+
+    isempty(summary) || annotate!(p, unfrac(0.97), unfrac(0.03),
+        pv_text(summary, PV_SMALL_FONTSIZE, :right, :bottom))
+    return p
+end
+
+"""
+    group_legend(labels; title = "", rows = length(labels) > 6 ? 2 : 1, width_pt = 145, row_step = 0.32)
+
+Legend of the groups of an agreement plot (colors of `group_colors`) as a
+separate, frameless subplot, to be placed below the plot: the `title`
+followed by the groups in `rows` rows. The entries start after the title
+(its width estimated relative to `width_pt`).
+"""
+function group_legend(labels; title = "", rows = length(labels) > 6 ? 2 : 1, width_pt = 145, row_step = 0.32)
+    n = length(labels)
+    cols = ceil(Int, n / rows)
+    colors = group_colors(n)
+    x0 = isempty(title) ? 0.0 : 0.06 + 0.5 * PV_SMALL_FONTSIZE * length(title) / width_pt
+    colw = (1 - x0) / cols
+    # rows from top to bottom, starting with some distance to the axis label above;
+    # the first row is at the same height in all legends
+    ys = 0.7 .- (0:(rows - 1)) .* row_step
+
+    p = plot(framestyle = :none, legend = false, grid = false,
+        xlims = (0, 1), ylims = (0, 1), margin = 0mm, fontfamily = PV_FONT)
+    isempty(title) || annotate!(p, 0, ys[1], pv_text(title, PV_SMALL_FONTSIZE, :left))
+    for (k, l) in enumerate(labels)
+        r, c = divrem(k - 1, cols)
+        x = x0 + c * colw
+        scatter!(p, [x + 0.02], [ys[r + 1]], markercolor = colors[k], markerstrokewidth = 0, markersize = 3)
+        annotate!(p, x + 0.045, ys[r + 1], pv_text(l, PV_SMALL_FONTSIZE - 1, :left))
+    end
+    return p
+end
+
+"""
+    place_labels!(p, xf, yf, labels, deviation, unfrac;
+        nlabels = 3, min_visible = 0.03, blocked = [], panel_width_pt = 145,
+        panel_height_pt = 150, fontsize = PV_SMALL_FONTSIZE)
+
+Labels the `nlabels` points with the largest `deviation` in an agreement
+plot, but only those whose distance from the diagonal is visible (at least
+`min_visible` of the axis length). Positions `xf`, `yf` are fractions of the axes (0 to 1), `unfrac`
+converts them back to data coordinates. `blocked` lists further areas
+(x0, x1, y0, y1 as fractions) that labels must not cover, such as the
+legend or the summary text.
+
+Text sizes are estimated from the number of characters and the font size
+relative to the panel size (`panel_width_pt`, `panel_height_pt`). Each label
+tries several positions: next to its point (to the right in the left half
+of the panel, to the left in the right half), then moved away from the
+diagonal in steps, then on the other side, then moved toward the diagonal.
+The first position that stays inside the panel, on the same side of the
+diagonal as its point, and does not cover a point, another label or a
+blocked area is used; if there is none, the point stays unlabeled. Labels
+that are not directly next to their point get a faint line to it, which
+cannot cross the diagonal either, since label and point are on the same side.
+"""
+function place_labels!(p, xf, yf, labels, deviation, unfrac;
+        nlabels = 3, min_visible = 0.03, blocked = [], panel_width_pt = 145, panel_height_pt = 150,
+        fontsize = PV_SMALL_FONTSIZE)
+
+    pad, inner, step = 0.025, 0.02, 0.07
+    width(s) = 0.48 * fontsize * length(s) / panel_width_pt
+    height = 1.6 * fontsize / panel_height_pt      # line height with some spacing
+    dot = 0.015                                 # radius of a point
+    taken = Tuple{Float64, Float64, Float64, Float64}[blocked...]
+
+    overlaps(a, b) = a[1] < b[2] && b[1] < a[2] && a[3] < b[4] && b[3] < a[4]
+    # a box lies entirely above the diagonal if its lower right corner does,
+    # entirely below it if its upper left corner does
+    same_side(box, own) = yf[own] > xf[own] ? box[3] - box[2] > dot : box[1] - box[4] > dot
+    function free(box, own)
+        box[1] >= inner && box[2] <= 1 - inner && box[3] >= inner && box[4] <= 1 - inner || return false
+        same_side(box, own) || return false
+        any(t -> overlaps(box, t), taken) && return false
+        for k in eachindex(xf)
+            k == own && continue
+            overlaps(box, (xf[k] - dot, xf[k] + dot, yf[k] - dot, yf[k] + dot)) && return false
+        end
+        return true
+    end
+
+    # the largest deviations, but only points whose distance from the diagonal is visible
+    idx = filter(i -> abs(yf[i] - xf[i]) >= min_visible,
+        collect(partialsortperm(deviation, 1:min(nlabels, length(deviation)), rev = true)))
+    for i in idx
+        s, w = labels[i], width(labels[i])
+        away = yf[i] < xf[i] ? -1 : 1              # away from the diagonal
+        preferred = xf[i] < 0.5                      # text to the right of the point
+        choice = nothing
+        # away from the diagonal first, then toward it
+        for dir in (away, -away), right in (preferred, !preferred), k in (dir == away ? (0:9) : (1:9))
+            y = yf[i] + dir * k * step
+            x = xf[i] + (right ? pad : -pad)
+            box = right ? (x, x + w, y - height / 2, y + height / 2) : (x - w, x, y - height / 2, y + height / 2)
+            if free(box, i)
+                choice = (x = x, y = y, right = right, box = box, leader = k > 0 || right != preferred)
+                break
+            end
+        end
+        # no free position: leave the point unlabeled rather than covering something
+        isnothing(choice) && continue
+        push!(taken, choice.box)
+
+        if choice.leader
+            # from the near edge of the text to just before the point
+            x0 = clamp(xf[i], choice.box[1], choice.box[2])
+            y0 = clamp(yf[i], choice.box[3], choice.box[4])
+            dx, dy = xf[i] - x0, yf[i] - y0
+            r = hypot(dx, dy)
+            f = r > 0 ? max(0.0, (r - 1.2dot) / r) : 0.0
+            plot!(p, unfrac.([x0, x0 + f * dx]), unfrac.([y0, y0 + f * dy]),
+                linecolor = :gray, linealpha = 0.5, linewidth = 0.6, label = "")
+        end
+        annotate!(p, unfrac(choice.x), unfrac(choice.y), pv_text(s, fontsize, choice.right ? :left : :right))
+    end
+    return p
+end
+
+"""
+    group_colors(n)
+
+`n` colors for groups such as age groups: the GEMS default palette.
+"""
+group_colors(n) = gemscolors(n)
+
+"""
+    state_agreement_panels(data; first_letter = 'C')
+
+Agreement plots of the federal states: share of the national population,
+age structure (10-year groups), household sizes, household types and senior
+status, each GEMS against the reference (axes labeled with the source names
+of `reference_labels(data)`). Returns the panels and, separately, their
+legends (empty for the population panel), to be placed below the panels.
+"""
+function state_agreement_panels(data; first_letter = 'C')
+    letter(k) = string(first_letter + k)
+    sources = reference_labels(data)
+
+    # share of the national population
+    pop = combine(groupby(data.age_sex, :state), :model => sum => :model, :reference => sum => :reference)
+    sort!(pop, :state)
+    pop_m, pop_r = pop.model ./ sum(pop.model), pop.reference ./ sum(pop.reference)
+    rel = pop_m ./ pop_r .- 1
+    p_pop = plot_agreement(pop_r, pop_m,
+        labels = STATE_NAMES_EN,
+        deviation = abs.(rel),
+        summary = "mean |Δ| = $(round(100 * mean(abs.(rel)), digits = 1))%",
+        reference_label = sources.age_sex,
+        title = "$(letter(0))  Population")
+
+    # shares of categories per state, flattened to one point per state and
+    # category, colored by category (labels name the state; the color names the category)
+    function category_panel(df, key, categories, reference_label, title; nlabels = 3)
+        m, r = state_shares(df, key, categories)
+        lab = [STATE_NAMES_EN[s] for s in 1:16, _ in eachindex(categories)]
+        grp = [c for _ in 1:16, c in eachindex(categories)]
+        return plot_agreement(vec(r), vec(m),
+            labels = vec(lab),
+            nlabels = nlabels,
+            groups = vec(grp),
+            summary = "mean |Δ| = $(round(100 * mean(abs.(m .- r)), digits = 2)) pp",
+            reference_label = reference_label,
+            show_ylabel = false,
+            title = title)
+    end
+
+    age = transform(data.age_sex, :age => (a -> min.(a .÷ 10, 8)) => :group)
+    # decades (the oldest group is open-ended); the caption names the 10-year groups
+    age_labels = ["<10"; [string(10g, "s") for g in 1:7]; "80+"]
+    p_age = category_panel(age, :group, 0:8, sources.age_sex, "$(letter(1))  Age groups", nlabels = 4)
+
+    hh_sizes = 1:maximum(data.household_sizes.size)
+    hh_labels = category_label.(hh_sizes, last(hh_sizes))
+    p_hh = category_panel(data.household_sizes, :size, hh_sizes, sources.household_sizes,
+        "$(letter(2))  Household sizes")
+
+    # family types: shares of all households, "other" = no core family type (see `FAMILY_TYPES`)
+    p_types = category_panel(family_type_counts(data.household_types), :category,
+        getfield.(FAMILY_TYPES, :key), sources.household_types, "$(letter(3))  Household family types")
+
+    seniors = getfield.(SENIOR_STATUS, :key)
+    p_seniors = category_panel(data.senior_status, :category, seniors, sources.senior_status,
+        "$(letter(4))  Household senior status")
+
+    activity = getfield.(ACTIVITY_STATUS, :key)
+    p_activity = category_panel(data.activity_status, :category, activity, sources.activity_status,
+        "$(letter(5))  Activity status")
+
+    panels = [p_pop, p_age, p_hh, p_types, p_seniors, p_activity]
+    legends = [
+        plot(framestyle = :none, legend = false, grid = false, margin = 0mm),
+        group_legend(age_labels, title = "Age", rows = 2),
+        group_legend(hh_labels, title = "Persons"),
+        group_legend(getfield.(FAMILY_TYPES, :label), rows = 3),
+        group_legend(getfield.(SENIOR_STATUS, :label), rows = 2),
+        group_legend(getfield.(ACTIVITY_STATUS, :label), rows = 2),
+    ]
+    return panels, legends
+end
+
+
+# 4. FIGURE
+
+"""
+    validation_figure(data; national_height = 0.32, dpi = PV_DPI)
+
+National panels in the top row and the state table below, drawn at the
+print size of a full-page PLOS figure.
+"""
+function validation_figure(data; national_height = 0.32, dpi = PV_DPI)
+    sources = reference_labels(data)
+    national = [
+        plot_age_pyramid(data.age_sex, reference_label = sources.age_sex),
+        plot_household_size_panel(data.household_sizes, reference_label = sources.household_sizes),
+    ]
+    top = plot(national..., layout = (1, length(national)))
+    table = plot(state_table(data),
+        reference_label = "Reference",
+        title = "$(('A':'Z')[length(national) + 1])  Federal states",
+        titlelocation = :left,
+        titlefontsize = PV_HEADING_FONTSIZE,
+        top_margin = -3mm)
+
+    return plot(top, table,
+        layout = grid(2, 1, heights = [national_height, 1 - national_height]),
+        size = (100PV_WIDTH_IN, 100PV_HEIGHT_IN),
+        dpi = dpi,
+        fontfamily = PV_FONT)
+end
+
+"""
+    section_header(txt)
+
+Empty subplot carrying the heading of a row of panels and a thin line below it.
+"""
+section_header(txt) = plot(framestyle = :none, legend = false, grid = false,
+        xlims = (0, 1), ylims = (0, 1), margin = 0mm) |>
+    p -> plot!(p, [0, 1], [0.15, 0.15], linecolor = PV_LINE_COLOR, linewidth = 0.6) |>
+    p -> annotate!(p, 0, 0.3, pv_text(txt, PV_HEADING_FONTSIZE + 1, :left, :bottom))
+
+"""
+    validation_figure_agreement(data; height_in = 8.7, national_height_in = 2.4,
+        legend_height_in = 0.5, columns = 3, dpi = PV_DPI)
+
+National panels ("Germany") in the top row: age pyramid, household sizes,
+household types and senior status. Below, the agreement plots of the
+federal states (population, age groups, household sizes, household types,
+senior status) in rows of `columns` panels, each panel row followed by a
+row of legends (`legend_height_in`), so that all agreement plots have the
+same size. Both sections have a heading.
+"""
+function validation_figure_agreement(data; height_in = 8.7, national_height_in = 2.4,
+        legend_height_in = 0.5, columns = 3, dpi = PV_DPI)
+
+    sources = reference_labels(data)
+    # a line break after the title leaves room between title and plot
+    national = [
+        plot_age_pyramid(data.age_sex, reference_label = sources.age_sex, title = "A  Age and sex\n",
+            show_top_group = false, age_label = "", xtick_step = 0.004, legend = :topright),
+        plot_household_size_panel(data.household_sizes, reference_label = sources.household_sizes,
+            title = "B  Household size\n"),
+        plot_household_category_panel(family_type_counts(data.household_types), FAMILY_TYPES,
+            reference_label = sources.household_types, title = "C  Household family type\n",
+            xrotation = 40),
+        plot_household_category_panel(data.senior_status, SENIOR_STATUS,
+            reference_label = sources.senior_status, title = "D  Household senior status\n",
+            xrotation = 40, legend = false),
+    ]
+    panels, legends = state_agreement_panels(data, first_letter = 'A' + length(national))
+    foreach(p -> plot!(p, title = p[1][:title] * "\n"), panels)
+
+    # rows of agreement plots, each followed by its legends; empty cells fill the last row
+    empty() = plot(framestyle = :none, legend = false, grid = false, margin = 0mm)
+    nrows = ceil(Int, length(panels) / columns)
+    padded(v) = [v; [empty() for _ in 1:(nrows * columns - length(v))]]
+    panels, legends = padded(panels), padded(legends)
+    header = 0.25
+    row_height = (height_in - 2header - national_height_in) / nrows
+    legend_share = legend_height_in / row_height
+    state_rows = [plot(panels[(r - 1) * columns .+ (1:columns)]..., legends[(r - 1) * columns .+ (1:columns)]...,
+            layout = grid(2, columns, heights = [1 - legend_share, legend_share]), top_margin = -5mm)
+        for r in 1:nrows]
+
+    heights = [header; national_height_in; header; fill(row_height, nrows)] ./ height_in
+    return plot(
+        section_header("Germany"),
+        plot(national..., layout = grid(1, length(national), widths = [0.31; fill(0.23, length(national) - 1)]),
+            top_margin = -5mm, left_margin = -1mm),
+        section_header("Federal states"),
+        state_rows...,
+        layout = grid(length(heights), 1, heights = heights),
+        size = (100PV_WIDTH_IN, 100height_in),
+        dpi = dpi,
+        fontfamily = PV_FONT)
+end
+
+"""
+    population_validation(;
+        folder = nothing,
+        folder_tag = nothing,
+        sim = nothing,
+        reference = :official2019,
+        data = nothing)
+
+Compares the GEMS population with official statistics (`reference`, see
+`VALIDATION_REFERENCES`) and saves the figure (PNG) and its data (CSV) to
+`folder`. Pass `data` (from `validation_data` or
+`load_validation_data`) to redraw the figure without loading the
+population; otherwise `sim` (default: the German population) is used.
+
+If `folder` is `nothing`, a new result folder is created, with
+`folder_tag` appended to its timestamp-based name (see `result_folder`).
+"""
+function population_validation(;
+        folder = nothing,
+        folder_tag = nothing,
+        sim = nothing,
+        reference = :official2019,
+        data = nothing)
+
+    isnothing(folder) ? folder = result_folder(folder_tag) : mkpath(folder)
+
+    if isnothing(data)
+        sim = isnothing(sim) ? Simulation(population = "DE", seed = 0) : sim
+        data = validation_data(sim, reference = reference)
+    end
+    save_validation_data(data, folder)
+
+    p = validation_figure(data)
+    png(p, joinpath(folder, "population_validation.png"))
+    # second layout with agreement plots instead of the state table, for comparison
+    png(validation_figure_agreement(data), joinpath(folder, "population_validation_agreement.png"))
+    return p
+end
