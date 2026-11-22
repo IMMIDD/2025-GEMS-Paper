@@ -91,6 +91,9 @@ include("commuter_validation.jl")
 include("contacts.jl")
 include("benchmarking.jl")
 
+# INCLUDE CONTACT DATA (POLYMOD)
+include("contacts/polymod_data.jl")
+
 # INCLUDE RKI DATA AND MODEL (for the first wave scenario)
 include("first_wave/rki_data.jl")
 include("first_wave/rki_imports.jl")
