@@ -273,7 +273,10 @@
     #   work (3.920):   Office 1/2, Department 1/4, Workplace 1/8, WorkplaceSite 1/8
     #   school (2.673): SchoolClass 1/2, SchoolYear 1/4, School 1/8, SchoolComplex 1/8
     # Municipality: all other contacts (transport, leisure, other places, visitors at home),
-    # drawn uniformly from the members.
+    # drawn from the members by age (AgeBasedContactSampling): age-age matrix of the German
+    # POLYMOD contacts outside home, education, and work (inputs/contacts/
+    # polymod_municipality_matrix_DE.txt, 5-year groups, last group 70+), weighted by the age
+    # structure of each municipality (computed by GEMS from its members).
     [Settings.Household]
         [Settings.Household.contact_sampling_method]
                 type = "HouseholdSizeSampling"
@@ -306,10 +309,12 @@
 
     [Settings.Municipality]
         [Settings.Municipality.contact_sampling_method]
-                type = "ContactparameterSampling"
+                type = "AgeBasedContactSampling"
 
                 [Settings.Municipality.contact_sampling_method.parameters]
                     contactparameter = 4.155
+                    contact_matrix_file = "inputs/contacts/polymod_municipality_matrix_DE.txt"
+                    interval = 5
 
     [Settings.WorkplaceSite]
         [Settings.WorkplaceSite.contact_sampling_method]

@@ -164,7 +164,8 @@ care_home_contacts(csm, care_homes::Integer) =
 function contact_scaling(sim::Simulation, care_homes::Integer)
     scaled(T) = T != Household && !isempty(settings(sim, T))
     types = [T for T in settingtypes(settingscontainer(sim)) if scaled(T)]
-    # sampling method of each type (all settings of a type share it before the first scaling)
+    # sampling method of each type (all settings of a type have a copy of the config's method
+    # before the first scaling)
     base = Dict(map(types) do T
         csm = contact_sampling_method(first(settings(sim, T)))
         if !(csm isa Union{ContactparameterSampling, AgeBasedContactSampling})
@@ -172,7 +173,7 @@ function contact_scaling(sim::Simulation, care_homes::Integer)
         end
         T => csm
     end)
-    # all households share the config's sampling method before the first scaling
+    # all households have the config's sampling method before the first scaling
     care_size, c_care = care_home_contacts(
         contact_sampling_method(first(settings(sim, Household))), care_homes)
     care = filter(h -> length(individuals(h)) >= care_size, settings(sim, Household))

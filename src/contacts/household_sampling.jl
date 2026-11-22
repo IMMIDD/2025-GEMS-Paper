@@ -21,23 +21,27 @@ residents, so they get the mean daily home contacts of all participants.
 
 # Parameters
 
-- `probabilities::Vector{Float64}`: probability to contact each other member,
+- `probabilities::NTuple{N, Float64}`: probability to contact each other member,
   for household sizes 2, 3, ...; the last entry applies to all larger households
-  below `large_size` (e.g. `[q2, q3, q4, q5plus]`).
+  below `large_size` (e.g. `[q2, q3, q4, q5plus]`, given as a vector or tuple).
 - `large_size::Int = typemax(Int)`: smallest household size treated as a care
   home (none by default).
 - `large_contacts::Float64 = 0.0`: mean daily contacts in care homes.
 
 Single-person households have no household contacts.
+
+The method holds only plain values (`isbitstype`): GEMS gives every setting its
+own copy of the sampling method (`deepcopy`), which for such a struct returns
+the method itself, so all households share one object.
 """
-struct HouseholdSizeSampling <: ContactSamplingMethod
-    probabilities::Vector{Float64}
+struct HouseholdSizeSampling{N} <: ContactSamplingMethod
+    probabilities::NTuple{N, Float64}
     large_size::Int
     large_contacts::Float64
 
-    function HouseholdSizeSampling(probabilities::AbstractVector{<:Real},
-            large_size::Integer = typemax(Int), large_contacts::Real = 0.0)
-        isempty(probabilities) &&
+    function HouseholdSizeSampling{N}(probabilities::NTuple{N, Float64},
+            large_size::Int, large_contacts::Float64) where N
+        N >= 1 ||
             throw(ArgumentError("At least one contact probability is required."))
         all(p -> 0 <= p <= 1, probabilities) ||
             throw(ArgumentError("Contact probabilities must be in [0, 1]. Got $probabilities."))
@@ -45,8 +49,14 @@ struct HouseholdSizeSampling <: ContactSamplingMethod
             throw(ArgumentError("'large_size' must be at least 2. Got $large_size."))
         large_contacts >= 0 ||
             throw(ArgumentError("'large_contacts' must be non-negative. Got $large_contacts."))
-        return new(Float64.(probabilities), large_size, large_contacts)
+        return new{N}(probabilities, large_size, large_contacts)
     end
+end
+
+function HouseholdSizeSampling(probabilities::Union{AbstractVector{<:Real}, Tuple{Vararg{Real}}},
+        large_size::Integer = typemax(Int), large_contacts::Real = 0.0)
+    p = Tuple(Float64.(collect(probabilities)))
+    return HouseholdSizeSampling{length(p)}(p, Int(large_size), Float64(large_contacts))
 end
 
 # keyword constructor, as GEMS builds contact sampling methods from config files

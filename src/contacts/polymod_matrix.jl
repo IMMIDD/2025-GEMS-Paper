@@ -5,7 +5,7 @@
 # Input of `AgeBasedContactSampling` for municipalities: for each age group of an
 # individual, the probability distribution over the age groups of its contacts,
 # relative to the population (GEMS multiplies each row by the age structure of
-# the population before sampling, see `national_age_based_sampling`).
+# the municipality before sampling, see `AgeBasedContactSampling`).
 
 
 """

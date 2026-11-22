@@ -276,12 +276,16 @@ end
     config_layer_contacts(configfile)
 
 Contacts per member and day of each GEMS layer in `configfile` (sum of the
-contact parameters of the layer's setting types, see `LAYER_SETTING_TYPES`).
+contact parameters of the layer's setting types, see `LAYER_SETTING_TYPES`);
+`missing` for a layer whose sampling method has no contact parameter (e.g.
+households with `HouseholdSizeSampling`).
 """
 function config_layer_contacts(configfile)
     settings = TOML.parsefile(configfile)["Settings"]
-    param(t) = haskey(settings, t) ?
-        settings[t]["contact_sampling_method"]["parameters"]["contactparameter"] : 0.0
+    function param(t)
+        haskey(settings, t) || return 0.0
+        return get(settings[t]["contact_sampling_method"]["parameters"], "contactparameter", missing)
+    end
     # rounded: sums of decimal parameters are not exact in floating point
     return Dict(l => round(sum(param, types), digits = 6) for (l, types) in LAYER_SETTING_TYPES)
 end
