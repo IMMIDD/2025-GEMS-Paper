@@ -66,9 +66,8 @@
                 # [C] sum of the daily per-contact transmission probabilities over the infection
                 # (the profile sums to 1); fitted to R0 = 3.28 [L] Liu et al. 2020 in
                 # calibrate_first_wave.jl (mean effective R of ticks 1-10,
-                # 10 runs), on Rhineland-Palatinate (contact structure closest to DE);
-                # start value 7 x 0.06541 (fitted rate of the constant 7-day infectious period)
-                transmission_scale = 0.50486
+                # 10 runs), on Rhineland-Palatinate (contact structure closest to DE).
+                transmission_scale = 0.46202
                 # [L] adapted: infectiousness profile relative to symptom onset, shifted gamma with
                 # shape 97.1875, rate 3.71875, shift 25.625 d (He et al. 2020, corrected by
                 # Ashcroft et al. 2020, Table 1); parameters = shape, scale = 1 / rate;
@@ -258,83 +257,94 @@
 
 [Settings]
 
-    # daily contacts, drawn uniformly from the members of the setting:
-    # household, office/workplace total 2.8, school total 1.8, municipality: [L] Mossong et al. 2008;
-    # [A] work and school contacts split over the setting levels, weighted towards the most
-    # immediate level (most contacts with the own class / office); each level gets half of
-    # the one below, the two outermost levels the same:
-    #   work:   Office 1/2 (1.4), Department 1/4 (0.7), Workplace 1/8 (0.35), WorkplaceSite 1/8 (0.35)
-    #   school: SchoolClass 1/2 (0.9), SchoolYear 1/4 (0.45), School 1/8 (0.225),
-    #           SchoolComplex 1/8 (0.225)
+    # [L] daily contacts derived from the German participants of POLYMOD (Mossong et al. 2008;
+    # data: doi:10.5281/zenodo.3874557) with derive_contact_parameters.jl; values and their
+    # derivation per entry in inputs/contacts/contact_parameters_DE.csv (rounded to 3 decimals).
+    # Contacts per member of a setting and day: weekdays 5/7, weekend 2/7, participants weighted
+    # by age to the members in the population model.
+    # Households (HouseholdSizeSampling, src/contacts/household_sampling.jl): each other member
+    # is met with a probability by household size (2, 3, 4, 5+); home contacts beyond the other
+    # members count as visitors (municipality). Care homes (11+ members): Poisson contacts with
+    # the mean daily home contacts of all participants.
+    # Education settings (daycare to university) and workplaces: contacts per member drawn
+    # uniformly from the members of the setting; [A] split over the setting levels, weighted
+    # towards the most immediate level (most contacts with the own class / office); each level
+    # gets half of the one below, the two outermost levels the same:
+    #   work (3.920):   Office 1/2, Department 1/4, Workplace 1/8, WorkplaceSite 1/8
+    #   school (2.673): SchoolClass 1/2, SchoolYear 1/4, School 1/8, SchoolComplex 1/8
+    # Municipality: all other contacts (transport, leisure, other places, visitors at home),
+    # drawn uniformly from the members.
     [Settings.Household]
         [Settings.Household.contact_sampling_method]
-                type = "ContactparameterSampling"
+                type = "HouseholdSizeSampling"
 
                 [Settings.Household.contact_sampling_method.parameters]
-                    contactparameter = 3.3
+                    probabilities = [0.953, 0.935, 0.899, 0.804]
+                    large_size = 11
+                    large_contacts = 2.706
 
     [Settings.Office]
         [Settings.Office.contact_sampling_method]
                 type = "ContactparameterSampling"
 
                 [Settings.Office.contact_sampling_method.parameters]
-                    contactparameter = 1.4
+                    contactparameter = 1.960
 
     [Settings.School]
         [Settings.School.contact_sampling_method]
                 type = "ContactparameterSampling"
 
                 [Settings.School.contact_sampling_method.parameters]
-                    contactparameter = 0.225
+                    contactparameter = 0.334
 
     [Settings.SchoolClass]
         [Settings.SchoolClass.contact_sampling_method]
                 type = "ContactparameterSampling"
 
                 [Settings.SchoolClass.contact_sampling_method.parameters]
-                    contactparameter = 0.9
+                    contactparameter = 1.337
 
     [Settings.Municipality]
         [Settings.Municipality.contact_sampling_method]
                 type = "ContactparameterSampling"
 
                 [Settings.Municipality.contact_sampling_method.parameters]
-                    contactparameter = 4
+                    contactparameter = 4.155
 
     [Settings.WorkplaceSite]
         [Settings.WorkplaceSite.contact_sampling_method]
                 type = "ContactparameterSampling"
 
                 [Settings.WorkplaceSite.contact_sampling_method.parameters]
-                    contactparameter = 0.35
+                    contactparameter = 0.490
 
     [Settings.SchoolComplex]
         [Settings.SchoolComplex.contact_sampling_method]
                 type = "ContactparameterSampling"
 
                 [Settings.SchoolComplex.contact_sampling_method.parameters]
-                    contactparameter = 0.225
+                    contactparameter = 0.334
 
     [Settings.SchoolYear]
         [Settings.SchoolYear.contact_sampling_method]
                 type = "ContactparameterSampling"
 
                 [Settings.SchoolYear.contact_sampling_method.parameters]
-                    contactparameter = 0.45
+                    contactparameter = 0.668
 
     [Settings.Department]
         [Settings.Department.contact_sampling_method]
                 type = "ContactparameterSampling"
 
                 [Settings.Department.contact_sampling_method.parameters]
-                    contactparameter = 0.7
+                    contactparameter = 0.980
 
     [Settings.Workplace]
         [Settings.Workplace.contact_sampling_method]
                 type = "ContactparameterSampling"
 
                 [Settings.Workplace.contact_sampling_method.parameters]
-                    contactparameter = 0.35
+                    contactparameter = 0.490
 
     # [D] no global setting
     [Settings.GlobalSetting]
