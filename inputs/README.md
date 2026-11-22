@@ -1,6 +1,6 @@
 # Inputs: sources, copyright and licenses
 
-This folder contains the inputs read by the analyses: results of our own calibrations and data from official statistics. The repository's GPL-3.0 license applies to the code only. Data from third parties keeps its original license, listed below for every file.
+This folder contains the inputs read by the analyses: results of our own calibrations, contact parameters derived from POLYMOD, and data from official statistics. The repository's GPL-3.0 license applies to the code only. Data from third parties keeps its original license, listed below for every file.
 
 ## Rules for adding data
 
@@ -38,6 +38,20 @@ This folder contains the inputs read by the analyses: results of our own calibra
 | File | Source | License | Changes |
 |---|---|---|---|
 | `county_income_2019.csv` | Statistische Ämter des Bundes und der Länder, Volkswirtschaftliche Gesamtrechnungen der Länder, Reihe 2 Band 3, Tab. 2.4 (Berechnungsstand Februar 2025), [statistikportal.de](https://www.statistikportal.de) | dl-de/by-2-0 | Extract of the 2019 values per county; columns renamed (`ags`, `name`, `income_2019`) |
+
+### `contacts/`: contact parameters derived from POLYMOD
+
+Written by [derive_contact_parameters.jl](../derive_contact_parameters.jl) (code in [src/contacts/](../src/contacts/)) from the POLYMOD raw data, which is downloaded on demand into `data/polymod/` and not part of the repository.
+
+| File | Content |
+|---|---|
+| `contact_parameters_DE.csv` | Contact sampling parameters of the config, one row per entry (setting type, parameter, index, value, derivation) |
+| `polymod_contact_rates.csv` | Daily contacts per member of each GEMS setting layer, Germany and all countries, with all and with capped home contacts, next to the config |
+| `polymod_household_probabilities.csv` | Share of the other household members met per day by household size, Germany and all countries |
+
+- Source: Mossong J, Hens N, Jit M, et al. (2020). POLYMOD social contact data (Version 2) [Data set]. Zenodo. [10.5281/zenodo.3874557](https://doi.org/10.5281/zenodo.3874557). Survey described in Mossong J, et al. (2008). PLoS Med 5(3):e74. [10.1371/journal.pmed.0050074](https://doi.org/10.1371/journal.pmed.0050074).
+- License: [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). The derived files keep this license (not the repository's GPL-3.0) and may only be reused for non-commercial purposes, with attribution.
+- Changes: own calculation. Contacts assigned to GEMS setting layers, averaged per member of each layer, daily average (weekdays 5/7, weekend 2/7), weighted by age to the GEMS population. Each file carries this note as a header.
 
 ### `population/`: reference data for the validation of the population model
 

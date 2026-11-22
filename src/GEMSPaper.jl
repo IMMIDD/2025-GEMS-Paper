@@ -93,6 +93,9 @@ include("benchmarking.jl")
 
 # INCLUDE CONTACT DATA (POLYMOD)
 include("contacts/polymod_data.jl")
+include("contacts/polymod_rates.jl")
+include("contacts/household_sampling.jl")
+include("contacts/contact_parameters.jl")
 
 # INCLUDE RKI DATA AND MODEL (for the first wave scenario)
 include("first_wave/rki_data.jl")

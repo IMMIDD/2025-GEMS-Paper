@@ -141,9 +141,26 @@ function symptom_test_probability(ascertainment::Real, symptomatic::Real, hospit
 end
 
 
+"""
+    care_home_contacts(csm, care_homes)
+
+Smallest care home size and mean daily contacts in care homes for the household
+contact sampling method `csm`: `care_homes` and the contact parameter for
+`ContactparameterSampling`, the method's own `large_size` and `large_contacts`
+for `HouseholdSizeSampling`.
+"""
+care_home_contacts(csm::ContactparameterSampling, care_homes::Integer) =
+    (care_homes, csm.contactparameter)
+care_home_contacts(csm::HouseholdSizeSampling, care_homes::Integer) =
+    (csm.large_size, csm.large_contacts)
+care_home_contacts(csm, care_homes::Integer) =
+    throw(ArgumentError("Care home contacts are not defined for households with $(typeof(csm))."))
+
+
 # setting types whose contacts are scaled (all except households) and a function that sets their
 # contact parameters to a factor times the config value; care homes (households with at least
-# `care_homes` members) are scaled as well
+# `care_homes` members, or the care home size of `HouseholdSizeSampling`, see
+# `care_home_contacts`) are scaled as well
 function contact_scaling(sim::Simulation, care_homes::Integer)
     scaled(T) = T != Household && !isempty(settings(sim, T))
     types = [T for T in settingtypes(settingscontainer(sim)) if scaled(T)]
@@ -154,10 +171,12 @@ function contact_scaling(sim::Simulation, care_homes::Integer)
         end
         T => csm.contactparameter
     end)
-    care = filter(h -> length(individuals(h)) >= care_homes, settings(sim, Household))
-    c_care = isempty(care) ? 0.0 : contact_sampling_method(first(care)).contactparameter
+    # all households share the config's sampling method before the first scaling
+    care_size, c_care = care_home_contacts(
+        contact_sampling_method(first(settings(sim, Household))), care_homes)
+    care = filter(h -> length(individuals(h)) >= care_size, settings(sim, Household))
     residents = sum(h -> length(individuals(h)), care; init = 0)
-    printinfo("Care homes (households with at least $care_homes members): $(length(care)), " *
+    printinfo("Care homes (households with at least $care_size members): $(length(care)), " *
         "$residents residents, contact parameter $c_care scaled")
 
     function scale(f)
