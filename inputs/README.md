@@ -48,6 +48,8 @@ Written by [derive_contact_parameters.jl](../derive_contact_parameters.jl) (code
 | `contact_parameters_DE.csv` | Contact sampling parameters of the config, one row per entry (setting type, parameter, index, value, derivation) |
 | `polymod_contact_rates.csv` | Daily contacts per member of each GEMS setting layer, Germany and all countries, with all and with capped home contacts, next to the config |
 | `polymod_household_probabilities.csv` | Share of the other household members met per day by household size, Germany and all countries |
+| `polymod_municipality_matrix_DE.txt` | Age-age matrix of the municipality contacts (age groups 0–4, …, 65–69, 70+), rows normalized to 1, in the format read by `AgeBasedContactSampling` (plain numbers, no header; source and license as below) |
+| `polymod_municipality_matrix_DE.csv` | The same matrix as a table with its derivation steps: mean daily contacts, made reciprocal, per capita, probabilities |
 
 - Source: Mossong J, Hens N, Jit M, et al. (2020). POLYMOD social contact data (Version 2) [Data set]. Zenodo. [10.5281/zenodo.3874557](https://doi.org/10.5281/zenodo.3874557). Survey described in Mossong J, et al. (2008). PLoS Med 5(3):e74. [10.1371/journal.pmed.0050074](https://doi.org/10.1371/journal.pmed.0050074).
 - License: [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). The derived files keep this license (not the repository's GPL-3.0) and may only be reused for non-commercial purposes, with attribution.

@@ -120,8 +120,9 @@ function run_testing_sims(;
     # assume that a share of the community contacts does not take place
     # (scales the contact parameter of the config's municipalities)
     function reduce_municipality_contacts!(sim)
-        c = contact_sampling_method(first(settings(sim, Municipality))).contactparameter
-        csm = ContactparameterSampling(c * (1.0 - municipality_contact_reduction))
+        base_csm = contact_sampling_method(first(settings(sim, Municipality)))
+        csm = with_contactparameter(base_csm,
+            base_csm.contactparameter * (1.0 - municipality_contact_reduction))
         foreach(s -> contact_sampling_method!(s, csm), settings(sim, Municipality))
     end
 

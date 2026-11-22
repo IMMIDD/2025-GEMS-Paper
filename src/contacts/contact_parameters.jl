@@ -145,6 +145,10 @@ Derives the contact parameters of the config from the POLYMOD participants of
   (`polymod_rate_table`).
 - `polymod_household_probabilities.csv`: share of the other household members
   met per day by household size (`household_contact_probabilities`).
+- `polymod_municipality_matrix_<country>.txt`: age-age matrix of the
+  municipality contacts in the format of `AgeBasedContactSampling`, and
+  `polymod_municipality_matrix_<country>.csv` with its steps
+  (`municipality_contact_matrix`).
 
 Returns the parameters next to the values in `configfile` and warns about the
 entries that differ (rounded to three decimals).
@@ -179,6 +183,14 @@ function derive_contact_parameters(;
         "Daily contacts per member of each GEMS setting layer (POLYMOD; config: $configfile)")
     write_polymod_csv(joinpath(dir, "polymod_household_probabilities.csv"), households,
         "Share of the other household members met per day by household size (POLYMOD)")
+
+    # age-age matrix of the municipality contacts (AgeBasedContactSampling)
+    matrix = municipality_contact_matrix(polymod, population_age_counts(sim), country = country)
+    write_contact_matrix(joinpath(dir, "polymod_municipality_matrix_$country.txt"),
+        matrix.probabilities)
+    write_polymod_csv(joinpath(dir, "polymod_municipality_matrix_$country.csv"), matrix_table(matrix),
+        "Age-age matrix of the municipality contacts (POLYMOD $country; contacts without age: " *
+        "$(round(100 * matrix.missing_age, digits = 1))%, left out)")
     printinfo("Contact parameters written to $dir")
 
     comparison = compare_contact_parameters(parameters, configfile)
