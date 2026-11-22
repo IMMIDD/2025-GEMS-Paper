@@ -67,7 +67,7 @@
                 # (the profile sums to 1); fitted to R0 = 3.28 [L] Liu et al. 2020 in
                 # calibrate_first_wave.jl (mean effective R of ticks 1-10,
                 # 10 runs), on Rhineland-Palatinate (contact structure closest to DE).
-                transmission_scale = 0.46202
+                transmission_scale = 0.45784
                 # [L] adapted: infectiousness profile relative to symptom onset, shifted gamma with
                 # shape 97.1875, rate 3.71875, shift 25.625 d (He et al. 2020, corrected by
                 # Ashcroft et al. 2020, Table 1); parameters = shape, scale = 1 / rate;
