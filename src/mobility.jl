@@ -273,9 +273,14 @@ end
     mobility(;
         folder = nothing,
         folder_tag = nothing,
-        sim = Simulation(population = "SL"))
+        sim = Simulation(population = "SL"),
+        share_maps = false)
 
-Runs all mobilty-related analyses.
+Runs all mobilty-related analyses: the shares of in- and out-commuters per
+county (CSV) and, for a population covering all federal states, the figure
+of the commuting balance and its comparison with the BA commuter statistics
+(`commuter_validation`). With `share_maps`, it also saves the maps of the
+in- and out-commuter shares per county (the earlier figure of the paper).
 
 If `folder` is `nothing`, a new result folder is created, with `folder_tag`
 appended to its timestamp-based name (see `result_folder`).
@@ -283,7 +288,8 @@ appended to its timestamp-based name (see `result_folder`).
 function mobility(;
         folder = nothing,
         folder_tag = nothing,
-        sim = Simulation(population = "SL", seed = 0))
+        sim = Simulation(population = "SL", seed = 0),
+        share_maps = false)
 
     # create result folder if not passed
     isnothing(folder) ? folder = result_folder(folder_tag) : nothing
@@ -292,37 +298,37 @@ function mobility(;
     mc = mun_commutes(sim)
     cc = county_commutes(mc)
 
-    mcif = mun_commutes_in_fraction(mc)
-    mcof = mun_commutes_out_fraction(mc)
     ccif = county_commutes_in_fraction(cc)
     ccof = county_commutes_out_fraction(cc)
-    
+
     # store data
     CSV.write(joinpath(folder, "county_commutes_in_fraction.csv"), ccif)
     CSV.write(joinpath(folder, "county_commutes_out_fraction.csv"), ccof)
 
-    # plot fraction of outgoing commuters per municipality
-    # p_out_mc = plot_mun_commutes_out_fraction(mcof)
-    # png(p_out_mc, joinpath(folder, "outgoing_commuters_fraction_per_municipality.png"))
+    if share_maps
+        # plot fraction of outgoing commuters per municipality
+        # p_out_mc = plot_mun_commutes_out_fraction(mun_commutes_out_fraction(mc))
+        # png(p_out_mc, joinpath(folder, "outgoing_commuters_fraction_per_municipality.png"))
 
-    # plot fraction of outgoing commuters per county
-    p_out_cc = plot_county_commutes_out_fraction(ccof)
-    png(p_out_cc, joinpath(folder, "outgoing_commuters_fraction_per_county.png"))
+        # plot fraction of outgoing commuters per county
+        p_out_cc = plot_county_commutes_out_fraction(ccof)
+        png(p_out_cc, joinpath(folder, "outgoing_commuters_fraction_per_county.png"))
 
-    # plot fraction of workforce as incoming commuters per municipality
-    # p_in_mc = plot_mun_commutes_in_fraction(mcif)
-    # png(p_in_mc, joinpath(folder, "incoming_commuters_fraction_per_municipality.png"))
+        # plot fraction of workforce as incoming commuters per municipality
+        # p_in_mc = plot_mun_commutes_in_fraction(mun_commutes_in_fraction(mc))
+        # png(p_in_mc, joinpath(folder, "incoming_commuters_fraction_per_municipality.png"))
 
-    # plot fraction of workforce as incoming commuters per county
-    p_in_cc = plot_county_commutes_in_fraction(ccif)
-    png(p_in_cc, joinpath(folder, "incoming_commuters_fraction_per_county.png"))
+        # plot fraction of workforce as incoming commuters per county
+        p_in_cc = plot_county_commutes_in_fraction(ccif)
+        png(p_in_cc, joinpath(folder, "incoming_commuters_fraction_per_county.png"))
 
-    p_comb = plot_county_commutes_combined(p_in_cc, p_out_cc)
-    png(p_comb, joinpath(folder, "in_and_out_commuter_fraction_per_county.png"))
+        p_comb = plot_county_commutes_combined(p_in_cc, p_out_cc)
+        png(p_comb, joinpath(folder, "in_and_out_commuter_fraction_per_county.png"))
+    end
 
-    # compare the commutes with the BA commuter statistics (needs all 16 federal states)
+    # commuting balance and comparison with the BA commuter statistics (needs all 16 federal states)
     if length(unique(state.(cc.hh_ags))) == 16
-        commuter_validation(folder = folder, county_commutes_df = cc)
+        commuter_validation(folder = folder, sim = sim, county_commutes_df = cc)
     else
         @warn "Commuter validation skipped: it compares all 16 federal states, but the population does not cover them."
     end
