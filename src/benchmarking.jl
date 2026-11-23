@@ -1,207 +1,476 @@
 export run_sims
-export plot_timings
+export run_thread_speedup
+export run_peak_memory
+export summarize_benchmarks
 export plot_benchmarks
+export plot_thread_speedup
+export plot_runtime_per_agent
+export replot_benchmarks
 export benchmark
 
 # DATA GENERATION
 
+"""
+    BENCHMARK_POPULATIONS
+
+GEMS population models of the 16 German states and Germany.
+"""
+const BENCHMARK_POPULATIONS = ["BW", "BY", "BE", "BB", "HB", "HH", "HE", "MV", "NI", "NRW", "RP", "SL", "SN", "ST", "SH", "TH", "DE"]
 
 """
-    run_sims()
+    BENCHMARK_SYNTHETIC_SIZES
 
-Runs benchmarking simulations for each German state and the complete German model
-as well as synthetic populations of various sizes.
-
-Returns a DataFrame with timings.
+Sizes of the on-the-fly populations.
 """
-function run_sims(num_runs::Int = 11)
-    # run everything once to pre-compile simulation
-    sim = Simulation()
+const BENCHMARK_SYNTHETIC_SIZES = [100_000, 1_000_000, 5_000_000, 10_000_000, 20_000_000, 50_000_000]
+
+"""
+    machine_info()
+
+Returns a one-row DataFrame with the hardware, Julia and GEMS versions, and Julia threads of this process.
+"""
+function machine_info()
+    return DataFrame(
+        cpu = strip(Sys.cpu_info()[1].model),
+        physical_cores = try GEMS.CpuId.cpucores() catch; missing end,
+        cpu_threads = Sys.CPU_THREADS,
+        memory_gb = round(Sys.total_memory() / 2^30, digits = 1),
+        os = string(Sys.KERNEL),
+        julia_version = string(VERSION),
+        gems_version = string(pkgversion(GEMS)),
+        julia_threads = Threads.nthreads())
+end
+
+# keyword arguments, name, and type of a population: a population model code or an on-the-fly size
+_population_kwargs(p::AbstractString) = (population = p,)
+_population_kwargs(p::Integer) = (pop_size = p,)
+_population_name(p::AbstractString) = p
+_population_name(p::Integer) = "Size_$p"
+_population_type(::AbstractString) = "Gesyland"
+_population_type(::Integer) = "Synthetic"
+
+# compiles both population paths (on-the-fly and population model) before anything is timed
+function _warm_up()
+    for kwargs in ((;), (population = "SL",))
+        sim = Simulation(; kwargs...)
+        run!(sim)
+        ResultData(sim)
+    end
+    GC.gc()
+end
+
+# one timed run; initialization covers reading the (already downloaded) population and settings
+# files up to the ready simulation; live memory is measured after a full GC outside the timings
+function _timed_run(p, seed)
+    GC.gc()
+    init_t = @timed Simulation(; seed = seed, _population_kwargs(p)...)
+    sim = init_t.value
+    sim_t = @timed run!(sim)
+    GC.gc()
+    sim_live = Base.gc_live_bytes()
+    proc_t = @timed ResultData(sim)
+    GC.gc()
+    post_live = Base.gc_live_bytes()
+    return (
+        model = _population_name(p),
+        type = _population_type(p),
+        run = seed,
+        threads = Threads.nthreads(),
+        pop_size = length(individuals(sim)),
+        infections = total_infections(proc_t.value),
+        initialization_time = init_t.time,
+        simulation_time = sim_t.time,
+        post_processing_time = proc_t.time,
+        compile_time = init_t.compile_time + sim_t.compile_time + proc_t.compile_time,
+        gc_time = init_t.gctime + sim_t.gctime + proc_t.gctime,
+        allocated_gb = (init_t.bytes + sim_t.bytes + proc_t.bytes) / 2^30,
+        live_gb_simulation = sim_live / 2^30,
+        live_gb_post_processing = post_live / 2^30)
+end
+
+"""
+    run_sims(; populations = BENCHMARK_POPULATIONS, synthetic_sizes = BENCHMARK_SYNTHETIC_SIZES, num_runs = 11)
+
+Runs the benchmark `num_runs` times (random seeds 1 to `num_runs`) for each population model and
+on-the-fly population size, after a warm-up. Returns a DataFrame with one row per run.
+"""
+function run_sims(; populations = BENCHMARK_POPULATIONS, synthetic_sizes = BENCHMARK_SYNTHETIC_SIZES, num_runs::Int = 11)
+    # download population files before timing anything
+    foreach(GEMS.obtain_remote_files, populations)
+    _warm_up()
+    rows = [_timed_run(p, seed) for p in vcat(populations, synthetic_sizes) for seed in 1:num_runs]
+    return DataFrame(rows)
+end
+
+# timed runs of one Julia process for `run_thread_speedup`, written to `out`
+function _speedup_worker(populations, num_runs, out)
+    foreach(GEMS.obtain_remote_files, filter(p -> p isa AbstractString, populations))
+    _warm_up()
+    CSV.write(out, DataFrame([_timed_run(p, seed) for p in populations for seed in 1:num_runs]))
+end
+
+"""
+    run_thread_speedup(; populations = ["RP"], threads = [1, 2, 4, 8, 16, 32, 64, 128], num_runs = 5, folder = mktempdir())
+
+Runs the benchmark for each population with each number of threads, in one Julia process per
+thread count (the thread count is fixed at startup). Returns a DataFrame with one row per run.
+"""
+function run_thread_speedup(; populations = ["RP"], threads = [1, 2, 4, 8, 16, 32, 64, 128], num_runs::Int = 5, folder = mktempdir())
+    project = dirname(Base.active_project())
+    files = String[]
+    for n in threads
+        out = joinpath(folder, "speedup_$(n)_threads.csv")
+        code = "using GEMSPaper; GEMSPaper._speedup_worker($(repr(populations)), $num_runs, $(repr(out)))"
+        run(`$(Base.julia_cmd()) --project=$project --threads=$n -e $code`)
+        push!(files, out)
+    end
+    return reduce(vcat, [CSV.read(f, DataFrame) for f in files])
+end
+
+# peak memory of one run in a fresh process, written to `out`
+function _peak_memory_worker(population, out)
+    sim = Simulation(; _population_kwargs(population)...)
     run!(sim)
-    rd = ResultData(sim)
+    rss_sim = Sys.maxrss()
+    ResultData(sim)
+    CSV.write(out, DataFrame(
+        model = _population_name(population),
+        pop_size = length(individuals(sim)),
+        threads = Threads.nthreads(),
+        peak_rss_gb_simulation = rss_sim / 2^30,
+        peak_rss_gb_post_processing = Sys.maxrss() / 2^30))
+end
 
-    res = DataFrame(
-        model = String[],
-        type = String[],
-        pop_size = Float64[],       # Changed to Float64 for averages
-        infections = Float64[],     # Changed to Float64 for averages
-        initialization_time = Float64[],
-        simulation_time = Float64[],
-        post_processing_time = Float64[])
+"""
+    run_peak_memory(population = "DE"; threads = Threads.nthreads(), folder = mktempdir())
 
-    pop_codes = [
-        "BW", # Baden-Württemberg
-        "BY", # Bayern (Bavaria)
-        "BE", # Berlin
-        "BB", # Brandenburg
-        "HB", # Bremen
-        "HH", # Hamburg
-        "HE", # Hessen
-        "MV", # Mecklenburg-Vorpommern
-        "NI", # Niedersachsen (Lower Saxony)
-        "NRW", # Nordrhein-Westfalen (North Rhine–Westphalia)
-        "RP", # Rheinland-Pfalz (Rhineland-Palatinate)
-        "SL", # Saarland
-        "SN", # Sachsen (Saxony)
-        "ST", # Sachsen-Anhalt (Saxony-Anhalt)
-        "SH", # Schleswig-Holstein
-        "TH", # Thüringen (Thuringia)
-        "DE"  # Germany
-    ]
+Peak resident memory of one run (simulation and post-processing) of `population` in a fresh
+Julia process, as the RAM a machine needs. Returns a one-row DataFrame.
+"""
+function run_peak_memory(population = "DE"; threads::Int = Threads.nthreads(), folder = mktempdir())
+    population isa AbstractString && GEMS.obtain_remote_files(population)
+    out = joinpath(folder, "peak_memory.csv")
+    code = "using GEMSPaper; GEMSPaper._peak_memory_worker($(repr(population)), $(repr(out)))"
+    run(`$(Base.julia_cmd()) --project=$(dirname(Base.active_project())) --threads=$threads -e $code`)
+    return CSV.read(out, DataFrame)
+end
 
-    synth_sizes = [
-        100_000,
-        1_000_000,
-        5_000_000,
-        10_000_000,
-        20_000_000,
-        50_000_000,
-        #85_000_000,
-    ]
+"""
+    summarize_benchmarks(runs)
 
-    # run German models
-    for p in pop_codes
-        # Initialize accumulators for this model
-        pop_sizes = Float64[]
-        infs = Float64[]
-        init_ts = Float64[]
-        sim_ts = Float64[]
-        proc_ts = Float64[]
-
-        for i in 1:num_runs
-            GC.gc()
-            init_t = @timed Simulation(population = p, seed = i)
-            sim = init_t.value # get sim object
-            sim_t = @timed run!(sim)
-            proc_t = @timed ResultData(sim)
-
-            push!(pop_sizes, length(individuals(sim)))
-            push!(infs, total_infections(proc_t.value))
-            push!(init_ts, init_t.time)
-            push!(sim_ts, sim_t.time)
-            push!(proc_ts, proc_t.time)
-        end
-
-        push!(res, (
-            model = p,
-            type = "Gesyland",
-            pop_size = median(pop_sizes),
-            infections = median(infs),
-            initialization_time = median(init_ts),
-            simulation_time = median(sim_ts),
-            post_processing_time = median(proc_ts)))
-    end
-
-    # run synthetic models
-    for s in synth_sizes
-        # Initialize accumulators for this model
-        pop_sizes = Float64[]
-        infs = Float64[]
-        init_ts = Float64[]
-        sim_ts = Float64[]
-        proc_ts = Float64[]
-
-        for i in 1:num_runs
-            GC.gc()
-            init_t = @timed Simulation(pop_size = s, seed = i)
-            sim = init_t.value # get sim object
-            sim_t = @timed run!(sim)
-            proc_t = @timed ResultData(sim)
-
-            push!(pop_sizes, length(individuals(sim)))
-            push!(infs, total_infections(proc_t.value))
-            push!(init_ts, init_t.time)
-            push!(sim_ts, sim_t.time)
-            push!(proc_ts, proc_t.time)
-        end
-
-        push!(res, (
-            model = "Size_$s",
-            type = "Synthetic",
-            pop_size = median(pop_sizes),
-            infections = median(infs),
-            initialization_time = median(init_ts),
-            simulation_time = median(sim_ts),
-            post_processing_time = median(proc_ts)))
-    end
-
-    return res
+Median and interquartile range of each stage per population and thread count.
+"""
+function summarize_benchmarks(runs::DataFrame)
+    q(x, p) = quantile(x, p)
+    return combine(groupby(runs, [:model, :type, :threads]),
+        :pop_size => median => :pop_size,
+        :infections => median => :infections,
+        nrow => :runs,
+        [s => f => Symbol("$(s)_$(n)") for s in [:initialization_time, :simulation_time, :post_processing_time]
+            for (n, f) in [("median", median), ("q25", x -> q(x, 0.25)), ("q75", x -> q(x, 0.75))]]...,
+        :live_gb_simulation => median => :live_gb_simulation,
+        :live_gb_post_processing => median => :live_gb_post_processing)
 end
 
 # PLOTTING
 
-"""
-    plot_timings(x, y, title, xlab, ylab)
+const _STAGES = [
+    (:initialization_time, "Initialization", :steelblue),
+    (:simulation_time, "Simulation", :darkorange),
+    (:post_processing_time, "Post-processing", :seagreen)]
 
-generates a single benchmarking plot.
-"""
-function plot_timings(x, y, types, title, xlab, ylab)
-    return scatter(
-        log10.(x), log10.(y),
-        title = title,
-        color = (t -> (t == "Gesyland" ? :tomato : :deepskyblue)).(types),
-        markerstrokewidth=0,
-        xticks = ([5, 6, 7, 8], ["100k", "1m", "10m", "100m"]),
-        yticks = ([-1, 0, 1, 2, 3], ["0.1s", "1s", "10s", "100s", "1000s"]),
-        xlims = (4.9, 8.1),
-        ylims = (-1, 3),
-        xlabel = xlab,
-        ylabel = ylab,
-        xtickfontsize = 14,
-        ytickfontsize = 14,
-        xlabelfontsize = 14,
-        ylabelfontsize = 14,
-        titlefontsize = 20,
-        markersize=7,
-        left_margin = 10mm,
-        right_margin = 5mm,
-        bottom_margin = 10mm,
-        fontfamily = "Times Roman",
-        legend = nothing)
+_bench_style() = (
+    fontfamily = "Times Roman",
+    tickfontsize = 12,
+    labelfontsize = 14,
+    titlefontsize = 16,
+    legendfontsize = 11,
+    framestyle = :box)
+
+# log ticks within [lo, hi] with readable labels; adds 2 and 5 if fewer than three decades fit
+function _decade_ticks(lo, hi, label)
+    ks = floor(Int, log10(lo)):ceil(Int, log10(hi))
+    ticks = filter(t -> lo <= t <= hi, [10.0^k for k in ks])
+    if length(ticks) < 3
+        ticks = filter(t -> lo <= t <= hi, [m * 10.0^k for k in ks for m in (1, 2, 5)])
+    end
+    return (ticks, label.(ticks))
+end
+_size_label(x) = x >= 1e6 ? "$(round(Int, x / 1e6))M" : "$(round(Int, x / 1e3))k"
+_seconds_label(x) = x >= 1 ? "$(round(Int, x)) s" : "$(round(x, sigdigits = 1)) s"
+
+# least-squares slope of log(y) against log(x)
+function _loglog_slope(x, y)
+    lx, ly = log.(x), log.(y)
+    return sum((lx .- mean(lx)) .* (ly .- mean(ly))) / sum((lx .- mean(lx)) .^ 2)
+end
+
+# drops the on-the-fly populations if `on_the_fly` is false
+_select_populations(summary, on_the_fly) = sort(on_the_fly ? summary : summary[summary.type .!= "Synthetic", :], :pop_size)
+
+# legend entries for the marker fill (population models filled, on-the-fly open)
+function _fill_legend!(p, summary)
+    any(summary.type .== "Gesyland") && scatter!(p, [NaN], [NaN], markercolor = :gray, markerstrokecolor = :gray, label = "German states and Germany")
+    any(summary.type .== "Synthetic") && scatter!(p, [NaN], [NaN], markercolor = :white, markerstrokecolor = :gray, markerstrokewidth = 1.5, label = "on-the-fly generator")
+end
+
+# runtime of one stage against the population size, with shared axis limits
+function _stage_panel(d, stage, title, color, xlims, ylims; legend = false, xlabel = "Population size", ylabel = "Runtime")
+    p = plot(;
+        xscale = :log10, yscale = :log10, xlims = xlims, ylims = ylims,
+        xticks = _decade_ticks(xlims..., _size_label), yticks = _decade_ticks(ylims..., _seconds_label),
+        xlabel = xlabel, ylabel = ylabel, title = title, legend = legend ? :topleft : false,
+        _bench_style()...)
+    col = "$(stage)_median"
+    for (type, name, filled) in (("Gesyland", "German states and Germany", true), ("Synthetic", "on-the-fly generator", false))
+        g = d[d.type .== type, :]
+        nrow(g) == 0 && continue
+        y = g[!, col]
+        scatter!(p, g.pop_size, y,
+            yerror = (y .- g[!, "$(stage)_q25"], g[!, "$(stage)_q75"] .- y),
+            markercolor = filled ? color : :white, markerstrokecolor = color, markerstrokewidth = 1.5,
+            linecolor = color, markersize = 6, label = name)
+    end
+
+    # slope of the population models (of all populations if there are none)
+    fit = any(d.type .== "Gesyland") ? d[d.type .== "Gesyland", :] : d
+    nrow(fit) > 1 && annotate!(p, xlims[2] / 1.2, ylims[1] * 1.4,
+        text("slope $(round(_loglog_slope(fit.pop_size, fit[!, col]), digits = 2))", 11, "Times Roman", :right))
+
+    de = d[d.model .== "DE", :]
+    nrow(de) > 0 && annotate!(p, de.pop_size[1] / 1.1, de[1, col] * 1.5, text("Germany", 10, "Times Roman", :right))
+    return p
 end
 
 """
-    plot_benchmarks(df)
+    plot_benchmarks(summary; speedup = nothing, physical_cores = missing, on_the_fly = true)
 
-Returns a multiplot for initialization, simulation, and post-processing benchmarks.
-Requires a timings dataframe as input (which is the output of the `run_sims()` function).
+One panel per stage of the runtime against the population size (log-log, shared axes; median,
+interquartile range, and the log-log slope of the population models), plus the speedup panel of
+`plot_thread_speedup` if `speedup` is given. Requires the output of `summarize_benchmarks`.
 """
-function plot_benchmarks(df)
-    init_times = plot_timings(
-        df.pop_size, df.initialization_time, df.type,
-        "Initialization Time", "Population Size", "Runtime")
-    sim_times = plot_timings(
-        df.pop_size, df.simulation_time, df.type,
-        "Simulation Time", "Population Size", "Runtime")
-    proc_times = plot_timings(
-        df.pop_size, df.post_processing_time, df.type,
-        "Post-Processing Time", "Population Size", "Runtime")
-        
-    return plot(init_times, sim_times, proc_times, layout = (1, 3), size = (1800, 600))
+function plot_benchmarks(summary::DataFrame; speedup = nothing, physical_cores = missing, on_the_fly::Bool = true)
+    d = _select_populations(summary, on_the_fly)
+    ys = vcat([vcat(d[!, "$(s)_q25"], d[!, "$(s)_q75"]) for (s, _, _) in _STAGES]...)
+    xlims = (minimum(d.pop_size) / 1.4, maximum(d.pop_size) * 1.4)
+    ylims = (minimum(ys) / 1.6, maximum(ys) * 2.5)
+    grid = !isnothing(speedup)
+
+    # axis titles only where the neighbouring panel does not repeat them
+    ps = [_stage_panel(d, s, title, color, xlims, ylims;
+            legend = i == 1,
+            xlabel = grid && i == 1 ? "" : "Population size",
+            ylabel = (grid ? i == 2 : i > 1) ? "" : "Runtime")
+        for (i, (s, title, color)) in enumerate(_STAGES)]
+
+    grid || return plot(ps..., layout = (1, 3), size = (2100, 650), left_margin = 10mm, bottom_margin = 10mm, top_margin = 3mm)
+    p_speedup = plot_thread_speedup(speedup; physical_cores = physical_cores, on_the_fly = on_the_fly)
+    return plot(ps..., p_speedup, layout = (2, 2), size = (1600, 1300), left_margin = 10mm, bottom_margin = 8mm, top_margin = 3mm)
+end
+
+# TEMPORARY: single-panel alternative to `plot_benchmarks` for comparison; delete once the figure is decided
+function plot_benchmarks_single_panel(summary::DataFrame; on_the_fly::Bool = true)
+    d = _select_populations(summary, on_the_fly)
+    stage_cols = ["$(s)_median" for (s, _, _) in _STAGES]
+    ymin = minimum(minimum(d[!, c]) for c in stage_cols)
+    ymax = maximum(maximum(d[!, c]) for c in stage_cols)
+    p = plot(;
+        xscale = :log10, yscale = :log10,
+        xticks = _decade_ticks(minimum(d.pop_size), maximum(d.pop_size), _size_label),
+        yticks = _decade_ticks(ymin, ymax, _seconds_label), ylims = (ymin / 1.5, ymax * 2.5),
+        xlabel = "Population size", ylabel = "Runtime",
+        title = "Runtime by population size",
+        legend = :topleft, size = (900, 650), left_margin = 8mm, bottom_margin = 8mm,
+        _bench_style()...)
+
+    # the three stages of each population joined by a grey line
+    for r in eachrow(d)
+        y = [r[c] for c in stage_cols]
+        plot!(p, [r.pop_size, r.pop_size], [minimum(y), maximum(y)], color = :gray70, linewidth = 1, label = "")
+    end
+
+    for (s, label, color) in _STAGES
+        for (type, filled) in (("Gesyland", true), ("Synthetic", false))
+            g = d[d.type .== type, :]
+            nrow(g) == 0 && continue
+            y = g[!, "$(s)_median"]
+            scatter!(p, g.pop_size, y,
+                yerror = (y .- g[!, "$(s)_q25"], g[!, "$(s)_q75"] .- y),
+                markercolor = filled ? color : :white,
+                markerstrokecolor = color, markerstrokewidth = 1.5, linecolor = color,
+                markersize = 6,
+                label = (filled || !any(d.type .== "Gesyland")) ? label : "")
+        end
+    end
+    _fill_legend!(p, d)
+
+    # label Germany
+    de = d[d.model .== "DE", :]
+    if nrow(de) > 0
+        annotate!(p, de.pop_size[1] / 1.1, de.simulation_time_median[1] * 1.6, text("Germany", 10, "Times Roman", :right))
+    end
+    return p
+end
+
+"""
+    plot_thread_speedup(summary; physical_cores = missing, on_the_fly = true)
+
+Speedup of each stage (colour) against the number of threads for each population (population
+models filled and solid, on-the-fly populations open and dashed), with the linear speedup and, if
+given, a vertical line at the number of physical cores. Requires the output of
+`summarize_benchmarks` for runs with several thread counts.
+"""
+function plot_thread_speedup(summary::DataFrame; physical_cores = missing, on_the_fly::Bool = true)
+    summary = _select_populations(summary, on_the_fly)
+    threads = sort(unique(summary.threads))
+    base_threads = "$(threads[1]) thread$(threads[1] == 1 ? "" : "s")"
+    p = plot(;
+        xscale = :log2, yscale = :log2,
+        xticks = (threads, string.(threads)), yticks = (threads, string.(threads)),
+        xlabel = "Threads", ylabel = "Speedup (runtime with $base_threads / with n threads)",
+        title = "Speedup by number of threads",
+        legend = :topleft, size = (900, 650), left_margin = 8mm, bottom_margin = 8mm,
+        _bench_style()...)
+    plot!(p, threads, threads, linestyle = :dot, color = :gray, label = "linear speedup")
+    if !ismissing(physical_cores) && physical_cores < maximum(threads)
+        vline!(p, [physical_cores], color = :black, linestyle = :dashdot, linewidth = 1, label = "$physical_cores physical cores")
+    end
+    for (_, label, color) in _STAGES
+        plot!(p, [NaN], [NaN], color = color, linewidth = 2, label = label)
+    end
+
+    # one marker shape per population, filled for population models and open for on-the-fly
+    shapes = [:circle, :rect, :diamond, :utriangle, :dtriangle]
+    for (i, g) in enumerate(groupby(sort(summary, :threads), :model))
+        filled = g.type[1] == "Gesyland"
+        style = (linestyle = filled ? :solid : :dash, marker = shapes[mod1(i, length(shapes))],
+            markerstrokewidth = 1.5, markersize = 5)
+        base = g[g.threads .== minimum(g.threads), :]
+        for (s, _, color) in _STAGES
+            col = "$(s)_median"
+            plot!(p, g.threads, base[1, col] ./ g[!, col]; style...,
+                color = color, linewidth = 1.5, markercolor = filled ? color : :white, markerstrokecolor = color, label = "")
+        end
+        name = filled ? g.model[1] : "$(_size_label(g.pop_size[1])) on-the-fly"
+        plot!(p, [NaN], [NaN]; style..., color = :gray, markercolor = filled ? :gray : :white, markerstrokecolor = :gray, label = name)
+    end
+    return p
+end
+
+"""
+    plot_runtime_per_agent(summary; on_the_fly = true)
+
+Runtime per million agents of each stage against the population size (log-log); linear scaling is
+a flat line. Requires the output of `summarize_benchmarks`.
+"""
+function plot_runtime_per_agent(summary::DataFrame; on_the_fly::Bool = true)
+    d = _select_populations(summary, on_the_fly)
+    per_agent(s) = d[!, "$(s)_median"] ./ (d.pop_size ./ 1e6)
+    ys = reduce(vcat, [per_agent(s) for (s, _, _) in _STAGES])
+    p = plot(;
+        xscale = :log10, yscale = :log10,
+        xticks = _decade_ticks(minimum(d.pop_size), maximum(d.pop_size), _size_label),
+        yticks = _decade_ticks(minimum(ys), maximum(ys), _seconds_label),
+        xlabel = "Population size", ylabel = "Runtime per million agents",
+        title = "Runtime per agent",
+        legend = :topright, size = (900, 650), left_margin = 8mm, bottom_margin = 8mm,
+        _bench_style()...)
+    for (s, label, color) in _STAGES
+        for (type, filled) in (("Gesyland", true), ("Synthetic", false))
+            g = d[d.type .== type, :]
+            nrow(g) == 0 && continue
+            scatter!(p, g.pop_size, g[!, "$(s)_median"] ./ (g.pop_size ./ 1e6),
+                markercolor = filled ? color : :white, markerstrokecolor = color, markerstrokewidth = 1.5,
+                markersize = 6, label = (filled || !any(d.type .== "Gesyland")) ? label : "")
+        end
+    end
+    _fill_legend!(p, d)
+    return p
+end
+
+"""
+    replot_benchmarks(folder; on_the_fly = true)
+
+Draws the benchmark figures from the CSV files that `benchmark()` wrote to `folder`, without
+running anything: `benchmarks.png` (with the speedup panel if its summary exists),
+`benchmarks_per_agent.png`, and, temporarily, `benchmarks_single_panel.png`.
+"""
+function replot_benchmarks(folder; on_the_fly::Bool = true)
+    summary = CSV.read(joinpath(folder, "benchmark_summary.csv"), DataFrame)
+    machine_file = joinpath(folder, "benchmark_machine.csv")
+    machine = isfile(machine_file) ? CSV.read(machine_file, DataFrame) : DataFrame()
+    cores = hasproperty(machine, :physical_cores) ? machine.physical_cores[1] : missing
+    speedup_file = joinpath(folder, "benchmark_speedup_summary.csv")
+    speedup = isfile(speedup_file) ? CSV.read(speedup_file, DataFrame) : nothing
+    png(plot_benchmarks(summary; speedup = speedup, physical_cores = cores, on_the_fly = on_the_fly),
+        joinpath(folder, "benchmarks.png"))
+    png(plot_runtime_per_agent(summary; on_the_fly = on_the_fly), joinpath(folder, "benchmarks_per_agent.png"))
+
+    # TEMPORARY: single-panel alternative, see `plot_benchmarks_single_panel`
+    p_single = plot_benchmarks_single_panel(summary; on_the_fly = on_the_fly)
+    isnothing(speedup) || (p_single = plot(p_single, plot_thread_speedup(speedup; physical_cores = cores, on_the_fly = on_the_fly),
+        layout = (1, 2), size = (1800, 650), left_margin = 10mm, bottom_margin = 10mm))
+    png(p_single, joinpath(folder, "benchmarks_single_panel.png"))
 end
 
 
 # RUN ALL ANALYSES
 
 """
-    benchmark(; folder = nothing, folder_tag = nothing)
+    benchmark(;
+        folder = nothing,
+        folder_tag = nothing,
+        populations = BENCHMARK_POPULATIONS,
+        synthetic_sizes = BENCHMARK_SYNTHETIC_SIZES,
+        num_runs = 11,
+        speedup_populations = ["RP"],
+        speedup_threads = [1, 2, 4, 8, 16, 32, 64, 128],
+        speedup_runs = 5,
+        peak_memory_population = "DE")
 
-Runs all benchmark-related analyses.
+Runs all benchmark-related analyses: runtime by population size (with the threads of this
+process), speedup by number of threads (one process per thread count; skipped if `speedup_populations` or
+`speedup_threads` is empty), and the peak memory of one run of `peak_memory_population` in a fresh
+process (skipped if `nothing`). Writes all runs, their summaries, the machine information, and the
+figures.
 
 If `folder` is `nothing`, a new result folder is created, with `folder_tag`
 appended to its timestamp-based name (see `result_folder`).
 """
-function benchmark(; folder = nothing, folder_tag = nothing)
+function benchmark(;
+    folder = nothing,
+    folder_tag = nothing,
+    populations = BENCHMARK_POPULATIONS,
+    synthetic_sizes = BENCHMARK_SYNTHETIC_SIZES,
+    num_runs::Int = 11,
+    speedup_populations = ["RP"],
+    speedup_threads = [1, 2, 4, 8, 16, 32, 64, 128],
+    speedup_runs::Int = 5,
+    peak_memory_population = "DE")
+
     # create result folder if not passed
     isnothing(folder) ? folder = result_folder(folder_tag) : nothing
-    
-    # run benchmark simulations
-    df = run_sims()
 
-    # export dataframe
-    CSV.write(joinpath(folder, "benchmarks.csv"), df)
+    CSV.write(joinpath(folder, "benchmark_machine.csv"), machine_info())
 
-    # plot benchmarks
-    bench_p = plot_benchmarks(df)
-    png(bench_p, joinpath(folder, "benchmarks.png"))
+    # runtime by population size
+    runs = run_sims(populations = populations, synthetic_sizes = synthetic_sizes, num_runs = num_runs)
+    CSV.write(joinpath(folder, "benchmark_runs.csv"), runs)
+    CSV.write(joinpath(folder, "benchmark_summary.csv"), summarize_benchmarks(runs))
+
+    # speedup by number of threads
+    if !isempty(speedup_populations) && !isempty(speedup_threads)
+        speedup = run_thread_speedup(populations = speedup_populations, threads = speedup_threads,
+            num_runs = speedup_runs, folder = mkpath(joinpath(folder, "thread_speedup")))
+        CSV.write(joinpath(folder, "benchmark_speedup_runs.csv"), speedup)
+        CSV.write(joinpath(folder, "benchmark_speedup_summary.csv"), summarize_benchmarks(speedup))
+    end
+
+    # peak memory
+    if !isnothing(peak_memory_population)
+        CSV.write(joinpath(folder, "benchmark_peak_memory.csv"),
+            run_peak_memory(peak_memory_population, folder = mkpath(joinpath(folder, "peak_memory"))))
+    end
+
+    replot_benchmarks(folder)
 end

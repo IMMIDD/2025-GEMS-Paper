@@ -376,7 +376,13 @@ GEMS default parameterization ([data/DefaultConf.toml @ v1.0.2](https://github.c
 | Death (Critical) | Bernoulli(p = 0.3) |
 | On-the-fly population | 100,000 agents, mean household size 3, office size 5, school size 100 |
 
-Protocol: one warm-up run, then 11 runs per population (random seeds 1–11), medians reported. Populations: 16 German states and Germany, plus on-the-fly populations of 0.1, 1, 5, 10, 20, and 50 million agents.
+Protocol:
+
+- **Runtime by population size:** 16 German states and Germany, plus on-the-fly populations of 0.1, 1, 5, 10, 20, and 50 million agents. The population files are downloaded and both population paths (population model and on-the-fly) are run once for compilation before anything is timed. Then 11 runs per population (random seeds 1–11), all with the threads of the running Julia process. Each run times three stages separately: initialization (reading population and settings files up to the ready simulation), simulation (`run!`), and post-processing (`ResultData`). It also records compile time, garbage collection time, allocated memory, and the live heap after a full garbage collection, once after the simulation and once after post-processing. Fig 18 shows medians with interquartile ranges.
+- **Speedup by number of threads:** RP, 5 runs each with 1, 2, 4, 8, 16, 32, 64, and 128 threads, in one Julia process per thread count.
+- **Peak memory:** maximum resident set size of one run of Germany (simulation and post-processing) in a fresh Julia process, i.e., the RAM a machine needs.
+
+Outputs: `benchmark_machine.csv` (hardware, Julia and GEMS versions, threads), `benchmark_runs.csv` and `benchmark_summary.csv` (all runs; median and interquartile range per population), `benchmark_speedup_runs.csv` and `benchmark_speedup_summary.csv`, `benchmark_peak_memory.csv`, `benchmarks.png` (runtime of each stage by population size, speedup by number of threads), and `benchmarks_per_agent.png` (runtime per million agents). `replot_benchmarks(folder)` redraws the figures from the CSV files; `replot_benchmarks(folder; on_the_fly = false)` leaves out the on-the-fly populations.
 
 ## 6. Population analyses (Fig 4–7)
 
