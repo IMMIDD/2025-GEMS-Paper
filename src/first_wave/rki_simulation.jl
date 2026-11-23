@@ -135,7 +135,7 @@ simulation_days(startdate::Date, last_day::Date) = Dates.value(last_day - startd
         imports_from = nothing,
         extra_seeds = nothing,
         random_seeding = false,
-        uniform_municipalities = false,
+        municipality_mixing = nothing,
         transmission_rate = nothing,
         switches = Pair{Date, Float64}[])
 
@@ -147,10 +147,10 @@ before the run (e.g. `phase_setup`).
 Variants: `heinsberg = false` drops the Heinsberg cluster, `imports_from` drops
 the imports infected before that date, `extra_seeds` is an additional seeding
 schedule, `random_seeding` puts the same number of seeds per day into counties
-drawn in proportion to their population, `uniform_municipalities` replaces the
-contact sampling of the municipalities of the config by uniform sampling with the
-same number of contacts (`use_uniform_municipalities!`, before `setup`, so the
-contact phases scale it), `transmission_rate` replaces the
+drawn in proportion to their population, `municipality_mixing` replaces the
+contact sampling of the municipalities of the config by another mixing
+assumption with the same number of contacts (`MUNICIPALITY_MIXING`, see
+`use_municipality_mixing!`; before `setup`, so the contact phases scale it), `transmission_rate` replaces the
 rate of the config (the `transmission_scale` of an `InfectiousnessProfile`), and
 `switches` (`date => rate`) change it during the run.
 
@@ -166,7 +166,7 @@ function run_rki_sim(s::RKISettings;
     imports_from = nothing,
     extra_seeds = nothing,
     random_seeding = false,
-    uniform_municipalities = false,
+    municipality_mixing = nothing,
     transmission_rate = nothing,
     switches = Pair{Date, Float64}[])
 
@@ -183,8 +183,8 @@ function run_rki_sim(s::RKISettings;
     if sim.startdate != s.startdate
         throw(ArgumentError("The config starts on $(sim.startdate), not on $(s.startdate)."))
     end
-    if uniform_municipalities
-        use_uniform_municipalities!(sim)
+    if !isnothing(municipality_mixing)
+        use_municipality_mixing!(sim, municipality_mixing)
     end
     enddate = sim.startdate + Day(s.days - 1)
     pop = county_population(sim)
@@ -475,7 +475,8 @@ function _phase_run(s::RKISettings, factors, seed; map_weeks, stage, school_reop
         (; (Symbol("seeded_$k") => phase_sum(:seeded, k) for k in 1:n_phases)...),
         (; (Symbol("seeded_share_$k") =>
             phase_sum(:seeded, k) / max(phase_sum(:infections, k), 1) for k in 1:n_phases)...),
-        mixing_outcomes(inf, s.days))
+        mixing_outcomes(inf, s.days),
+        (municipality_contact_ratio = municipality_contact_ratio(res.sim),))
     printinfo("$stage: seed $seed done after $(round(runtime / 60, digits = 1)) min, " *
         "ascertainment $(round(stats.ascertainment, digits = 3))")
     return (
@@ -503,8 +504,8 @@ county tables of the runs for `map_weeks` (`tbls`), and the daily cases per
 state (`states`); further the mean infections per day, all and seeded
 (`infections`), the statistics per run (`stats`, including the seeded
 infections in total and per phase: `seeded`, `seeded_share`, `infections_k`,
-`seeded_k`, `seeded_share_k`, phase k from its start date, and the outcomes of
-`mixing_outcomes`), the mean share of transmissions outside households per phase
+`seeded_k`, `seeded_share_k`, phase k from its start date, the outcomes of
+`mixing_outcomes`, and `municipality_contact_ratio`), the mean share of transmissions outside households per phase
 (`shares`), the mean infections, detected infections, and deaths per RKI age
 group (`ages`, see `infection_age_table`), and the incubation `model`.
 `sim_options` (seeding and model variants) are passed to `run_rki_sim`.

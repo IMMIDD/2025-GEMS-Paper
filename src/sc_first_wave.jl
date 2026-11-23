@@ -99,11 +99,11 @@ calibrated contact factors of the config (`first_wave_input`, see
 - `:seeds_robustness`: all RKI cases infected before the first phase change as seeds
 - `:random_seeds`: the same number of seeds per day in counties drawn in proportion to their
   population
-- `:mixing`: uniform instead of age-based contacts in the municipalities (same number of
-  contacts, no recalibration), with the RKI introductions and with random seed counties,
-  compared with the runs of `:final` and `:random_seeds` (run if their outputs are not in the
-  folder): national fit, county correlations, age groups, fatality, and settings
-  (`mixing_summary`)
+- `:mixing`: uniform and same-age instead of POLYMOD contacts in the municipalities
+  (`MUNICIPALITY_MIXING`, same number of contacts, no recalibration), with the RKI
+  introductions and with random seed counties, compared with the runs of `:final` and
+  `:random_seeds` (run if their outputs are not in the folder): national fit, county
+  correlations, age groups, fatality, and settings (`mixing_summary`)
 - `:figures`: the paper figures and the outputs of the paper text; with
   `diagnostics`, also the figures of all parts whose results exist (counterfactuals:
   with `:final`)
@@ -280,13 +280,14 @@ _mixing_files(folder, part) = [joinpath(folder, first_wave_file(part, k, b))
     for (k, b) in (("daily", :report), ("counties", :report), ("run_incidences", :report),
         ("stats", nothing), ("ages", nothing))]
 
-# age-based (reference model) and uniform municipality contacts with the same number of contacts
-# and the calibrated factors of the config (no recalibration), each with the RKI introductions
-# and with introductions in random counties; the reference runs are those of `:final` and
-# `:random_seeds` (reused if their outputs exist in `folder`, run and written as these parts
-# otherwise); writes the runs with uniform contacts (parts `mixing_uniform` and
-# `mixing_uniform_random_seeds`), the county metrics of all four, the shares by age group
-# (`mixing_ages`), and the comparison (`mixing_summary`, see `mixing_summary`)
+# municipality contacts of the reference model (POLYMOD matrix) and of the alternative mixing
+# assumptions (`MUNICIPALITY_MIXING`), with the same number of contacts and the calibrated factors
+# of the config (no recalibration), each with the RKI introductions and with introductions in
+# random counties; the reference runs are those of `:final` and `:random_seeds` (reused if their
+# outputs exist in `folder`, run and written as these parts otherwise); writes the runs of each
+# alternative (parts `mixing_<mixing>` and `mixing_<mixing>_random_seeds`), the county metrics of
+# all runs, the shares by age group (`mixing_ages`), and the comparison (`mixing_summary`, see
+# `mixing_summary`)
 function _rki_mixing(folder, s::RKISettings; seeds, bases = BASES)
     municipality = TOML.parsefile(s.configfile)["Settings"]["Municipality"]["contact_sampling_method"]
     if municipality["type"] != "AgeBasedContactSampling"
@@ -297,17 +298,17 @@ function _rki_mixing(folder, s::RKISettings; seeds, bases = BASES)
     factors = fill(_read_factors(s), length(seeds))
     file(part, kind, b = nothing) = joinpath(folder, first_wave_file(part, kind, b))
 
-    results = Dict{Symbol, Any}()
-    for (model, uniform) in ((:age_based, false), (:uniform, true))
+    models = map((:polymod, MUNICIPALITY_MIXING...)) do model
+        mixing = model == :polymod ? nothing : model
         parts = map(((:final, false), (:random, true))) do (key, random)
-            part = uniform ? "mixing_uniform" * (random ? "_random_seeds" : "") :
-                (random ? "random_seeds" : "final")
-            if uniform || !all(isfile, _mixing_files(folder, part))
+            part = isnothing(mixing) ? (random ? "random_seeds" : "final") :
+                "mixing_$mixing" * (random ? "_random_seeds" : "")
+            if !isnothing(mixing) || !all(isfile, _mixing_files(folder, part))
                 out = run_rki_phase_sims(s, factors, seeds,
                     map_weeks = RKI_WEEKS,
                     stage = replace(part, "_" => " "),
                     random_seeding = random,
-                    uniform_municipalities = uniform)
+                    municipality_mixing = mixing)
                 _write_runs(folder, part, out, bases = bases)
             end
             counties = _read_counties(file(part, "counties", :report))
@@ -321,19 +322,20 @@ function _rki_mixing(folder, s::RKISettings; seeds, bases = BASES)
                 stats = CSV.read(file(part, "stats"), DataFrame),
                 ages = CSV.read(file(part, "ages"), DataFrame))
         end
-        results[model] = (; parts...)
+        model => (; parts...)
     end
-    u, a = results[:uniform].final.runs, results[:age_based].final.runs
+    runs(m) = Dict(models)[m].final.runs
+    reference = first(first(models))
 
     rki = rki_age_table(s, to = s.startdate + Day(s.days - 1))
-    ages = mixing_age_table(rki, results[:uniform].final.ages, results[:age_based].final.ages)
+    ages = mixing_age_table(rki, [m => r.final.ages for (m, r) in models])
     CSV.write(file("mixing", "ages"), ages)
     summary = mixing_summary(
-        uniform = results[:uniform],
-        age_based = results[:age_based],
+        models = collect(models),
         ages = ages,
-        run_spearman = (uniform = mean_run_spearman(u, u), age_based = mean_run_spearman(a, a),
-            between = mean_run_spearman(u, a)))
+        run_spearman = (
+            within = Dict(m => mean_run_spearman(runs(m), runs(m)) for (m, _) in models),
+            between = Dict(m => mean_run_spearman(runs(m), runs(reference)) for (m, _) in models)))
     CSV.write(file("mixing", "summary"), summary)
     printinfo("Mixing comparison written to $(file("mixing", "summary"))")
     return summary

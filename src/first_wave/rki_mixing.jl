@@ -2,30 +2,105 @@
 ### FIRST WAVE 2020: OUTCOMES BY AGE AND SETTING, AND THE MIXING COMPARISON
 ###
 
-# Outcomes that differ between age-based (reference model) and uniform contact
-# sampling in municipalities (who meets whom, not how many): age distribution of
-# cases and deaths, fatality, setting shares of the transmissions, and the share
-# of municipality transmissions within the same age band. `mixing_summary`
-# compares the runs of both assumptions (see the `:mixing` part of
-# `scenario_first_wave`).
+# Mixing assumptions for the municipality contacts (who meets whom, not how
+# many): the POLYMOD matrix of the reference model, and as alternatives uniform
+# mixing and contacts within the own age group only. Outcomes that differ
+# between them: age distribution of cases and deaths, fatality, setting shares
+# of the transmissions, and the share of municipality transmissions within the
+# same age band. `mixing_summary` compares the runs of the assumptions (see the
+# `:mixing` part of `scenario_first_wave`).
 
-export use_uniform_municipalities!
+export MUNICIPALITY_MIXING
+export use_municipality_mixing!
+export municipality_contact_ratio
 
 
 """
-    use_uniform_municipalities!(sim; contactparameter = nothing)
+    MUNICIPALITY_MIXING
 
-Replaces the contact sampling of all municipalities of `sim` with uniform
-sampling from the members (`ContactparameterSampling`), keeping the mean number
-of contacts of the config (or `contactparameter`). Returns the new sampling
-method.
+Alternative mixing assumptions for the municipality contacts, compared with the
+POLYMOD matrix of the reference model (`use_municipality_mixing!`): `:uniform`
+(no age preference, the lower bound of age assortativity) and `:same_age`
+(contacts within the own age group only, `same_age_matrix`, the upper bound).
 """
-function use_uniform_municipalities!(sim; contactparameter = nothing)
+const MUNICIPALITY_MIXING = (:uniform, :same_age)
+
+"""
+    same_age_matrix()
+
+Age-age matrix of contacts within the own age group only: the identity matrix
+over the age groups of the POLYMOD municipality matrix (`MATRIX_GROUPS` groups
+of `MATRIX_INTERVAL` years, the last one open).
+"""
+same_age_matrix() = ContactMatrix{Float64}(
+    Matrix{Float64}(LinearAlgebra.I, MATRIX_GROUPS, MATRIX_GROUPS),
+    MATRIX_INTERVAL, MATRIX_GROUPS * MATRIX_INTERVAL)
+
+"""
+    use_municipality_mixing!(sim, mixing; contactparameter = nothing)
+
+Replaces the contact sampling of all municipalities of `sim` by the mixing
+assumption `mixing` (`MUNICIPALITY_MIXING`), keeping the mean number of contacts
+of the config (or `contactparameter`): `:uniform` draws the contacts uniformly
+from the members (`ContactparameterSampling`), `:same_age` by age with
+`same_age_matrix` (`AgeBasedContactSampling`, each municipality with the age
+structure of its own members). Returns the new sampling method.
+"""
+function use_municipality_mixing!(sim, mixing::Symbol; contactparameter = nothing)
     municipalities = settings(sim, Municipality)
-    c = something(contactparameter, contact_sampling_method(first(municipalities)).contactparameter)
-    csm = ContactparameterSampling(Float64(c))
+    c = Float64(something(contactparameter, contact_sampling_method(first(municipalities)).contactparameter))
+    csm = if mixing == :uniform
+        ContactparameterSampling(c)
+    elseif mixing == :same_age
+        AgeBasedContactSampling(c, MATRIX_INTERVAL, same_age_matrix(), Float64[])
+    else
+        throw(ArgumentError("Unknown municipality mixing :$mixing, use one of $MUNICIPALITY_MIXING."))
+    end
     foreach(s -> contact_sampling_method!(s, csm), municipalities)
     return csm
+end
+
+"""
+    municipality_contact_ratio(sim)
+
+Expected municipality contacts per member relative to the contact parameter,
+averaged over all members of the municipalities of `sim`, for their current
+contact sampling methods: shows that a mixing assumption changes who meets whom,
+not how many.
+
+Uniform sampling gives each member of a municipality with at least two members
+the contact parameter c. `AgeBasedContactSampling` draws Poisson(c m_max /
+(q ⋅ m_g)) candidates among the other members (q the age structure of the
+municipality, m_g the matrix row of the member's age group g, m_max its maximum)
+and keeps each with probability m / m_max. With n_j members in group j of a
+municipality of N members, a member of group g then has on average
+c S / (S + m_gg) N / (N - 1) contacts, S = Σ_j n_j m_gj - m_gg (fewer than c
+only if few members of the preferred ages live in the municipality).
+"""
+function municipality_contact_ratio(sim)
+    total, members = 0.0, 0
+    for s in settings(sim, Municipality)
+        inds = individuals(s)
+        N = length(inds)
+        members += N
+        N < 2 && continue # no one to meet
+        csm = contact_sampling_method(s)
+        if !(csm isa AgeBasedContactSampling)
+            total += N
+            continue
+        end
+        m = csm.contact_matrix.data
+        interval, max_age = csm.contact_matrix.interval_steps, csm.contact_matrix.aggregation_bound - 1
+        n = zeros(size(m, 1))
+        foreach(i -> n[min(Int(age(i)), max_age) ÷ interval + 1] += 1, inds)
+        for g in eachindex(n)
+            n[g] == 0 && continue
+            T = sum(n[j] * m[g, j] for j in eachindex(n))
+            T > 0 || continue
+            total += n[g] * (T - m[g, g]) / T * N / (N - 1)
+        end
+    end
+    return total / max(members, 1)
 end
 
 
@@ -231,94 +306,108 @@ end
 
 
 """
-    mixing_age_table(rki, uniform, age_based)
+    mixing_age_table(rki, ages)
 
 Shares per RKI age group of the reported (RKI) or detected (GEMS) cases, the
-deaths, and (GEMS) all infections, for RKI (`rki_age_table`) and the runs with
-uniform and age-based municipality contacts (`infection_age_table`, mean of the
+deaths, and (GEMS) all infections, for RKI (`rki_age_table`) and the runs of
+each mixing assumption (`ages`: `model => infection_age_table`, mean of the
 runs).
 """
-function mixing_age_table(rki, uniform, age_based)
+function mixing_age_table(rki, ages)
     shares(x) = x ./ sum(x)
+    columns(kind, col) = [Symbol("$(kind)_$m") => shares(a[!, col]) for (m, a) in ages]
     return DataFrame(
-        age_group = rki.age_group,
-        cases_rki = shares(rki.cases),
-        cases_uniform = shares(uniform.detected),
-        cases_age_based = shares(age_based.detected),
-        deaths_rki = shares(rki.deaths),
-        deaths_uniform = shares(uniform.deaths),
-        deaths_age_based = shares(age_based.deaths),
-        infections_uniform = shares(uniform.infections),
-        infections_age_based = shares(age_based.infections))
+        :age_group => rki.age_group,
+        :cases_rki => shares(rki.cases),
+        columns("cases", :detected)...,
+        :deaths_rki => shares(rki.deaths),
+        columns("deaths", :deaths)...,
+        columns("infections", :infections)...)
 end
 
 
 """
-    mixing_summary(; uniform, age_based, ages, run_spearman)
+    mixing_summary(; models, ages, run_spearman)
 
-Comparison of uniform and age-based municipality contacts, one row per outcome
-(`block`, `outcome`, `uniform`, `age_based`, `rki`, and for the county
-correlations the paired difference age-based minus uniform with its 95%
-interval). `uniform` and `age_based` are named tuples with the results of the
+Comparison of the municipality mixing assumptions, one row per outcome: `block`,
+`outcome`, one column per model, `rki`, and for the county correlations the
+paired difference of each alternative minus the reference model (the first of
+`models`) with its 95% interval and p-value (`difference_<model>`, `_low`,
+`_high`, `_p`, see `paired_spearman_difference`).
+
+`models` holds `model => results` in the order of the columns, each with the
 runs with the RKI introductions (`final`: `daily`, `counties`, `metrics`,
 `stats`) and with introductions in random counties (`random`: `counties`,
-`metrics`), `ages` comes from `mixing_age_table`, and `run_spearman` holds the
+`metrics`). `ages` comes from `mixing_age_table`, and `run_spearman` holds the
 mean county correlations of single runs with the RKI introductions
-(`mean_run_spearman`) between the seeds of each model (`uniform`, `age_based`)
-and between the models (`between`).
+(`mean_run_spearman`) between the seeds of each model (`within`) and between
+each alternative and the reference model (`between`), as `model => value`.
 """
-function mixing_summary(; uniform, age_based, ages, run_spearman)
-    rows = NamedTuple[]
-    add!(block, outcome, u, a; rki = missing, d = nothing) = push!(rows, (
-        block = block, outcome = outcome, uniform = u, age_based = a, rki = rki,
-        difference = isnothing(d) ? missing : d.difference,
-        difference_low = isnothing(d) ? missing : d.low,
-        difference_high = isnothing(d) ? missing : d.high,
-        difference_p = isnothing(d) ? missing : d.p))
+function mixing_summary(; models, ages, run_spearman)
+    names = first.(models)
+    ref, alternatives = first(names), names[2:end]
+    res = Dict(models)
+    diff_cols(a) = [Symbol("difference_$a$suffix") for suffix in ("", "_low", "_high", "_p")]
+    cols = vcat([:block, :outcome], names, [:rki], reduce(vcat, diff_cols.(alternatives); init = Symbol[]))
+    rows = Dict{Symbol, Any}[]
+    function add!(block, outcome, value; rki = missing, difference = nothing)
+        row = Dict{Symbol, Any}(c => missing for c in cols)
+        row[:block], row[:outcome], row[:rki] = block, outcome, rki
+        foreach(m -> row[m] = value(m), names)
+        if !isnothing(difference)
+            for a in alternatives
+                d = difference(a)
+                row[Symbol("difference_$a")] = d.difference
+                row[Symbol("difference_$(a)_low")] = d.low
+                row[Symbol("difference_$(a)_high")] = d.high
+                row[Symbol("difference_$(a)_p")] = d.p
+            end
+        end
+        push!(rows, row)
+    end
 
     # national fit in the fitted weeks
-    fu, fa = (national_fit(x.final.daily, RKI_FIT_WEEKS) for x in (uniform, age_based))
-    add!("national", "weekly cases GEMS/RKI, lowest fitted week", fu.ratio_low, fa.ratio_low)
-    add!("national", "weekly cases GEMS/RKI, highest fitted week", fu.ratio_high, fa.ratio_high)
-    add!("national", "RMS of the log ratio, fitted weeks", fu.rms_log_ratio, fa.rms_log_ratio)
-    add!("national", "reported cases (whole run)", fu.cases_gems, fa.cases_gems, rki = fu.cases_rki)
+    fit = Dict(m => national_fit(res[m].final.daily, RKI_FIT_WEEKS) for m in names)
+    add!("national", "weekly cases GEMS/RKI, lowest fitted week", m -> fit[m].ratio_low)
+    add!("national", "weekly cases GEMS/RKI, highest fitted week", m -> fit[m].ratio_high)
+    add!("national", "RMS of the log ratio, fitted weeks", m -> fit[m].rms_log_ratio)
+    add!("national", "reported cases (whole run)", m -> fit[m].cases_gems, rki = fit[ref].cases_rki)
 
     # county pattern
-    metric(x, part, window, col) = only(x[part].metrics[x[part].metrics.week .== window, col])
+    metric(m, part, window, col) = only(res[m][part].metrics[res[m][part].metrics.week .== window, col])
     for (part, label) in ((:final, "RKI introductions"), (:random, "introductions in random counties"))
         for window in first.(RKI_WINDOWS)
-            d = paired_spearman_difference(age_based[part].counties, uniform[part].counties, window)
             add!("spatial", "county Spearman with RKI, $window, $label",
-                metric(uniform, part, window, :spearman), metric(age_based, part, window, :spearman), d = d)
+                m -> metric(m, part, window, :spearman),
+                difference = a -> paired_spearman_difference(res[a][part].counties, res[ref][part].counties, window))
         end
-        add!("spatial", "state Spearman with RKI, fit, $label",
-            metric(uniform, part, "fit", :spearman_states), metric(age_based, part, "fit", :spearman_states))
+        add!("spatial", "state Spearman with RKI, fit, $label", m -> metric(m, part, "fit", :spearman_states))
     end
     add!("spatial", "gain over the introductions, fit, introductions in random counties",
-        metric(uniform, :random, "fit", :gain_seeds), metric(age_based, :random, "fit", :gain_seeds))
+        m -> metric(m, :random, "fit", :gain_seeds))
     add!("spatial", "mean county Spearman of single runs between seeds of the model, fit",
-        run_spearman.uniform, run_spearman.age_based)
-    add!("spatial", "mean county Spearman of single runs between both models, fit",
-        run_spearman.between, run_spearman.between)
+        m -> run_spearman.within[m])
+    add!("spatial", "mean county Spearman of single runs with the reference model, fit",
+        m -> m == ref ? missing : run_spearman.between[m])
 
     # age and severity
-    stat(x, col) = mean(x.final.stats[!, col])
-    add!("age", "mean age of the infected", stat(uniform, :mean_age), stat(age_based, :mean_age))
+    stat(m, col) = mean(res[m].final.stats[!, col])
+    add!("age", "mean age of the infected", m -> stat(m, :mean_age))
     older(col) = sum(ages[ages.age_group .∈ Ref(["A60-A79", "A80+"]), col])
-    add!("age", "share of cases aged 60+", older(:cases_uniform), older(:cases_age_based),
-        rki = older(:cases_rki))
+    add!("age", "share of cases aged 60+", m -> older(Symbol("cases_$m")), rki = older(:cases_rki))
     oldest(col) = only(ages[ages.age_group .== "A80+", col])
-    add!("age", "share of deaths aged 80+", oldest(:deaths_uniform), oldest(:deaths_age_based),
-        rki = oldest(:deaths_rki))
-    add!("age", "deaths (up to the last day)", stat(uniform, :deaths), stat(age_based, :deaths))
-    add!("age", "infection fatality rate", stat(uniform, :ifr), stat(age_based, :ifr))
+    add!("age", "share of deaths aged 80+", m -> oldest(Symbol("deaths_$m")), rki = oldest(:deaths_rki))
+    add!("age", "deaths (up to the last day)", m -> stat(m, :deaths))
+    add!("age", "infection fatality rate", m -> stat(m, :ifr))
 
     # settings (check that only who meets whom changed)
+    add!("settings", "expected municipality contacts per member, relative to the contact parameter",
+        m -> stat(m, :municipality_contact_ratio))
     for (col, label) in ((:share_household, "household"), (:share_municipality, "municipality"),
             (:share_work, "work"), (:share_school, "education"))
-        add!("settings", "share of transmissions: $label", stat(uniform, col), stat(age_based, col))
+        add!("settings", "share of transmissions: $label", m -> stat(m, col))
     end
     add!("settings", "municipality transmissions within the same $SAME_AGE_BAND-year age band",
-        stat(uniform, :municipality_same_age), stat(age_based, :municipality_same_age))
-    return DataFrame(rows)
+        m -> stat(m, :municipality_same_age))
+    return DataFrame([c => [r[c] for r in rows] for c in cols])
 end
