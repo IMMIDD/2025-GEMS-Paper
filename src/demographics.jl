@@ -225,7 +225,7 @@ end
     demographics(;
         folder = nothing,
         folder_tag = nothing,
-        sim = Simulation(population = "SL"))
+        sim = Simulation(population = "DE"))
 
 Runs all mobilty-related analyses.
 
@@ -235,7 +235,7 @@ appended to its timestamp-based name (see `result_folder`).
 function demographics(;
         folder = nothing,
         folder_tag = nothing,
-        sim = Simulation(population = "SL", seed = 0))
+        sim = Simulation(population = "DE", seed = 0))
 
     # create result folder if not passed
     isnothing(folder) ? folder = result_folder(folder_tag) : nothing

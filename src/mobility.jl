@@ -273,7 +273,7 @@ end
     mobility(;
         folder = nothing,
         folder_tag = nothing,
-        sim = Simulation(population = "SL"),
+        sim = Simulation(population = "DE"),
         share_maps = false)
 
 Runs all mobilty-related analyses: the shares of in- and out-commuters per
@@ -288,7 +288,7 @@ appended to its timestamp-based name (see `result_folder`).
 function mobility(;
         folder = nothing,
         folder_tag = nothing,
-        sim = Simulation(population = "SL", seed = 0),
+        sim = Simulation(population = "DE", seed = 0),
         share_maps = false)
 
     # create result folder if not passed

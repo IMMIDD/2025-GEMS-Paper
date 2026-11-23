@@ -53,7 +53,7 @@ end
         population = "SL",
         infected_fraction = 0.001,
         stop_criterion = TimesUp(limit = 365),
-        transmission_reduction::Float64 = 0.67,
+        transmission_reduction::Float64 = 0.66,
         rep::Int64 = 5,
         step_size::Float64 = 0.025)
 
@@ -61,7 +61,7 @@ Runs the simulations to sweep parameter space (share of asymptomatic
 progressions and self-isolation adherence).
 To focus on the regime where self-isolation can be decisive, the scenario assumes
 that other measures already prevent a share of all transmissions
-(`transmission_reduction`, by default 67 %), such that without isolation R_init
+(`transmission_reduction`, by default 66 %), such that without isolation R_init
 lies slightly above 1. This reduces the `transmission_scale` of the pathogen's
 `InfectiousnessProfile` accordingly.
 Returns a dataframe with xvals, yvals, and outvals.
@@ -71,7 +71,7 @@ function run_sweeps(;
     population = "SL",
     infected_fraction = 0.001,
     stop_criterion = TimesUp(limit = 365),
-    transmission_reduction::Float64 = 0.67,
+    transmission_reduction::Float64 = 0.66,
     rep::Int64 = 5,
     step_size::Float64 = 0.025)
 
@@ -262,7 +262,7 @@ end
         population = "SL",
         infected_fraction = 0.001,
         stop_criterion = TimesUp(limit = 365),
-        transmission_reduction::Float64 = 0.67,
+        transmission_reduction::Float64 = 0.66,
         rep = 5,
         step_size::Float64 = 0.025,
         folder = nothing,
@@ -278,7 +278,7 @@ function scenario_sweeping(;
     population = "SL",
     infected_fraction = 0.001,
     stop_criterion = TimesUp(limit = 365),
-    transmission_reduction::Float64 = 0.67, # share of transmissions prevented by other measures
+    transmission_reduction::Float64 = 0.66, # share of transmissions prevented by other measures
     rep = 5, # repetitions per combination
     step_size::Float64 = 0.025,
     folder = nothing,

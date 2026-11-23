@@ -363,14 +363,14 @@ The Fig 14B listing ([sc_household_isolation_screenshot_file.jl](src/sc_househol
 
 Code: [sc_sweeping.jl](src/sc_sweeping.jl). Config: reference model.
 
-To focus on the regime where self-isolation can be decisive, we assume that other measures already prevent 67 % of all transmissions, such that without isolation R_init lies slightly above 1.
+To focus on the regime where self-isolation can be decisive, we assume that other measures already prevent 66 % of all transmissions, such that without isolation R_init lies slightly above 1.
 
 | Parameter | Reference model | This example |
 |---|---|---|
 | Population | – | Saarland |
 | Initial infections | none | 0.1 % of the population, random |
 | Duration | 112 days | 365 days |
-| Transmission scale | 0.45784 | × (1 − 0.67): 67 % of transmissions prevented by other measures (`transmission_reduction = 0.67`) [I] |
+| Transmission scale | 0.45784 | × (1 − 0.66): 66 % of transmissions prevented by other measures (`transmission_reduction = 0.66`) [I] |
 | Asymptomatic share (x-axis) | 0.17 | 0 to 1, step 0.025, set in all age groups; the other categories rescaled proportionally |
 | Adherence (y-axis) | – | 0 to 1, step 0.025 |
 | Repetitions | – | 5 per combination; random seeds 1–8405 (one per run) |
@@ -434,6 +434,8 @@ No disease parameters are involved. All analyses use the GEMS population model o
 - **Fig 4–5:** population model and demographic maps per county (`demographics()`).
 - **Fig 6:** commuting. `mobility()` writes the shares of in- and out-commuters per county as CSV and draws the commuting figure ([Section 6.3](#63-commuting-validation)). The earlier maps of the commuter shares are drawn with `mobility(share_maps = true)`.
 - **Fig 7:** contact patterns of the reference model ([Section 4.2](#42-contacts)), sampled by GEMS with the contact sampling method of each setting (`contacts()`; in `runall()` with the reference model).
+
+`demographics()`, `settinganalyses()`, and `mobility()` use the population of Germany by default, as in the paper. For quick tests, pass a smaller population, e.g. `sim = Simulation(population = "SL")`. The validations then are skipped, as they compare all 16 federal states.
 
 ### 6.2 Population validation
 
