@@ -75,9 +75,6 @@ map_dims() = (1600, 2000)
 map_titlefontsize() = 34
 map_legendfontsize() = 24
 
-# INCLUDE STYLES
-include("styles/rd_contacts_only.jl")
-
 # INCLUDE MODEL EXTENSIONS
 include("infectiousness_profile.jl")
 

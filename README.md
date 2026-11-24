@@ -94,7 +94,7 @@ All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-an
 | Fig 4–6 (population, demographics, commuting) | `demographics.jl`, `settings.jl`, `mobility.jl` | none | DE | – | – |
 | Population validation | [population_validation.jl](src/population_validation.jl) → `population_validation()` (part of `demographics()`) | none | DE | – | – |
 | Commuting validation | [commuter_validation.jl](src/commuter_validation.jl) → `commuter_validation()` (part of `mobility()`) | none | DE | – | – |
-| Fig 7 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | reference model | DE | – | 0 |
+| Fig 7 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | reference model, plus uniform and strict mixing in the municipalities | DE | – | 1 day, all members of all settings |
 | Contact parameters (Sec. 2.4, reference model) | [derive_contact_parameters.jl](derive_contact_parameters.jl) → `derive_contact_parameters()` | reference model | DE (age weights) | – | – |
 | Sec. 3.1.1 First wave 2020 (Fig 10–11), incl. municipality mixing comparison | [sc_first_wave.jl](src/sc_first_wave.jl) → `scenario_first_wave()` | reference model | DE | 10.02.–31.05.2020 | see [5.1](#51-first-wave-2020-sec-311-fig-1011) |
 | Sec. 3.1.2 RSV immunization 2025/26 (Fig 12–13) | separate repository: [IMMIDD/2025-RSV-scenario](https://github.com/IMMIDD/2025-RSV-scenario) | – | – | – | – |
@@ -433,9 +433,9 @@ No disease parameters are involved. All analyses use the GEMS population model o
 
 - **Fig 4–5:** population model and demographic maps per county (`demographics()`).
 - **Fig 6:** commuting. `mobility()` writes the shares of in- and out-commuters per county as CSV and draws the commuting figure ([Section 6.3](#63-commuting-validation)). The earlier maps of the commuter shares are drawn with `mobility(share_maps = true)`.
-- **Fig 7:** contact patterns of the reference model ([Section 4.2](#42-contacts)), sampled by GEMS with the contact sampling method of each setting (`contacts()`; in `runall()` with the reference model).
+- **Fig 7:** contact patterns, as mean daily contacts per person by age (`contacts()`, `contact_matrices.png` and `contact_matrices.csv`). Every member of every setting draws contacts once with the GEMS sampling functions, and the sums are divided by all persons of the ego's age group. Panels A–C: households, workplaces, and educational settings (uniform mixing), summed over all levels of the setting hierarchy, with the contact parameters of the reference model ([Section 4.2](#42-contacts)). Panels D–F: municipalities with uniform mixing, with the POLYMOD matrix of the reference model, and with strict mixing (own age group only), i.e. the variants of the mixing comparison ([Section 5.1](#51-first-wave-2020-sec-311-fig-1011)). The age groups have five years (top group 85+). The contact matrices of E and F end with the group 70+.
 
-`demographics()`, `settinganalyses()`, and `mobility()` use the population of Germany by default, as in the paper. For quick tests, pass a smaller population, e.g. `sim = Simulation(population = "SL")`. The validations then are skipped, as they compare all 16 federal states.
+`demographics()`, `settinganalyses()`, `mobility()`, and `contacts()` use the population of Germany by default, as in the paper. For quick tests, pass a smaller population, e.g. `sim = Simulation(population = "SL")`. The validations then are skipped, as they compare all 16 federal states. `contacts()` also needs the reference model, e.g. `sim = Simulation(configfile = "models/DE_model_first_wave.toml", population = "SL")`.
 
 ### 6.2 Population validation
 
