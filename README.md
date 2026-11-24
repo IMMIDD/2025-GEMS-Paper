@@ -4,8 +4,8 @@ This repository contains the code and model configurations behind the example ap
 
 > Ponge, J., Patzner, J., Suer, J., et al. *GEMS: The German Epidemic Microsimulation System.*
 
-All simulations use [GEMS](https://github.com/IMMIDD/GEMS) **v1.0.2** (pinned in [Manifest.toml](Manifest.toml)).
-This README documents the parameterization of every example: population, contacts, transmission, disease progression, and interventions.
+All simulations use [GEMS](https://github.com/IMMIDD/GEMS) **v1.0.2**, the branch [`release_1.0.2`](https://github.com/IMMIDD/GEMS/tree/release_1.0.2) at commit [`7f3b79e`](https://github.com/IMMIDD/GEMS/commit/7f3b79e51752f1d316a836c2e9d78a76d73572fe) (pinned in [Manifest.toml](Manifest.toml); not yet tagged, the package version there is still 1.0.1). It gives every setting its own copy of its contact sampling method, which the age-based municipality contacts of the reference model need ([Section 4.2](#42-contacts)).
+This README documents the parameterization of every example: population, contacts, transmission, disease progression, and interventions, as well as the validation of the population model against official statistics ([Section 6](#6-population-analyses-and-validation)).
 All disease examples share one **reference model**, [models/DE_model_first_wave.toml](models/DE_model_first_wave.toml) ([Section 4](#4-reference-model-covid-19-wild-type-first-wave-2020)). Each example sets its own initial infections, horizon, and interventions in code, via the `Simulation` constructor or the scenario function's keyword arguments; [Section 5](#5-example-specific-parameterization) lists only these deviations.
 
 ## Contents
@@ -25,7 +25,10 @@ All disease examples share one **reference model**, [models/DE_model_first_wave.
    - [5.3 Parameter sweep (Sec. 3.2.2, Fig 16)](#53-parameter-sweep-sec-322-fig-16)
    - [5.4 Multi-criteria strategy evaluation (Sec. 3.2.3, Fig 17, Tab 2)](#54-multi-criteria-strategy-evaluation-sec-323-fig-17-tab-2)
    - [5.5 Performance benchmark (Sec. 3.3, Fig 18)](#55-performance-benchmark-sec-33-fig-18)
-6. [Population analyses (Fig 4–7)](#6-population-analyses-fig-47)
+6. [Population analyses and validation](#6-population-analyses-and-validation)
+   - [6.1 Population and contact figures (Fig 4–7)](#61-population-and-contact-figures-fig-47)
+   - [6.2 Population validation](#62-population-validation)
+   - [6.3 Commuting validation](#63-commuting-validation)
 7. [References](#7-references)
 
 ---
@@ -38,12 +41,16 @@ All disease examples share one **reference model**, [models/DE_model_first_wave.
 | [src/GEMSPaper.jl](src/GEMSPaper.jl) | Package entry point and `runall()` |
 | [src/infectiousness_profile.jl](src/infectiousness_profile.jl) | `InfectiousnessProfile` transmission function |
 | `src/sc_*.jl` | One file per example scenario |
-| [src/first_wave/](src/first_wave/) | RKI data, imported and introduced infections, intervention phases of March 2020 (fitted contact reductions), calibration, and figures of the first wave example |
+| [src/first_wave/](src/first_wave/) | RKI data, imported and introduced infections, intervention phases of March 2020 (fitted contact reductions), calibration, comparison of municipality mixing assumptions, and figures of the first wave example |
+| [src/contacts/](src/contacts/) | POLYMOD contact data: download, contacts per setting layer, household contact sampling (`HouseholdSizeSampling`), age-age matrix of the municipality contacts, derivation of the contact parameters of the config, and scaling of contact parameters |
 | [src/demographics.jl](src/demographics.jl), [src/settings.jl](src/settings.jl), [src/mobility.jl](src/mobility.jl), [src/contacts.jl](src/contacts.jl) | Population analyses (Fig 4–7) |
+| [src/population_validation.jl](src/population_validation.jl), [src/setting_validation.jl](src/setting_validation.jl) | Population validation against official statistics: age, sex, households, employment and education, setting sizes ([Section 6.2](#62-population-validation)) |
+| [src/commuter_validation.jl](src/commuter_validation.jl) | Commuting balance and validation against the BA commuter statistics ([Section 6.3](#63-commuting-validation)) |
 | [src/benchmarking.jl](src/benchmarking.jl) | Performance benchmark (Fig 18) |
 | [calibrate_first_wave.jl](calibrate_first_wave.jl) | Calibration of the reference model (transmission scale, generation time, contact factors); not part of `runall()` |
-| [inputs/](inputs/) | Calibration results read by the scenarios, county income data |
-| `data/` | RKI case data, downloaded on the first run |
+| [derive_contact_parameters.jl](derive_contact_parameters.jl) | Derivation of the contact parameters of the reference model from POLYMOD; not part of `runall()` |
+| [inputs/](inputs/) | Calibration results read by the scenarios, contact parameters derived from POLYMOD, reference data from official statistics (population, settings, commuting), county income; sources and licenses of every file in [inputs/README.md](inputs/README.md) |
+| `data/` | Downloaded on demand, not part of the repository: RKI case data, POLYMOD raw data, KMK class statistics ([inputs/README.md](inputs/README.md#downloaded-at-runtime-not-in-the-repository)) |
 
 ## 2. Reproducing the results
 
@@ -61,7 +68,11 @@ runall()                  # all analyses and scenarios, written to results/<time
 
 Each example can also be run on its own: `scenario_first_wave()`, `scenario_household_isolation()`, `scenario_sweeping()`, `scenario_testing()`, `benchmark()`, `contacts()`, `demographics()`, `mobility()`, `settinganalyses()`.
 
-The first wave example downloads the RKI case data (about 400 MB, checked against a SHA-256 checksum) to `data/` on its first run. Its calibrated contact factors are read from `inputs/`; to recalibrate, run [calibrate_first_wave.jl](calibrate_first_wave.jl).
+With a population of all 16 federal states, `demographics()` also runs the population validation (`population_validation()`) and `mobility()` the commuting validation (`commuter_validation()`). Both save their data as CSV files, so the figures can be redrawn without loading the population: `population_validation(data = load_validation_data(folder))` and `commuter_validation(data = load_commuter_data(folder))`.
+
+The first wave example downloads the RKI case data (about 400 MB, checked against a SHA-256 checksum) to `data/` on its first run. Its calibrated contact factors are read from `inputs/`; to recalibrate, run [calibrate_first_wave.jl](calibrate_first_wave.jl). The population validation downloads the KMK class statistics to `data/` on its first run.
+
+The contact parameters of the reference model are derived from the POLYMOD survey with [derive_contact_parameters.jl](derive_contact_parameters.jl). It downloads the POLYMOD raw data to `data/polymod/`, writes the parameters and the tables they come from to [inputs/contacts/](inputs/contacts/), and warns about config entries that differ from the derived values.
 
 The parameter sweep stores its results in `sc_sweep_data.csv`; `replot_sweeps(folder)` redraws the heatmap and the variability summary from that file without re-running the 8,405 simulations.
 
@@ -81,8 +92,11 @@ All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-an
 | Paper element | Script → function | Config | Population | Horizon | Runs / random seeds |
 |---|---|---|---|---|---|
 | Fig 4–6 (population, demographics, commuting) | `demographics.jl`, `settings.jl`, `mobility.jl` | none | DE | – | – |
-| Fig 7 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | reference model | DE | – | 0 |
-| Sec. 3.1.1 First wave 2020 (Fig 10–11) | [sc_first_wave.jl](src/sc_first_wave.jl) → `scenario_first_wave()` | reference model | DE | 10.02.–31.05.2020 | see [5.1](#51-first-wave-2020-sec-311-fig-1011) |
+| Population validation | [population_validation.jl](src/population_validation.jl) → `population_validation()` (part of `demographics()`) | none | DE | – | – |
+| Commuting validation | [commuter_validation.jl](src/commuter_validation.jl) → `commuter_validation()` (part of `mobility()`) | none | DE | – | – |
+| Fig 7 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | reference model, plus uniform and strict mixing in the municipalities | DE | – | 1 day, all members of all settings |
+| Contact parameters (Sec. 2.4, reference model) | [derive_contact_parameters.jl](derive_contact_parameters.jl) → `derive_contact_parameters()` | reference model | DE (age weights) | – | – |
+| Sec. 3.1.1 First wave 2020 (Fig 10–11), incl. municipality mixing comparison | [sc_first_wave.jl](src/sc_first_wave.jl) → `scenario_first_wave()` | reference model | DE | 10.02.–31.05.2020 | see [5.1](#51-first-wave-2020-sec-311-fig-1011) |
 | Sec. 3.1.2 RSV immunization 2025/26 (Fig 12–13) | separate repository: [IMMIDD/2025-RSV-scenario](https://github.com/IMMIDD/2025-RSV-scenario) | – | – | – | – |
 | Sec. 3.2.1 Scenario modeling (Fig 14A, baseline readouts Fig 15) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 180 d | 1 per scenario / 0 |
 | Fig 14B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
@@ -109,16 +123,37 @@ Config: [models/DE_model_first_wave.toml](models/DE_model_first_wave.toml). The 
 
 ### 4.2 Contacts
 
-Daily contacts ~ Poisson(λ), drawn uniformly from the members of the setting (`ContactparameterSampling`).
+All contact parameters are derived from the German participants of the POLYMOD survey (Mossong et al. 2008; data: Mossong et al. 2020) with [derive_contact_parameters.jl](derive_contact_parameters.jl) (code in [src/contacts/](src/contacts/)). [inputs/contacts/contact_parameters_DE.csv](inputs/contacts/contact_parameters_DE.csv) lists the value and derivation of every config entry. The config holds them rounded to 3 decimals.
 
-| Setting type | Level | λ | Source |
+**Derivation**
+
+| Step | Rule |
+|---|---|
+| Layer of a contact | home → household; school → education, if the participant attends daycare, school, or university (children's diaries: `child_care`, without childminders; own diaries: full-time education); work → work, if the participant works (school contacts of working participants, e.g. teachers, also go to work); all other contacts (transport, leisure, other places, no location, school or work without membership) → municipality |
+| Contacts per member and day | mean over the participants who are members of the layer (households and municipality: all participants), weighted by age (groups 0, 5, 10, 15, 20, 30, …, 70+) to the members of the layer in the GEMS DE population; daily average of weekdays (5/7) and weekend (2/7) |
+| Visitors at home | home contacts beyond the other household members (household size − 1) count as municipality contacts |
+| Split over setting levels | [A] contacts weighted towards the most immediate level (own office or class): each level gets half of the one below, the two outermost levels the same (1/2, 1/4, 1/8, 1/8) |
+
+**Contact sampling per setting type**
+
+| Setting type | Sampling method | Parameters | Source |
 |---|---|---|---|
-| Household | – | 3.3 | [L] Mossong et al. 2008 |
-| Workplace | Office / Department / Workplace / WorkplaceSite | 1.4 / 0.7 / 0.35 / 0.35 | [L] Mossong et al. 2008 (total 2.8); [A] split 1/2, 1/4, 1/8, 1/8 |
-| School | SchoolClass / SchoolYear / School / SchoolComplex | 0.9 / 0.45 / 0.225 / 0.225 | [L] Mossong et al. 2008 (total 1.8); [A] split 1/2, 1/4, 1/8, 1/8 |
-| Municipality | – | 4.0 | [L] Mossong et al. 2008 |
+| Household (2–10 members) | `HouseholdSizeSampling` ([src/contacts/household_sampling.jl](src/contacts/household_sampling.jl)): each other present member is met once per day with probability q, by household size | q = 0.953 / 0.935 / 0.899 / 0.804 for 2 / 3 / 4 / 5+ members | [L] adapted: share of the other household members met per day by the German participants, by household size ([polymod_household_probabilities.csv](inputs/contacts/polymod_household_probabilities.csv)) |
+| Household (care homes, 11+ members) | Poisson(λ) contacts drawn uniformly from the present members | λ = 2.706 | [L] adapted: mean daily home contacts of all German participants (POLYMOD has no care home residents); [A] care homes from 11 members on |
+| Workplace | `ContactparameterSampling`: Poisson(λ) contacts drawn uniformly from the members | Office / Department / Workplace / WorkplaceSite: λ = 1.960 / 0.980 / 0.490 / 0.490 (total 3.920) | [L] adapted: work contacts per working participant; [A] split |
+| Education (daycare to university) | `ContactparameterSampling` | SchoolClass / SchoolYear / School / SchoolComplex: λ = 1.337 / 0.668 / 0.334 / 0.334 (total 2.673) | [L] adapted: education contacts per participant in education; [A] split |
+| Municipality | `AgeBasedContactSampling` (GEMS): Poisson(c) contacts per day, drawn from the members by the age-age matrix below | c = 4.155; matrix [polymod_municipality_matrix_DE.txt](inputs/contacts/polymod_municipality_matrix_DE.txt), 5-year age groups (0–4, …, 65–69, 70+) | [L] adapted: all other contacts, including visitors at home |
 
-The split weights contacts towards the most immediate level (own office or class): each level gets half of the one below, the two outermost levels the same.
+[polymod_contact_rates.csv](inputs/contacts/polymod_contact_rates.csv) compares the contacts per layer for Germany and all POLYMOD countries, with and without the cap on home contacts.
+
+**Municipality contact matrix** ([src/contacts/polymod_matrix.jl](src/contacts/polymod_matrix.jl); steps in [polymod_municipality_matrix_DE.csv](inputs/contacts/polymod_municipality_matrix_DE.csv)): from the municipality contacts of the German participants, without the visitors at home (not identifiable in the data) and the 1.5 % of contacts without an age:
+
+1. mean daily contacts c<sub>ij</sub> of a participant in age group i with persons in age group j (weekdays 5/7, weekend 2/7),
+2. made reciprocal with the GEMS DE population N: (c<sub>ij</sub> N<sub>i</sub> + c<sub>ji</sub> N<sub>j</sub>) / (2 N<sub>i</sub>),
+3. divided by N<sub>j</sub> (contacts per capita, independent of the age structure),
+4. rows normalized to 1.
+
+GEMS weights each row with the age structure of the municipality, computed from its members, so the age of the contacts reflects both the age preferences of POLYMOD and the local population. The expected number of contacts per member equals the contact parameter (0.9997 of c in the German first wave runs).
 
 ### 4.3 Transmission
 
@@ -130,7 +165,7 @@ p(τ) = `transmission_scale` · w(τ), with w(τ) the profile mass in [τ, τ + 
 |---|---|---|
 | Profile | shifted gamma relative to symptom onset: shape 97.1875, rate 3.71875, shift 25.625 d | [L] He et al. 2020, corrected by Ashcroft et al. 2020, Table 1 |
 | Config parameters | `distribution = "Gamma"`, `parameters = [97.1875, 0.26891]` (shape, scale = 1 / rate), `offset = 21.625` | [L] adapted: offset = shift − pre-symptomatic period (25.625 − 4.0); profile mass before infectiousness onset (4 %) dropped |
-| `transmission_scale` | 0.50486 | [C] fitted to R0 = 3.28 with [calibrate_first_wave.jl](calibrate_first_wave.jl) |
+| `transmission_scale` | 0.45784 | [C] fitted to R0 = 3.28 with [calibrate_first_wave.jl](calibrate_first_wave.jl) |
 | Target R0 | 3.28 | [L] Liu et al. 2020 |
 
 **Fit of the transmission scale:** population Rhineland-Palatinate (contact structure closest to Germany), 0.1 % random initial infections, 50 days per run, 10 runs per candidate; R0 = mean R_eff of ticks 1–10; linear search (candidate × target / result, at most 15 iterations) from the value in the config until |R0 − 3.28| ≤ 0.02.
@@ -248,8 +283,8 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 |---|---|---|
 | Phase start dates | phase 2: 09.03. (large events cancelled), phase 3: 16.03. (schools closed), phase 4: 23.03. (contact restrictions) | [L] dates of the measures |
 | Transitions between phases | linear over 3, 3, 4 days | [L] Dehning et al. 2020 |
-| Contact factors (phases 1–4) | 0.570 / 0.163 / 0.165 / 0.119, multiplied with the contact parameters of all settings except households | [C] [inputs/first_wave_factors_DE_model_first_wave.csv](inputs/first_wave_factors_DE_model_first_wave.csv) |
-| Care homes | households with at least 11 members, scaled like the other settings | [A] |
+| Contact factors (phases 1–4) | 0.641 / 0.207 / 0.182 / 0.139, multiplied with the contact parameters of all settings except households (municipalities keep their age-based sampling) | [C] [inputs/first_wave_factors_DE_model_first_wave.csv](inputs/first_wave_factors_DE_model_first_wave.csv) |
+| Care homes | households with at least 11 members (`large_size` of `HouseholdSizeSampling`), λ = 2.706 scaled like the other settings | [A] |
 | School closure | all school settings closed from 16.03.2020 | [L] |
 | Ascertainment | 0.22 of all infections detected (`ASCERTAINMENT_2020`); also used to scale the reported imports, not the Heinsberg cluster | [L] adapted: under-ascertainment factor of 4 to 5 in the first half of 2020 from seroprevalence studies (Robert Koch-Institut 2021, p. 1), i.e. 20–25 % of infections detected; 1 / 4.5 = 0.22; [A] the same factor for imports |
 | Testing | perfect PCR test at symptom onset with probability p = (0.22 − hospitalized share) / (symptomatic share − hospitalized share), and at hospital admission (if not detected before); positives are not isolated | [A] |
@@ -261,7 +296,7 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 | Step | Setup |
 |---|---|
 | 1. Transmission scale | [Section 4.3](#43-transmission) |
-| 2a. Generation time of the model | Saarland, 70 days, scale 0.35, 20 extra infections per day in the Regionalverband Saarbrücken (ticks 7–27), ascertainment 1.0, random seed 2; cohort of ticks 10–22; mean 5.68 d ([inputs/generation_time_DE_model_first_wave.csv](inputs/generation_time_DE_model_first_wave.csv)) |
+| 2a. Generation time of the model | Saarland, 70 days, scale 0.35, 20 extra infections per day in the Regionalverband Saarbrücken (ticks 7–27), ascertainment 1.0, random seed 2; cohort of ticks 10–22; mean 5.76 d ([inputs/generation_time_DE_model_first_wave.csv](inputs/generation_time_DE_model_first_wave.csv)) |
 | 2b. Contact factors | fitted to the weekly RKI cases by onset, weeks 10–16 (up to 19.04., weight 0.5 for week 10), with the R per phase of GEMS kept inside the 95 % interval of the RKI R per phase (R(t) back-calculated from 01.02., infections 01.03.–12.04., block bootstrap with 1,000 samples, block length 7 d); surrogate fit, then damped Gauss–Newton steps, at most 7 evaluations with 2 runs each (random seeds 0, 1); runs until 17.05. |
 | 2c. Band | 20 factor samples (log-normal) from the approximate covariance of the fit, σ²(AᵀA)⁻¹ with A the weighted Jacobian of the residuals at the optimum and σ² = residual sum of squares / (7 weeks − 4 factors) (random seeds 1001–1020) ([inputs/first_wave_band_factors_DE_model_first_wave.csv](inputs/first_wave_band_factors_DE_model_first_wave.csv)) |
 
@@ -278,7 +313,7 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 
 **Parts of the scenario** (`FIRST_WAVE_PARTS`)
 
-By default, `scenario_first_wave()` runs only the parts of the paper (`FIRST_WAVE_PAPER_PARTS`, marked *paper*) and writes the outputs of the paper (cases by reporting date, the paper figures `sc_first_wave_paper_figure_1_reported.png` and `…_2_reported.png`, the seeding summary, and the county metrics) and the files they are built from. The other parts can be selected with `parts`, e.g. `scenario_first_wave(parts = (:projections, :figures), diagnostics = true)`; `diagnostics = true` also writes the comparisons by symptom onset and the figures of all parts.
+By default, `scenario_first_wave()` runs only the parts of the paper (`FIRST_WAVE_PAPER_PARTS`, marked *paper*) and writes the outputs of the paper (cases by reporting date, the paper figures `sc_first_wave_paper_figure_1_reported.png` and `…_2_reported.png`, the seeding summary, the county metrics, and the mixing comparison) and the files they are built from. The other parts can be selected with `parts`, e.g. `scenario_first_wave(parts = (:projections, :figures), diagnostics = true)`; `diagnostics = true` also writes the comparisons by symptom onset and the figures of all parts.
 
 | Part | Setup | Runs / random seeds | Paper |
 |---|---|---|---|
@@ -288,7 +323,19 @@ By default, `scenario_first_wave()` runs only the parts of the paper (`FIRST_WAV
 | `:band` | factor samples of the calibration, 5–95 % band, national and per state | 20 / 1001–1020 | paper |
 | `:seeds_robustness` | all RKI cases infected before 09.03. as introduced infections (divided by the ascertainment, Heinsberg 1:1), no transmission before 09.03. | 3 / 0–2 | – |
 | `:random_seeds` | the seeds of `:final` (imports and Heinsberg cluster), the same number per day, in counties drawn in proportion to their population (drawn anew for each random seed) | 3 / 0–2 | paper |
+| `:mixing` | municipality contacts with uniform mixing and with same-age mixing instead of the POLYMOD matrix, each with the introductions of `:final` and of `:random_seeds`; compared with these two parts (run first if their outputs are not in the folder) | 3 per variant / 0–2 | paper |
 | `:figures` | paper figures, seeding summary, county metrics; with `diagnostics`, the figures of all parts whose results exist | – | paper |
+
+**Municipality mixing comparison** (`:mixing`, [src/first_wave/rki_mixing.jl](src/first_wave/rki_mixing.jl))
+
+| Item | Setup |
+|---|---|
+| Mixing assumptions (`MUNICIPALITY_MIXING`) | reference: POLYMOD matrix ([Section 4.2](#42-contacts)); `:uniform`: `ContactparameterSampling`, contacts drawn uniformly from the members; `:same_age`: `AgeBasedContactSampling` with the identity matrix over the 15 age groups of the POLYMOD matrix (contacts only within the own age group) |
+| Parameters | the contact parameter c = 4.155, the transmission scale, and the contact factors of the reference fit (no recalibration) |
+| National fit | weekly cases GEMS / RKI in the fitted weeks (lowest, highest, RMS of the log ratio), reported cases of the whole run |
+| Spatial pattern | county and state Spearman correlations with the RKI incidence as in the Evaluation above; difference alternative − reference with 95 % interval and p-value from the same bootstrap over states (paired); mean county Spearman of single runs between the random seeds of a model and with the reference model |
+| Age and settings | age groups of cases and deaths, mean age of the infected, share of transmissions per setting type, share of municipality transmissions within the same 10-year age band, expected municipality contacts per member relative to c |
+| Outputs | `sc_first_wave_mixing_summary.csv` (one column per model), `sc_first_wave_mixing_ages.csv`, and the outputs of each variant (`sc_first_wave_mixing_<variant>[_random_seeds]_*.csv`) |
 
 ### 5.2 Scenario modeling (Sec. 3.2.1, Fig 14–15)
 
@@ -316,14 +363,14 @@ The Fig 14B listing ([sc_household_isolation_screenshot_file.jl](src/sc_househol
 
 Code: [sc_sweeping.jl](src/sc_sweeping.jl). Config: reference model.
 
-To focus on the regime where self-isolation can be decisive, we assume that other measures already prevent 67 % of all transmissions, such that without isolation R_init lies slightly above 1.
+To focus on the regime where self-isolation can be decisive, we assume that other measures already prevent 60 % of all transmissions, such that without isolation R_init lies above 1.
 
 | Parameter | Reference model | This example |
 |---|---|---|
 | Population | – | Saarland |
 | Initial infections | none | 0.1 % of the population, random |
 | Duration | 112 days | 365 days |
-| Transmission scale | 0.50486 | × (1 − 0.67): 67 % of transmissions prevented by other measures (`transmission_reduction = 0.67`) [I] |
+| Transmission scale | 0.45784 | × (1 − 0.6): 60 % of transmissions prevented by other measures (`transmission_reduction = 0.6`) [I] |
 | Asymptomatic share (x-axis) | 0.17 | 0 to 1, step 0.025, set in all age groups; the other categories rescaled proportionally |
 | Adherence (y-axis) | – | 0 to 1, step 0.025 |
 | Repetitions | – | 5 per combination; random seeds 1–8405 (one per run) |
@@ -345,7 +392,7 @@ To focus on the regime where tracing can be decisive, we assume that other measu
 |---|---|---|
 | Initial infections | none | 50 infections in Gangelt (municipality key 05370008, county Heinsberg) |
 | Duration | 112 days | 365 days |
-| Municipality contact parameter | 4.0 | 2.0: 50 % of community contacts prevented (`municipality_contact_reduction = 0.5`) [I] |
+| Municipality contact parameter | 4.155 | 2.078: 50 % of community contacts prevented (`municipality_contact_reduction = 0.5`), age-based sampling kept [I] |
 | Random seeds | – | 0 (Isolation Only), 1 (Isolation & Testing), 2 (Isolation, Testing & Tracing) |
 
 **Test type** "Antigen Test" [I]: positive ~ Bernoulli(p = 0.80) if infected (sensitivity), Bernoulli(p = 0.01) if not (specificity 0.99).
@@ -363,7 +410,7 @@ The tests in Isolation & Testing have no follow-up: the scenario detects cases w
 
 ### 5.5 Performance benchmark (Sec. 3.3, Fig 18)
 
-GEMS default parameterization ([data/DefaultConf.toml @ v1.0.2](https://github.com/IMMIDD/GEMS/blob/v1.0.2/data/DefaultConf.toml)), also used for Fig 14B.
+GEMS default parameterization ([data/DefaultConf.toml @ 7f3b79e](https://github.com/IMMIDD/GEMS/blob/7f3b79e51752f1d316a836c2e9d78a76d73572fe/data/DefaultConf.toml)), also used for Fig 14B.
 
 | Parameter | Value |
 |---|---|
@@ -378,12 +425,46 @@ GEMS default parameterization ([data/DefaultConf.toml @ v1.0.2](https://github.c
 
 Protocol: one warm-up run, then 11 runs per population (random seeds 1–11), medians reported. Populations: 16 German states and Germany, plus on-the-fly populations of 0.1, 1, 5, 10, 20, and 50 million agents.
 
-## 6. Population analyses (Fig 4–7)
+## 6. Population analyses and validation
 
-No disease parameters are involved.
+No disease parameters are involved. All analyses use the GEMS population model of Germany (84,563,726 individuals, Gesyland).
 
-- **Fig 4–6:** Germany (84,563,726 individuals).
-- **Fig 7:** Germany, contacts of the reference model.
+### 6.1 Population and contact figures (Fig 4–7)
+
+- **Fig 4–5:** population model and demographic maps per county (`demographics()`).
+- **Fig 6:** commuting. `mobility()` writes the shares of in- and out-commuters per county as CSV and draws the commuting figure ([Section 6.3](#63-commuting-validation)). The earlier maps of the commuter shares are drawn with `mobility(share_maps = true)`.
+- **Fig 7:** contact patterns, as mean daily contacts per person by age (`contacts()`, `contact_matrices.png` and `contact_matrices.csv`). Every member of every setting draws contacts once with the GEMS sampling functions, and the sums are divided by all persons of the ego's age group. Panels A–C: households, workplaces, and educational settings (uniform mixing), summed over all levels of the setting hierarchy, with the contact parameters of the reference model ([Section 4.2](#42-contacts)). Panels D–F: municipalities with uniform mixing, with the POLYMOD matrix of the reference model, and with strict mixing (own age group only), i.e. the variants of the mixing comparison ([Section 5.1](#51-first-wave-2020-sec-311-fig-1011)). The age groups have five years (top group 85+). The contact matrices of E and F end with the group 70+.
+
+`demographics()`, `settinganalyses()`, `mobility()`, and `contacts()` use the population of Germany by default, as in the paper. For quick tests, pass a smaller population, e.g. `sim = Simulation(population = "SL")`. The validations then are skipped, as they compare all 16 federal states. `contacts()` also needs the reference model, e.g. `sim = Simulation(configfile = "models/DE_model_first_wave.toml", population = "SL")`.
+
+### 6.2 Population validation
+
+`population_validation()` ([src/population_validation.jl](src/population_validation.jl), setting sizes in [src/setting_validation.jl](src/setting_validation.jl)) compares the population model with official statistics and writes `population_validation.png` and its data (`validation_*.csv`). The reference data are listed with table codes, reference dates, and licenses in [inputs/README.md](inputs/README.md#population-reference-data-for-the-validation-of-the-population-model).
+
+| Panel | Comparison (Germany) | Reference |
+|---|---|---|
+| A) Age and sex | share of the population by single year of age (top group 90+) and sex | Destatis 12411-0013, 31.12.2019 |
+| B) Household size | share of private households by size (1 to 5+); GEMS households with up to 9 members (Gesyland models care homes as households of 90+ residents) | Microcensus 12211-9034, 2019 |
+| C) Family type | share of private households by type: couples without children, couples with children, single mothers, single fathers, other (single-person households and households without a core family) | Zensus 2022 5000H-1005, 15.05.2022 |
+| D) Senior status | share of households by members aged 65+: only seniors (1, 2, 3+), seniors and younger persons, no seniors | Zensus 2022 5000H-1003, 15.05.2022 |
+| E) Workplaces | share of workers by workplace size (1–9, 10–49, 50–249, 250–499, 500+) | BA establishments by size class, 30.06.2019 |
+| F) Mean group size | members per daycare group and per school class (primary, secondary grades 5–10, special schools); secondary 11+ without reference (taught in courses) | Destatis 22541-0001, 01.03.2019; KMK class statistics 2019 |
+| G) Universities | share of students by university size | Destatis 21311-0002, WS 2019/20 |
+| H)–M) Federal states | GEMS vs. official share per state: population, age groups, employment and education (employed, daycare, pupils, not working 15–64, retired 65+), household sizes, family types, senior status | as above; employment: Zensus 2022 2000S-1002; pupils: Destatis 21111-0011, 21121-0010 (2019/20); daycare: Destatis 22541-0112 (01.03.2019) |
+
+GEMS has no relationships between household members, so family types are classified by age: members at least 18 years younger than the oldest member count as children ([A]). Persons from 65 on without a workplace or education setting count as retired ([A]). Household types, senior status, and employment come from the Zensus 2022, which reports them for all federal states in categories that can be derived from the GEMS population.
+
+### 6.3 Commuting validation
+
+`commuter_validation()` ([src/commuter_validation.jl](src/commuter_validation.jl)) compares the commutes between counties in GEMS with the commuter statistics of the Bundesagentur für Arbeit (BA) of 30.06.2019 (employees subject to social insurance) and writes `commuter_validation.png` and its data (`commuter_validation_*.csv`). Reference data: [inputs/README.md](inputs/README.md#commuters-reference-data-for-the-validation-of-commuting).
+
+| Panel | Content |
+|---|---|
+| A) Commuting balance (GEMS) | net commuters per county (in- minus out-commuters) as peaks on the county centres (up: net in-commuting, down: net out-commuting), over the population density |
+| B) Flows between counties | share of the out-commuters of the home county going to each other county, GEMS vs. BA, for the pairs with at least 10 commuters in both (smaller flows are only published in aggregates); agreement as Common Part of Commuters (CPC; Lenormand et al. 2012, 2016), with both flow sets scaled to the same total |
+| C) Commuting distance | share of the workers who work in their home county and who commute over 0–25, 25–50, 50–100, 100–200, 200+ km (distance between the county centres), GEMS vs. BA |
+
+Counties as in 2019 (the boundaries of the population and of the BA data), with Eisenach (16056) merged into the Wartburgkreis (16063) as in the GEMS county shapes. GEMS counts all workers, the BA only employees subject to social insurance (without civil servants and self-employed persons), so the panels compare shares.
 
 ## 7. References
 
@@ -396,16 +477,23 @@ No disease parameters are involved.
 - He, X., et al. (2020). Temporal dynamics in viral shedding and transmissibility of COVID-19. *Nat Med* 26:672–675. https://doi.org/10.1038/s41591-020-0869-5; author correction *Nat Med* 26:1491–1493. https://doi.org/10.1038/s41591-020-1016-z
 - Hu, Z., et al. (2020). Clinical characteristics of 24 asymptomatic infections with COVID-19 screened among close contacts in Nanjing, China. *Sci China Life Sci* 63(5):706–711. https://doi.org/10.1007/s11427-020-1661-4
 - Karagiannidis, C., et al. (2020). Case characteristics, resource use, and outcomes of 10 021 patients with COVID-19 admitted to 920 German hospitals: an observational study. *Lancet Respir Med* 8(9):853–862. https://doi.org/10.1016/S2213-2600(20)30316-7
+- Lenormand, M., Huet, S., Gargiulo, F., Deffuant, G. (2012). A universal model of commuting networks. *PLoS ONE* 7(10):e45985. https://doi.org/10.1371/journal.pone.0045985
+- Lenormand, M., Bassolas, A., Ramasco, J. J. (2016). Systematic comparison of trip distribution laws and models. *J Transp Geogr* 51:158–169. https://doi.org/10.1016/j.jtrangeo.2015.12.008
 - Liu, Y., et al. (2020). The reproductive number of COVID-19 is higher compared to SARS coronavirus. *J Travel Med* 27(2):taaa021. https://doi.org/10.1093/jtm/taaa021
 - McAloon, C., et al. (2020). Incubation period of COVID-19: a rapid systematic review and meta-analysis of observational research. *BMJ Open* 10(8):e039652. https://doi.org/10.1136/bmjopen-2020-039652
 - Mossong, J., et al. (2008). Social contacts and mixing patterns relevant to the spread of infectious diseases. *PLoS Med* 5(3):e74. https://doi.org/10.1371/journal.pmed.0050074
+- Mossong, J., Hens, N., Jit, M., et al. (2020). POLYMOD social contact data (Version 2) [Data set]. Zenodo. https://doi.org/10.5281/zenodo.3874557. License: CC BY-NC 4.0
 - Ponge, J., et al. (2024). A standardized framework for modeling non-pharmaceutical interventions in individual-based infectious disease simulations. *WSC 2024*, 1106–1117. https://doi.org/10.1109/WSC63780.2024.10838778
 - Robert Koch-Institut (2020). Täglicher Lagebericht des RKI zur Coronavirus-Krankheit-2019 (COVID-19), reports of 04.03., 06.03., 08.03. (Tab. 2), 22.03., 24.03., 26.03. (Tab. 3), and 27.04.2020 (Fig. 3, Tab. 2). https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Situationsberichte/2020-MM-DD-de.pdf?__blob=publicationFile (no longer online; archived copies: https://web.archive.org/web/2020/ followed by that URL)
 - Robert Koch-Institut (2021). SARS-CoV-2-Seroprävalenz in der Allgemeinbevölkerung in Deutschland [Factsheet], as of 23.11.2021, p. 1. https://doi.org/10.25646/9288
 - Robert Koch-Institut (2026). SARS-CoV-2 Infektionen in Deutschland [Data set], version of 14.10.2026. Zenodo. https://doi.org/10.5281/zenodo.23357370. License: CC BY 4.0
 - Schilling, J., Lehfeld, A.-S., Schumacher, D., Ullrich, A., Diercke, M., Buda, S., Haas, W., RKI COVID-19 Study Group (2020). Krankheitsschwere der ersten COVID-19-Welle in Deutschland basierend auf den Meldungen gemäß Infektionsschutzgesetz. *Journal of Health Monitoring* 5(S11):2–20. https://doi.org/10.25646/7169
 - Sekretariat der Kultusministerkonferenz (2018). Ferien im Schuljahr 2019/2020 in den Ländern in der Bundesrepublik Deutschland, as of 11.07.2018. https://www.kmk.org/fileadmin/Dateien/pdf/Ferienkalender/FER19_20.pdf
+- Sekretariat der Kultusministerkonferenz (n.d.). Schüler/-innen, Klassen, Lehrkräfte und Absolvierende der Schulen 2010 bis 2019. Statistische Veröffentlichungen der KMK, Dokumentation 227, Teil A (allgemeinbildende und berufliche Schulen), retrieved 21.11.2026. https://www.kmk.org/ (downloaded at runtime, see [inputs/README.md](inputs/README.md))
+- Statistik der Bundesagentur für Arbeit (2020). Tables of the employment statistics, reference date 30.06.2019: Betriebe und sozialversicherungspflichtig Beschäftigte; Gemeindedaten der sozialversicherungspflichtig Beschäftigten nach Wohn- und Arbeitsort; Pendlerverflechtungen der sozialversicherungspflichtig Beschäftigten nach Kreisen. Nürnberg. https://statistik.arbeitsagentur.de/ (files, URLs, and terms of use in [inputs/README.md](inputs/README.md))
 - Statistik Austria (n.d.). Zuordnungsverzeichnis Deutschland (German postal codes → origin regions of the Austrian tourism statistics), edited by Landesstatistik Steiermark. https://www.landesentwicklung.steiermark.at/cms/dokumente/12656884_141979459/b19d32c7/Zuordnungsverzeichnis%20Oesterreich%20Deutschland-PLZ-PDF.pdf
 - Statistische Ämter des Bundes und der Länder (2026). Einkommen der privaten Haushalte in den kreisfreien Städten und Landkreisen der Bundesrepublik Deutschland 1995 bis 2023. Volkswirtschaftliche Gesamtrechnungen der Länder, Reihe 2, Kreisergebnisse Band 3, Tab. 2.4 (Berechnungsstand Februar 2025, published January 2026). https://www.statistikportal.de/de/vgrdl/publikationenbsalt. License: Datenlizenz Deutschland – Namensnennung – Version 2.0.
+- Statistisches Bundesamt (Destatis) (2026). GENESIS-Online, tables 12411-0013, 12211-9034, 21111-0011, 21121-0010, 21311-0002, 22541-0001, 22541-0112, retrieved 21.11.2026. https://www-genesis.destatis.de/. License: Datenlizenz Deutschland – Namensnennung – Version 2.0 (details per table in [inputs/README.md](inputs/README.md))
+- Statistische Ämter des Bundes und der Länder (2026). Zensus 2022 database, tables 5000H-1003, 5000H-1005, 2000S-1002, retrieved 21.11.2026. https://ergebnisse.zensus2022.de/. License: Datenlizenz Deutschland – Namensnennung – Version 2.0
 - Streeck, H., et al. (2020). Infection fatality rate of SARS-CoV2 in a super-spreading event in Germany. *Nat Commun* 11:5829. https://doi.org/10.1038/s41467-020-19509-y
 - Verity, R., et al. (2020). Estimates of the severity of coronavirus disease 2019: a model-based analysis. *Lancet Infect Dis* 20(6):669–677. https://doi.org/10.1016/S1473-3099(20)30243-7
