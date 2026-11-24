@@ -25,6 +25,13 @@ Sizes of the on-the-fly populations.
 const BENCHMARK_SYNTHETIC_SIZES = [100_000, 1_000_000, 5_000_000, 10_000_000, 20_000_000, 50_000_000]
 
 """
+    BENCHMARK_CONFIG
+
+Config of the benchmark: the reference model, run for 365 days with 0.1 % initial infections.
+"""
+const BENCHMARK_CONFIG = "models/DE_model_first_wave.toml"
+
+"""
     machine_info()
 
 Returns a one-row DataFrame with the hardware, Julia and GEMS versions, and Julia threads of this process.
@@ -49,10 +56,14 @@ _population_name(p::Integer) = "Size_$p"
 _population_type(::AbstractString) = "Gesyland"
 _population_type(::Integer) = "Synthetic"
 
+# reference model with 0.1 % initial infections, run for 365 days
+_benchmark_simulation(; kwargs...) = Simulation(; configfile = BENCHMARK_CONFIG, infected_fraction = 0.001,
+    stop_criterion = TimesUp(limit = 365), kwargs...)
+
 # compiles both population paths (on-the-fly and population model) before anything is timed
 function _warm_up()
     for kwargs in ((;), (population = "SL",))
-        sim = Simulation(; kwargs...)
+        sim = _benchmark_simulation(; kwargs...)
         run!(sim)
         ResultData(sim)
     end
@@ -63,7 +74,7 @@ end
 # files up to the ready simulation; live memory is measured after a full GC outside the timings
 function _timed_run(p, seed)
     GC.gc()
-    init_t = @timed Simulation(; seed = seed, _population_kwargs(p)...)
+    init_t = @timed _benchmark_simulation(; seed = seed, _population_kwargs(p)...)
     sim = init_t.value
     sim_t = @timed run!(sim)
     GC.gc()
@@ -71,6 +82,8 @@ function _timed_run(p, seed)
     proc_t = @timed ResultData(sim)
     GC.gc()
     post_live = Base.gc_live_bytes()
+    # post-processing with the LightRD style (fewer analyses), timed separately
+    light_t = @timed ResultData(sim; style = "LightRD")
     return (
         model = _population_name(p),
         type = _population_type(p),
@@ -81,6 +94,7 @@ function _timed_run(p, seed)
         initialization_time = init_t.time,
         simulation_time = sim_t.time,
         post_processing_time = proc_t.time,
+        post_processing_light_time = light_t.time,
         compile_time = init_t.compile_time + sim_t.compile_time + proc_t.compile_time,
         gc_time = init_t.gctime + sim_t.gctime + proc_t.gctime,
         allocated_gb = (init_t.bytes + sim_t.bytes + proc_t.bytes) / 2^30,
@@ -129,7 +143,7 @@ end
 
 # peak memory of one run in a fresh process, written to `out`
 function _peak_memory_worker(population, out)
-    sim = Simulation(; _population_kwargs(population)...)
+    sim = _benchmark_simulation(; _population_kwargs(population)...)
     run!(sim)
     rss_sim = Sys.maxrss()
     ResultData(sim)
@@ -166,7 +180,7 @@ function summarize_benchmarks(runs::DataFrame)
         :pop_size => median => :pop_size,
         :infections => median => :infections,
         nrow => :runs,
-        [s => f => Symbol("$(s)_$(n)") for s in [:initialization_time, :simulation_time, :post_processing_time]
+        [s => f => Symbol("$(s)_$(n)") for s in [:initialization_time, :simulation_time, :post_processing_time, :post_processing_light_time]
             for (n, f) in [("median", median), ("q25", x -> q(x, 0.25)), ("q75", x -> q(x, 0.75))]]...,
         :live_gb_simulation => median => :live_gb_simulation,
         :live_gb_post_processing => median => :live_gb_post_processing)
@@ -179,13 +193,17 @@ const _STAGES = [
     (:simulation_time, "Simulation", :darkorange),
     (:post_processing_time, "Post-processing", :seagreen)]
 
+# fonts and print size of the population validation figure
 _bench_style() = (
-    fontfamily = "Times Roman",
-    tickfontsize = 12,
-    labelfontsize = 14,
-    titlefontsize = 16,
-    legendfontsize = 11,
-    framestyle = :box)
+    fontfamily = PV_FONT,
+    tickfontsize = PV_SMALL_FONTSIZE,
+    guidefontsize = PV_FONTSIZE,
+    titlefontsize = PV_HEADING_FONTSIZE,
+    titlelocation = :left,
+    legendfontsize = PV_SMALL_FONTSIZE,
+    framestyle = :box,
+    dpi = PV_DPI)
+const _BENCH_MARKER = (markersize = 3.5, markerstrokewidth = 1)
 
 # log ticks within [lo, hi] with readable labels; adds 2 and 5 if fewer than three decades fit
 function _decade_ticks(lo, hi, label)
@@ -197,7 +215,7 @@ function _decade_ticks(lo, hi, label)
     return (ticks, label.(ticks))
 end
 _size_label(x) = x >= 1e6 ? "$(round(Int, x / 1e6))M" : "$(round(Int, x / 1e3))k"
-_seconds_label(x) = x >= 1 ? "$(round(Int, x)) s" : "$(round(x, sigdigits = 1)) s"
+_seconds_label(x) = x >= 1 ? "$(round(Int, x))" : "$(round(x, sigdigits = 1))"
 
 # least-squares slope of log(y) against log(x)
 function _loglog_slope(x, y)
@@ -210,62 +228,63 @@ _select_populations(summary, on_the_fly) = sort(on_the_fly ? summary : summary[s
 
 # legend entries for the marker fill (population models filled, on-the-fly open)
 function _fill_legend!(p, summary)
-    any(summary.type .== "Gesyland") && scatter!(p, [NaN], [NaN], markercolor = :gray, markerstrokecolor = :gray, label = "German states and Germany")
-    any(summary.type .== "Synthetic") && scatter!(p, [NaN], [NaN], markercolor = :white, markerstrokecolor = :gray, markerstrokewidth = 1.5, label = "on-the-fly generator")
+    any(summary.type .== "Gesyland") && scatter!(p, [NaN], [NaN]; _BENCH_MARKER..., markercolor = :gray, markerstrokecolor = :gray, label = "German states")
+    any(summary.type .== "Synthetic") && scatter!(p, [NaN], [NaN]; _BENCH_MARKER..., markercolor = :white, markerstrokecolor = :gray, label = "On-the-fly")
 end
 
 # runtime of one stage against the population size, with shared axis limits
-function _stage_panel(d, stage, title, color, xlims, ylims; legend = false, xlabel = "Population size", ylabel = "Runtime")
+function _stage_panel(d, stage, title, color, xlims, ylims; legend = false, xlabel = "Population size", ylabel = "Runtime (s)")
     p = plot(;
         xscale = :log10, yscale = :log10, xlims = xlims, ylims = ylims,
         xticks = _decade_ticks(xlims..., _size_label), yticks = _decade_ticks(ylims..., _seconds_label),
         xlabel = xlabel, ylabel = ylabel, title = title, legend = legend ? :topleft : false,
         _bench_style()...)
     col = "$(stage)_median"
-    for (type, name, filled) in (("Gesyland", "German states and Germany", true), ("Synthetic", "on-the-fly generator", false))
+    for (type, name, filled) in (("Gesyland", "German states", true), ("Synthetic", "On-the-fly", false))
         g = d[d.type .== type, :]
         nrow(g) == 0 && continue
         y = g[!, col]
-        scatter!(p, g.pop_size, y,
+        scatter!(p, g.pop_size, y; _BENCH_MARKER...,
             yerror = (y .- g[!, "$(stage)_q25"], g[!, "$(stage)_q75"] .- y),
-            markercolor = filled ? color : :white, markerstrokecolor = color, markerstrokewidth = 1.5,
-            linecolor = color, markersize = 6, label = name)
+            markercolor = filled ? color : :white, markerstrokecolor = color, linecolor = color, label = name)
     end
 
     # slope of the population models (of all populations if there are none)
     fit = any(d.type .== "Gesyland") ? d[d.type .== "Gesyland", :] : d
-    nrow(fit) > 1 && annotate!(p, xlims[2] / 1.2, ylims[1] * 1.4,
-        text("slope $(round(_loglog_slope(fit.pop_size, fit[!, col]), digits = 2))", 11, "Times Roman", :right))
+    nrow(fit) > 1 && annotate!(p, xlims[2] / 1.6, ylims[1] * 1.6,
+        text("slope $(round(_loglog_slope(fit.pop_size, fit[!, col]), digits = 2))", PV_SMALL_FONTSIZE, PV_FONT, :right))
 
     de = d[d.model .== "DE", :]
-    nrow(de) > 0 && annotate!(p, de.pop_size[1] / 1.1, de[1, col] * 1.5, text("Germany", 10, "Times Roman", :right))
+    nrow(de) > 0 && annotate!(p, de.pop_size[1] / 1.1, de[1, col] * 1.5, text("Germany", PV_SMALL_FONTSIZE, PV_FONT, :right))
     return p
 end
 
 """
     plot_benchmarks(summary; speedup = nothing, physical_cores = missing, on_the_fly = true)
 
-One panel per stage of the runtime against the population size (log-log, shared axes; median,
-interquartile range, and the log-log slope of the population models), plus the speedup panel of
-`plot_thread_speedup` if `speedup` is given. Requires the output of `summarize_benchmarks`.
+Panels A–C: runtime of each stage against the population size (log-log, shared axes; median,
+interquartile range, and the log-log slope of the population models). Panel D: `plot_thread_speedup`
+if `speedup` is given. Requires the output of `summarize_benchmarks`.
 """
 function plot_benchmarks(summary::DataFrame; speedup = nothing, physical_cores = missing, on_the_fly::Bool = true)
     d = _select_populations(summary, on_the_fly)
     ys = vcat([vcat(d[!, "$(s)_q25"], d[!, "$(s)_q75"]) for (s, _, _) in _STAGES]...)
     xlims = (minimum(d.pop_size) / 1.4, maximum(d.pop_size) * 1.4)
-    ylims = (minimum(ys) / 1.6, maximum(ys) * 2.5)
+    ylims = (minimum(ys) / 1.6, maximum(ys) * 1.8)
     grid = !isnothing(speedup)
 
     # axis titles only where the neighbouring panel does not repeat them
-    ps = [_stage_panel(d, s, title, color, xlims, ylims;
+    ps = [_stage_panel(d, s, "$('A' + i - 1)) $title", color, xlims, ylims;
             legend = i == 1,
-            xlabel = grid && i == 1 ? "" : "Population size",
-            ylabel = (grid ? i == 2 : i > 1) ? "" : "Runtime")
+            xlabel = grid && i <= 2 ? "" : "Population size",
+            ylabel = (grid ? i == 2 : i > 1) ? "" : "Runtime (s)")
         for (i, (s, title, color)) in enumerate(_STAGES)]
 
-    grid || return plot(ps..., layout = (1, 3), size = (2100, 650), left_margin = 10mm, bottom_margin = 10mm, top_margin = 3mm)
-    p_speedup = plot_thread_speedup(speedup; physical_cores = physical_cores, on_the_fly = on_the_fly)
-    return plot(ps..., p_speedup, layout = (2, 2), size = (1600, 1300), left_margin = 10mm, bottom_margin = 8mm, top_margin = 3mm)
+    # 2x2: the size of four agreement plots of the population validation figure; row: its width
+    grid || return plot(ps..., layout = (1, 3), size = (100PV_WIDTH_IN, 240), dpi = PV_DPI, right_margin = 2mm)
+    push!(ps, plot_thread_speedup(speedup; physical_cores = physical_cores, on_the_fly = on_the_fly,
+        title = "D) Speedup by threads"))
+    return plot(ps..., layout = (2, 2), size = (500, 480), dpi = PV_DPI, right_margin = 2mm)
 end
 
 # TEMPORARY: single-panel alternative to `plot_benchmarks` for comparison; delete once the figure is decided
@@ -278,9 +297,9 @@ function plot_benchmarks_single_panel(summary::DataFrame; on_the_fly::Bool = tru
         xscale = :log10, yscale = :log10,
         xticks = _decade_ticks(minimum(d.pop_size), maximum(d.pop_size), _size_label),
         yticks = _decade_ticks(ymin, ymax, _seconds_label), ylims = (ymin / 1.5, ymax * 2.5),
-        xlabel = "Population size", ylabel = "Runtime",
+        xlabel = "Population size", ylabel = "Runtime (s)",
         title = "Runtime by population size",
-        legend = :topleft, size = (900, 650), left_margin = 8mm, bottom_margin = 8mm,
+        legend = :topleft, size = (375, 280),
         _bench_style()...)
 
     # the three stages of each population joined by a grey line
@@ -294,11 +313,10 @@ function plot_benchmarks_single_panel(summary::DataFrame; on_the_fly::Bool = tru
             g = d[d.type .== type, :]
             nrow(g) == 0 && continue
             y = g[!, "$(s)_median"]
-            scatter!(p, g.pop_size, y,
+            scatter!(p, g.pop_size, y; _BENCH_MARKER...,
                 yerror = (y .- g[!, "$(s)_q25"], g[!, "$(s)_q75"] .- y),
                 markercolor = filled ? color : :white,
-                markerstrokecolor = color, markerstrokewidth = 1.5, linecolor = color,
-                markersize = 6,
+                markerstrokecolor = color, linecolor = color,
                 label = (filled || !any(d.type .== "Gesyland")) ? label : "")
         end
     end
@@ -307,52 +325,57 @@ function plot_benchmarks_single_panel(summary::DataFrame; on_the_fly::Bool = tru
     # label Germany
     de = d[d.model .== "DE", :]
     if nrow(de) > 0
-        annotate!(p, de.pop_size[1] / 1.1, de.simulation_time_median[1] * 1.6, text("Germany", 10, "Times Roman", :right))
+        annotate!(p, de.pop_size[1] / 1.1, de.simulation_time_median[1] * 1.6, text("Germany", PV_SMALL_FONTSIZE, PV_FONT, :right))
     end
     return p
 end
 
 """
-    plot_thread_speedup(summary; physical_cores = missing, on_the_fly = true)
+    plot_thread_speedup(summary; physical_cores = missing, on_the_fly = true, title = "Speedup by number of threads")
 
 Speedup of each stage (colour) against the number of threads for each population (population
 models filled and solid, on-the-fly populations open and dashed), with the linear speedup and, if
 given, a vertical line at the number of physical cores. Requires the output of
 `summarize_benchmarks` for runs with several thread counts.
 """
-function plot_thread_speedup(summary::DataFrame; physical_cores = missing, on_the_fly::Bool = true)
+function plot_thread_speedup(summary::DataFrame; physical_cores = missing, on_the_fly::Bool = true,
+    title = "Speedup by number of threads")
     summary = _select_populations(summary, on_the_fly)
     threads = sort(unique(summary.threads))
-    base_threads = "$(threads[1]) thread$(threads[1] == 1 ? "" : "s")"
     p = plot(;
         xscale = :log2, yscale = :log2,
         xticks = (threads, string.(threads)), yticks = (threads, string.(threads)),
-        xlabel = "Threads", ylabel = "Speedup (runtime with $base_threads / with n threads)",
-        title = "Speedup by number of threads",
-        legend = :topleft, size = (900, 650), left_margin = 8mm, bottom_margin = 8mm,
+        xlabel = "Threads", ylabel = "Speedup factor", title = title,
+        legend = :topleft, size = (375, 280),
         _bench_style()...)
-    plot!(p, threads, threads, linestyle = :dot, color = :gray, label = "linear speedup")
-    if !ismissing(physical_cores) && physical_cores < maximum(threads)
-        vline!(p, [physical_cores], color = :black, linestyle = :dashdot, linewidth = 1, label = "$physical_cores physical cores")
+    # reference lines labelled directly, in the free space below the linear speedup
+    n = maximum(threads)
+    plot!(p, threads, threads, linestyle = :dot, color = :gray, label = "")
+    annotate!(p, n / 1.05, n / 2.1, text("linear", PV_SMALL_FONTSIZE, PV_FONT, :gray, :right))
+    if !ismissing(physical_cores) && physical_cores < n
+        vline!(p, [physical_cores], color = :black, linestyle = :dashdot, linewidth = 1, label = "")
+        annotate!(p, physical_cores * 1.08, n / 3.2, text("$physical_cores cores", PV_SMALL_FONTSIZE, PV_FONT, :left))
     end
     for (_, label, color) in _STAGES
-        plot!(p, [NaN], [NaN], color = color, linewidth = 2, label = label)
+        plot!(p, [NaN], [NaN], color = color, linewidth = 1.5, label = label)
     end
 
     # one marker shape per population, filled for population models and open for on-the-fly
     shapes = [:circle, :rect, :diamond, :utriangle, :dtriangle]
-    for (i, g) in enumerate(groupby(sort(summary, :threads), :model))
+    groups = groupby(sort(summary, :threads), :model)
+    for (i, g) in enumerate(groups)
         filled = g.type[1] == "Gesyland"
-        style = (linestyle = filled ? :solid : :dash, marker = shapes[mod1(i, length(shapes))],
-            markerstrokewidth = 1.5, markersize = 5)
+        style = (; _BENCH_MARKER..., linestyle = filled ? :solid : :dash, marker = shapes[mod1(i, length(shapes))])
         base = g[g.threads .== minimum(g.threads), :]
         for (s, _, color) in _STAGES
             col = "$(s)_median"
             plot!(p, g.threads, base[1, col] ./ g[!, col]; style...,
-                color = color, linewidth = 1.5, markercolor = filled ? color : :white, markerstrokecolor = color, label = "")
+                color = color, linewidth = 1, markercolor = filled ? color : :white, markerstrokecolor = color, label = "")
         end
+        # legend entry per population only if there are several
         name = filled ? g.model[1] : "$(_size_label(g.pop_size[1])) on-the-fly"
-        plot!(p, [NaN], [NaN]; style..., color = :gray, markercolor = filled ? :gray : :white, markerstrokecolor = :gray, label = name)
+        length(groups) > 1 && plot!(p, [NaN], [NaN]; style..., color = :gray, markercolor = filled ? :gray : :white,
+            markerstrokecolor = :gray, label = name)
     end
     return p
 end
@@ -371,17 +394,17 @@ function plot_runtime_per_agent(summary::DataFrame; on_the_fly::Bool = true)
         xscale = :log10, yscale = :log10,
         xticks = _decade_ticks(minimum(d.pop_size), maximum(d.pop_size), _size_label),
         yticks = _decade_ticks(minimum(ys), maximum(ys), _seconds_label),
-        xlabel = "Population size", ylabel = "Runtime per million agents",
+        xlabel = "Population size", ylabel = "Runtime per million agents (s)",
         title = "Runtime per agent",
-        legend = :topright, size = (900, 650), left_margin = 8mm, bottom_margin = 8mm,
+        legend = :topright, size = (375, 280),
         _bench_style()...)
     for (s, label, color) in _STAGES
         for (type, filled) in (("Gesyland", true), ("Synthetic", false))
             g = d[d.type .== type, :]
             nrow(g) == 0 && continue
-            scatter!(p, g.pop_size, g[!, "$(s)_median"] ./ (g.pop_size ./ 1e6),
-                markercolor = filled ? color : :white, markerstrokecolor = color, markerstrokewidth = 1.5,
-                markersize = 6, label = (filled || !any(d.type .== "Gesyland")) ? label : "")
+            scatter!(p, g.pop_size, g[!, "$(s)_median"] ./ (g.pop_size ./ 1e6); _BENCH_MARKER...,
+                markercolor = filled ? color : :white, markerstrokecolor = color,
+                label = (filled || !any(d.type .== "Gesyland")) ? label : "")
         end
     end
     _fill_legend!(p, d)
@@ -409,7 +432,7 @@ function replot_benchmarks(folder; on_the_fly::Bool = true)
     # TEMPORARY: single-panel alternative, see `plot_benchmarks_single_panel`
     p_single = plot_benchmarks_single_panel(summary; on_the_fly = on_the_fly)
     isnothing(speedup) || (p_single = plot(p_single, plot_thread_speedup(speedup; physical_cores = cores, on_the_fly = on_the_fly),
-        layout = (1, 2), size = (1800, 650), left_margin = 10mm, bottom_margin = 10mm))
+        layout = (1, 2), size = (100PV_WIDTH_IN, 280), dpi = PV_DPI, left_margin = 3mm, bottom_margin = 3mm))
     png(p_single, joinpath(folder, "benchmarks_single_panel.png"))
 end
 
