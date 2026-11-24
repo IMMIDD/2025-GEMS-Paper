@@ -308,8 +308,9 @@ tables, and the names of their sources for figures (without reference
 dates, which belong in the caption).
 - `:official2019`: population on 31.12.2019 (Destatis, 12411-0013) and
   households 2019 (Microcensus, 12211-9034); household types, senior status
-  and activity status from the Zensus 2022, as no matching tables exist for
-  2019; education settings from the school and daycare statistics 2019
+  and activity status from the Zensus 2022, which reports them for all
+  federal states in categories that can be derived from the GEMS population;
+  education settings from the school and daycare statistics 2019
 
 Further data sets (e.g. for a later version of the population) are added
 as further entries with the same fields.

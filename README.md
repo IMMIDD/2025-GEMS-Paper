@@ -363,14 +363,14 @@ The Fig 14B listing ([sc_household_isolation_screenshot_file.jl](src/sc_househol
 
 Code: [sc_sweeping.jl](src/sc_sweeping.jl). Config: reference model.
 
-To focus on the regime where self-isolation can be decisive, we assume that other measures already prevent 66 % of all transmissions, such that without isolation R_init lies slightly above 1.
+To focus on the regime where self-isolation can be decisive, we assume that other measures already prevent 60 % of all transmissions, such that without isolation R_init lies above 1.
 
 | Parameter | Reference model | This example |
 |---|---|---|
 | Population | – | Saarland |
 | Initial infections | none | 0.1 % of the population, random |
 | Duration | 112 days | 365 days |
-| Transmission scale | 0.45784 | × (1 − 0.66): 66 % of transmissions prevented by other measures (`transmission_reduction = 0.66`) [I] |
+| Transmission scale | 0.45784 | × (1 − 0.6): 60 % of transmissions prevented by other measures (`transmission_reduction = 0.6`) [I] |
 | Asymptomatic share (x-axis) | 0.17 | 0 to 1, step 0.025, set in all age groups; the other categories rescaled proportionally |
 | Adherence (y-axis) | – | 0 to 1, step 0.025 |
 | Repetitions | – | 5 per combination; random seeds 1–8405 (one per run) |
@@ -452,7 +452,7 @@ No disease parameters are involved. All analyses use the GEMS population model o
 | G) Universities | share of students by university size | Destatis 21311-0002, WS 2019/20 |
 | H)–M) Federal states | GEMS vs. official share per state: population, age groups, employment and education (employed, daycare, pupils, not working 15–64, retired 65+), household sizes, family types, senior status | as above; employment: Zensus 2022 2000S-1002; pupils: Destatis 21111-0011, 21121-0010 (2019/20); daycare: Destatis 22541-0112 (01.03.2019) |
 
-GEMS has no relationships between household members, so family types are classified by age: members at least 18 years younger than the oldest member count as children ([A]). Persons from 65 on without a workplace or education setting count as retired ([A]). Household types, senior status, and employment come from the Zensus 2022, as no matching tables exist for 2019.
+GEMS has no relationships between household members, so family types are classified by age: members at least 18 years younger than the oldest member count as children ([A]). Persons from 65 on without a workplace or education setting count as retired ([A]). Household types, senior status, and employment come from the Zensus 2022, which reports them for all federal states in categories that can be derived from the GEMS population.
 
 ### 6.3 Commuting validation
 
