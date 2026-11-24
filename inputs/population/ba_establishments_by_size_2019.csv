@@ -1,0 +1,15 @@
+# Establishments (Betriebe) and employees subject to social insurance (SvB) by establishment size class (SvB), Germany, 30.06.2019.
+# Source: Statistik der Bundesagentur fuer Arbeit, Tabellen, Betriebe und sozialversicherungspflichtige Beschaeftigung, Nuernberg, 30. Juni 2019
+# (bstbetr-heft-d-0-201912-xls.xls, sheet 2.3, row "30.06.2019"); https://statistik.arbeitsagentur.de/
+# License: (c) Statistik der Bundesagentur fuer Arbeit. Storing, copying and redistributing (also in excerpts) with source note; contents must not be altered.
+# Changes: extract of the row 30.06.2019 of sheet 2.3; columns renamed (size_class, min, max, establishments, employees); min/max added from the class labels.
+size_class,min,max,establishments,employees
+1-5,1,5,1409495,3064113
+6-9,6,9,272349,1972177
+10-19,10,19,233817,3148280
+20-49,20,49,158016,4797401
+50-99,50,99,58275,4043044
+100-199,100,199,29406,4057442
+200-249,200,249,5499,1222900
+250-499,250,499,10536,3630573
+500 und mehr,500,,6187,7471332

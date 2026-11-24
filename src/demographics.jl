@@ -225,7 +225,7 @@ end
     demographics(;
         folder = nothing,
         folder_tag = nothing,
-        sim = Simulation(population = "SL"))
+        sim = Simulation(population = "DE"))
 
 Runs all mobilty-related analyses.
 
@@ -235,7 +235,7 @@ appended to its timestamp-based name (see `result_folder`).
 function demographics(;
         folder = nothing,
         folder_tag = nothing,
-        sim = Simulation(population = "SL", seed = 0))
+        sim = Simulation(population = "DE", seed = 0))
 
     # create result folder if not passed
     isnothing(folder) ? folder = result_folder(folder_tag) : nothing
@@ -275,4 +275,11 @@ function demographics(;
         p_pop_density, p_mean_hh_size, p_singles,
         p_mean_age, p_kids, p_elderly)
     png(p_combined, joinpath(folder, "demographic_maps.png"))
+
+    # compare the population with official statistics (needs all 16 federal states)
+    if length(unique(state_code.(id.ags))) == 16
+        population_validation(folder = folder, sim = sim, individual_data_df = id)
+    else
+        @warn "Population validation skipped: it compares all 16 federal states, but the population does not cover them."
+    end
 end

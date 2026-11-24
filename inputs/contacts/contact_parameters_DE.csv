@@ -1,0 +1,23 @@
+# Contact sampling parameters of the GEMS config derived from POLYMOD (DE)
+# Source: Mossong J, Hens N, Jit M, et al. (2020). POLYMOD social contact data (Version 2)
+# [Data set]. Zenodo. https://doi.org/10.5281/zenodo.3874557. Survey: Mossong J, et al. (2008).
+# PLoS Med 5(3):e74. https://doi.org/10.1371/journal.pmed.0050074
+# License: CC BY-NC 4.0 (https://creativecommons.org/licenses/by-nc/4.0/)
+# Changes: own calculation (derive_contact_parameters.jl, src/contacts/): contacts assigned to
+# GEMS setting layers, averaged per layer member, daily average (weekdays 5/7, weekend 2/7).
+setting_type,parameter,index,value,derivation
+Household,probabilities,1,0.9531618537642634,"share of the other household members met per day, household size 2"
+Household,probabilities,2,0.9354597184785864,"share of the other household members met per day, household size 3"
+Household,probabilities,3,0.8992603850050659,"share of the other household members met per day, household size 4"
+Household,probabilities,4,0.8040952075653149,"share of the other household members met per day, household size 5+"
+Household,large_size,,11.0,smallest household size treated as a care home (not from POLYMOD)
+Household,large_contacts,,2.7062893723686763,mean daily home contacts of all participants (care homes)
+SchoolClass,contactparameter,,1.336568456735515,0.5 of the daily contacts per member of an education setting
+SchoolYear,contactparameter,,0.6682842283677575,0.25 of the daily contacts per member of an education setting
+School,contactparameter,,0.33414211418387874,0.125 of the daily contacts per member of an education setting
+SchoolComplex,contactparameter,,0.33414211418387874,0.125 of the daily contacts per member of an education setting
+Office,contactparameter,,1.9601638602397924,0.5 of the daily contacts per member of a workplace
+Department,contactparameter,,0.9800819301198962,0.25 of the daily contacts per member of a workplace
+Workplace,contactparameter,,0.4900409650599481,0.125 of the daily contacts per member of a workplace
+WorkplaceSite,contactparameter,,0.4900409650599481,0.125 of the daily contacts per member of a workplace
+Municipality,contactparameter,,4.15514435682165,"daily contacts outside home, education and work, incl. visitors at home"

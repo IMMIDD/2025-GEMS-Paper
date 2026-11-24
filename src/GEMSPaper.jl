@@ -9,6 +9,8 @@ using Plots
 using Proj
 using Statistics
 using StatsBase
+using TOML
+using XLSX
 using Revise
 using Reexport
 import Downloads
@@ -73,18 +75,26 @@ map_dims() = (1600, 2000)
 map_titlefontsize() = 34
 map_legendfontsize() = 24
 
-# INCLUDE STYLES
-include("styles/rd_contacts_only.jl")
-
 # INCLUDE MODEL EXTENSIONS
 include("infectiousness_profile.jl")
 
 # INCLUDE ANALYSES
 include("demographics.jl")
+include("population_validation.jl")
+include("setting_validation.jl")
 include("settings.jl")
 include("mobility.jl")
+include("commuter_validation.jl")
 include("contacts.jl")
 include("benchmarking.jl")
+
+# INCLUDE CONTACT DATA (POLYMOD)
+include("contacts/polymod_data.jl")
+include("contacts/polymod_rates.jl")
+include("contacts/household_sampling.jl")
+include("contacts/polymod_matrix.jl")
+include("contacts/contact_parameters.jl")
+include("contacts/contact_scaling.jl")
 
 # INCLUDE RKI DATA AND MODEL (for the first wave scenario)
 include("first_wave/rki_data.jl")
@@ -94,6 +104,7 @@ include("first_wave/rki_phases.jl")
 include("first_wave/rki_reproduction.jl")
 include("first_wave/rki_simulation.jl")
 include("first_wave/rki_comparison.jl")
+include("first_wave/rki_mixing.jl")
 include("first_wave/rki_calibration.jl")
 include("first_wave/rki_figures.jl")
 include("first_wave/rki_paper_figure.jl")

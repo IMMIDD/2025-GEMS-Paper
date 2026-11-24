@@ -1,0 +1,16 @@
+# Share of the other household members met per day by household size (POLYMOD)
+# Source: Mossong J, Hens N, Jit M, et al. (2020). POLYMOD social contact data (Version 2)
+# [Data set]. Zenodo. https://doi.org/10.5281/zenodo.3874557. Survey: Mossong J, et al. (2008).
+# PLoS Med 5(3):e74. https://doi.org/10.1371/journal.pmed.0050074
+# License: CC BY-NC 4.0 (https://creativecommons.org/licenses/by-nc/4.0/)
+# Changes: own calculation (derive_contact_parameters.jl, src/contacts/): contacts assigned to
+# GEMS setting layers, averaged per layer member, daily average (weekdays 5/7, weekend 2/7).
+country,hh_size,participants,contacts,others,probability
+DE,2,411,0.9531618537642634,1.0,0.9531618537642634
+DE,3,339,1.8709194369571729,2.0,0.9354597184785864
+DE,4,244,2.6977811550151976,3.0,0.8992603850050659
+DE,5,97,3.5700053371286247,4.439779398683508,0.8040952075653149
+all,2,1645,0.9245819716740367,1.0,0.9245819716740367
+all,3,1683,1.85832571705411,2.0,0.929162858527055
+all,4,2041,2.760098849919209,3.0,0.9200329499730696
+all,5,1172,3.9990079365079367,4.489566070047509,0.8907337310809681
