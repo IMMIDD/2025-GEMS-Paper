@@ -74,7 +74,9 @@ The first wave example downloads the RKI case data (about 400 MB, checked agains
 
 The contact parameters of the reference model are derived from the POLYMOD survey with [derive_contact_parameters.jl](derive_contact_parameters.jl). It downloads the POLYMOD raw data to `data/polymod/`, writes the parameters and the tables they come from to [inputs/contacts/](inputs/contacts/), and warns about config entries that differ from the derived values.
 
-The parameter sweep stores its results in `sc_sweep_data.csv`; `replot_sweeps(folder)` redraws the heatmap and the variability summary from that file without re-running the 8,405 simulations.
+The parameter sweep stores its results in `sc_sweep_data.csv`; `replot_sweeps(folder)` redraws the heatmap and the variability summary from that file without re-running the 8,405 simulations. Likewise, `replot_testing(folder)` redraws the figure and rewrites the tables of the testing scenario from the stored results of its runs.
+
+For a quick test, the testing scenario also runs with the population of a smaller state and an outbreak in one of its municipalities, e.g. `scenario_testing(population = "SL", municipality = 10042111)` (Beckingen, Saarland).
 
 All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-and-configuration)). Bit-identical results require the same number of Julia threads.
 
@@ -101,7 +103,7 @@ All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-an
 | Sec. 3.2.1 Scenario modeling (Fig 14A, baseline readouts Fig 15) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 180 d | 1 per scenario / 0 |
 | Fig 14B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
 | Sec. 3.2.2 Parameter sweep (Fig 16) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 5 / 1–8405 |
-| Sec. 3.2.3 Multi-criteria evaluation (Fig 17, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | DE | 365 d | 1 per scenario / 0, 1, 2 |
+| Sec. 3.2.3 Multi-criteria evaluation (Fig 17, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | NRW | 365 d | 11 per scenario / 0–32 |
 | Sec. 3.3 Performance (Fig 18) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | GEMS defaults | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / 1–11 |
 
 ## 4. Reference model (COVID-19, wild type, first wave 2020)
@@ -390,10 +392,11 @@ To focus on the regime where tracing can be decisive, we assume that other measu
 
 | Parameter | Reference model | This example |
 |---|---|---|
+| Population | Germany | North Rhine-Westphalia |
 | Initial infections | none | 50 infections in Gangelt (municipality key 05370008, county Heinsberg) |
 | Duration | 112 days | 365 days |
 | Municipality contact parameter | 4.155 | 2.078: 50 % of community contacts prevented (`municipality_contact_reduction = 0.5`), age-based sampling kept [I] |
-| Random seeds | – | 0 (Isolation Only), 1 (Isolation & Testing), 2 (Isolation, Testing & Tracing) |
+| Runs / random seeds | – | 11 per scenario: 0, 3, …, 30 (Isolation Only), 1, 4, …, 31 (Isolation & Testing), 2, 5, …, 32 (Isolation, Testing & Tracing) |
 
 **Test type** "Antigen Test" [I]: positive ~ Bernoulli(p = 0.80) if infected (sensitivity), Bernoulli(p = 0.01) if not (specificity 0.99).
 
@@ -407,6 +410,8 @@ To focus on the regime where tracing can be decisive, we assume that other measu
 | | | Cancel Isolation | `CancelSelfIsolation` (0) |
 
 The tests in Isolation & Testing have no follow-up: the scenario detects cases without changing the spread, so it differs from Isolation Only only by the random seed. The tracing scenario corresponds to Fig 9 of the paper.
+
+The top panels of the figure (`sc_testing_and_observed_progression.png`) show all runs, the bottom panels the run with the median peak day of infections of each scenario. The scenario stores the results of every run (`runs/seed_*/resultdata.jld2`, GEMS `ResultData` in the style `TestingRD`) and writes the outcomes of every run (`sc_testing_outcomes.csv`), their statistics per scenario (`sc_testing_summary.csv`: mean, standard deviation, minimum, maximum, and 95 % confidence interval of the mean), and the daily data of every run (`sc_testing_daily.csv`). If it is interrupted, calling it again with the same `folder` and parameters skips the stored runs.
 
 ### 5.5 Performance benchmark (Sec. 3.3, Fig 18)
 

@@ -183,7 +183,6 @@ function runall(;
 
     printinfo("### RUNNING TESTING SCENARIOS")
     scenario_testing(
-        population = population,
         folder = folder
     )
 
