@@ -164,7 +164,7 @@ function plot_sweeps(df)
     return gemsheatmap(df.xvals, df.yvals, df.outvals,
         xlabel = "Fraction of asymptomatic cases (%)",
         ylabel = "Probability of adherence (%)",
-        colorbar_title = "\nInitial effective reproduction number",
+        colorbar_title = "\nInitial reproduction number",
         xrev = false,
         yrev = true,
         xticks = axis(sort(unique(df.xvals))),

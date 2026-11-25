@@ -1,15 +1,103 @@
+export HouseholdIsolationRD
 export run_household_isolation_sims
 export plot_scenario_household_isolation
 export plot_r0_by_region
 export plot_case_fatality
 export plot_combined_readouts
+export save_household_isolation_figure
 
 export scenario_household_isolation
+export replot_household_isolation
 
 # label of the reduction of the initial reproduction number (R^init in the paper);
 # plain text, as GR's LaTeX rendering is unreliable with the Times font
-const _RINIT_REDUCTION_LABEL = "Reduction of Initial R"
+const _RINIT_REDUCTION_LABEL = "Reduction of initial R"
 
+
+###
+### RESULT DATA STYLE
+###
+
+"""
+    HouseholdIsolationRD <: ResultDataStyle
+
+Result data of the household isolation scenario: only what the figures need, so that both
+runs can be stored (`exportJLD`) and loaded again (`import_resultdata`). Of the raw infections,
+it holds their numbers per progression category and age group (`progression_ages`) and the
+infection fatality per county (`fatality_per_county`), and of the population the mean
+household size and age per county (`county_means`).
+"""
+mutable struct HouseholdIsolationRD <: ResultDataStyle
+    data::Dict{String, Any}
+    function HouseholdIsolationRD(pP::PostProcessor)
+        sim = simulation(pP)
+        return new(Dict(
+            "sim_data" => Dict(
+                "label" => label(sim),
+                "seed" => seed(sim),
+                "final_tick" => tick(sim),
+                "tick_unit" => tickunit(sim),
+                "total_infections" => nrow(infectionsDF(pP)),
+                "attack_rate" => attack_rate(pP),
+                "r0" => r0(pP)),
+            "dataframes" => Dict(
+                "tick_cases" => tick_cases(pP),
+                "cumulative_cases" => cumulative_cases(pP),
+                "effectiveR" => effectiveR(pP),
+                "household_attack_rates" => household_attack_rates(pP),
+                "aggregated_compartment_periods" => aggregated_compartment_periods(pP),
+                "cumulative_disease_progressions" => cumulative_disease_progressions(pP),
+                "r0_per_county" => r0_per_county(pP),
+                "progression_ages" => progression_ages(infectionsDF(pP)),
+                "fatality_per_county" => fatality_per_county(infectionsDF(pP)),
+                "county_means" => county_means(sim))))
+    end
+end
+
+# progression categories by severity and width of the age groups (as in the plot
+# `ProgressionCategories` of GEMS)
+const HI_CATEGORIES = ["Asymptomatic", "Symptomatic", "Severe", "Hospitalized", "Critical"]
+const HI_AGE_GROUP = 5
+
+# number of infections per progression category and age group (named by its youngest age)
+function progression_ages(infections)
+    counts = DataFrame(
+            category = infections.progression_category,
+            age_group = infections.age_b .÷ HI_AGE_GROUP .* HI_AGE_GROUP) |>
+        df -> combine(groupby(df, [:category, :age_group]), nrow => :count) |>
+        df -> transform(df, :category => ByRow(string) => :category)
+    issubset(counts.category, HI_CATEGORIES) ||
+        throw(ArgumentError("Unknown progression categories: $(setdiff(counts.category, HI_CATEGORIES))."))
+
+    # all combinations of the categories and age groups
+    counted = Dict(zip(zip(counts.category, counts.age_group), counts.count))
+    return DataFrame([(category = c, age_group = a, count = get(counted, (c, a), 0))
+        for c in HI_CATEGORIES if c in counts.category
+        for a in 0:HI_AGE_GROUP:maximum(counts.age_group)])
+end
+
+# deaths per infection (%) by county of residence (as in the map `CaseFatalityMap` of GEMS)
+fatality_per_county(infections) =
+    DataFrame(ags = county.(infections.household_ags_b), death = infections.death .>= 0) |>
+        df -> combine(groupby(df, :ags), :death => (d -> 100 * mean(d)) => :case_fatality_rate)
+
+# mean household size and mean age per county
+function county_means(sim)
+    household_sizes = DataFrame(
+        ags = county.(ags.(households(sim))),
+        size = size.(households(sim)))
+    ages = DataFrame(
+        ags = county.(ags.((i -> household(i, sim)).(individuals(sim)))),
+        age = age.(individuals(sim)))
+    return innerjoin(
+        combine(groupby(household_sizes, :ags), :size => mean => :size),
+        combine(groupby(ages, :ags), :age => mean => :age), on = :ags)
+end
+
+
+###
+### SIMULATION
+###
 
 """
     run_household_isolation_sims(;
@@ -18,12 +106,8 @@ const _RINIT_REDUCTION_LABEL = "Reduction of Initial R"
         stop_criterion = TimesUp(limit = 180),
         population = "DE")
 
-Runs the household isolation scenario simulations and returns
-two ResultData objects: one for the baseline simulation and one for the scenario with household isolation.
-And also returns last simulation object for further data extraction.
-
-The baseline uses the default ResultData style, as its readout figure
-(`plot_combined_readouts`) needs the raw infections; the scenario uses `"LightRD"`.
+Runs the household isolation scenario simulations and returns two ResultData objects (style
+`HouseholdIsolationRD`): one for the baseline simulation and one for the scenario with household isolation.
 """
 function run_household_isolation_sims(;
     configfile = "models/DE_model_first_wave.toml",
@@ -41,7 +125,7 @@ function run_household_isolation_sims(;
         stop_criterion = stop_criterion)
 
     run!(sim)
-    rd_b = ResultData(sim)
+    rd_b = ResultData(sim, style = "HouseholdIsolationRD")
 
 
     # simulation with 14-day household isolation: upon symptom onset, all household members
@@ -63,92 +147,201 @@ function run_household_isolation_sims(;
     add_symptom_trigger!(sim, trigger)
 
     run!(sim)
-    rd_s = ResultData(sim, style = "LightRD")
+    rd_s = ResultData(sim, style = "HouseholdIsolationRD")
 
-    return rd_b, rd_s, sim
+    return rd_b, rd_s
 end
 
 
+###
+### FIGURE
+###
+
+# height of the plots (inches)
+const HI_HEIGHT_IN = 4.17
+
+# share of the width for the time series, and of the height for the map
+const HI_TIME_SERIES_SHARE = 0.55
+const HI_MAP_SHARE = 0.62
+
+# steps between the ticks of the scatter plots
+const HI_AGE_STEP = 2
+const HI_SIZE_STEP = 0.1
+const HI_R_STEP = 0.1
+
+# size of their points and of the point in their legend, size of the legend and its distance from the axes (inches)
+const HI_MARKERSIZE = 1.5
+const HI_LEGEND_MARKERSIZE = 2.5
+const HI_LEGEND_IN = (0.55, 0.16)
+const HI_LEGEND_GAP_IN = 0.05
+
+# width of the plot area of the map relative to the map (room for the colorbar)
+const HI_MAP_ROOM = 1.25
+const HI_MAP_XLIMS = (_FIG1_XLIMS[1], _FIG1_XLIMS[1] + HI_MAP_ROOM * (_FIG1_XLIMS[2] - _FIG1_XLIMS[1]))
+
+# width of the colorbar and its distance from the map (inches)
+const HI_COLORBAR_IN = 0.12
+const HI_COLORBAR_GAP_IN = 0.1
+
+# limits of an axis: the ticks in steps of `step` around the values
+tick_limits(values, step) = (step * floor(minimum(values) / step), step * ceil(maximum(values) / step))
+
 """
-    plot_scenario_household_isolation(rd_b, rd_s, sim)
+    plot_scenario_household_isolation(rd_b, rd_s)
 
 Plots the household isolation scenario results.
-Requires two ResultData objects as input, one for the baseline and one for the scenario with household isolation,
-and the simulation object (for the household sizes and ages per county).
+Requires two ResultData objects (style `HouseholdIsolationRD`) as input, one for the baseline and
+one for the scenario with household isolation.
 """
-function plot_scenario_household_isolation(rd_b, rd_s, sim)
+function plot_scenario_household_isolation(rd_b, rd_s)
 
-    # calculate r0 difference
-    r0b = r0_per_county(rd_b)
-    r0s = r0_per_county(rd_s)
-    r0_diff = r0b |>
-        df -> leftjoin(df, rename(r0s, :r0 => :r0_new), on = :ags) |>
+    # reduction of R0, mean household size, and mean age per county
+    df = innerjoin(r0_per_county(rd_b), rename(r0_per_county(rd_s), :r0 => :r0_new), on = :ags) |>
         df -> transform(df, [:r0, :r0_new] => ByRow(-) => :r0_diff) |>
-        df -> DataFrames.select(df, :ags, :r0_diff)
+        df -> innerjoin(df, dataframes(rd_b)["county_means"], on = :ags)
 
-    # mean household sizes per county
-    hh_size = households(sim) |>
-        vec -> DataFrame(
-            ags = county.(ags.(vec)),
-            size = size.(vec)) |>
-        df -> groupby(df, :ags) |>
-        df -> combine(df, :size => mean => :size)
+    style = (
+        titlelocation = :left,
+        fontfamily = FIG_FONT,
+        titlefontsize = FIG_HEADING_FONTSIZE,
+        guidefontsize = FIG_FONTSIZE,
+        tickfontsize = FIG_SMALL_FONTSIZE,
+        legendfontsize = FIG_SMALL_FONTSIZE)
+    axes = (gridalpha = 0.15, gridlinewidth = 0.5)
 
-    # mean ages per county
-    ind_ages = individuals(sim) |>
-        vec -> DataFrame(
-            ags = county.(ags.((i -> household(i, sim)).(vec))),
-            age = age.(vec)) |>
-        df -> groupby(df, :ags) |>
-        df -> combine(df, :age => mean => :age)
+    county_map = agsmap(select(df, :ags, :r0_diff); style...,
+        title = "$_RINIT_REDUCTION_LABEL by county",
+        fillcolor = :inferno,
+        clims = extrema(df.r0_diff),
+        colorbar = false, # drawn on the canvas (thinner)
+        legend = false,
+        linecolor = nothing,
+        framestyle = :none,
+        xlims = HI_MAP_XLIMS,
+        ylims = _FIG1_YLIMS,
+        widen = false)
 
-    # create DataFrame with r0 difference, household size, and mean age
-    df = r0_diff |>
-        df -> leftjoin(df, hh_size, on = :ags) |>
-        df -> leftjoin(df, ind_ages, on = :ags)
+    # x label as annotation (GR cuts off the lower parts of letters in its own), `y` relative to the plot area
+    xlabel!(p, label, y) = annotate!(p, (0.5, y), Plots.text(label, FIG_FONTSIZE, FIG_FONT, :center))
+    xlabel_margin = 5mm
 
+    r_limits = tick_limits(df.r0_diff, HI_R_STEP)
+    r_ticks = r_limits[1]:HI_R_STEP:r_limits[2]
+    r_limits = r_limits .+ (0, HI_R_STEP / 2) # room for a legend
+    function by_county(column, step, xlabel; kwargs...)
+        limits = tick_limits(df[!, column], step)
+        p = scatter(df[!, column], df.r0_diff; style..., axes...,
+            xlims = limits, xticks = limits[1]:step:limits[2],
+            ylims = r_limits, yticks = r_ticks,
+            widen = false,
+            label = "",
+            markersize = HI_MARKERSIZE,
+            markerstrokewidth = 0,
+            top_margin = -4mm, # into the empty space below the map
+            bottom_margin = xlabel_margin,
+            kwargs...)
+        return xlabel!(p, xlabel, -0.27)
+    end
 
-    l = @layout [a{0.5w} b{0.5w}]
-    l2 = @layout [a{0.75h}
-                b{0.25h}]
+    # y labels at the same distance from all time series
+    function over_time(type, title, ylabel; kwargs...)
+        p = gemsplot([rd_b, rd_s]; type = type, style..., axes...,
+            plot_title = "",
+            title = title,
+            xlabel = "",
+            ylabel = "",
+            left_margin = 5mm,
+            linewidth = 1,
+            legend = false,
+            kwargs...)
+        return annotate!(p, (-0.13, 0.5), Plots.text(ylabel, FIG_FONTSIZE, FIG_FONT, :center, rotation = 90))
+    end
 
-    return plot(
-            plot(
-                agsmap(
-                    select(df, :ags, :r0_diff),
-                    size = 0.5 .* map_dims(),
-                    title = "$_RINIT_REDUCTION_LABEL by County",
-                    linecolor = nothing,
-                ),
-                plot(
-                    scatter(df.age, df.r0_diff,
-                        title = "$_RINIT_REDUCTION_LABEL by Mean Age",
-                        xlabel = "Mean Age",
-                        ylabel = _RINIT_REDUCTION_LABEL,
-                        label = "County",
-                        markerstrokewidth=0),
-                    scatter(df.size, df.r0_diff,
-                        title = "$_RINIT_REDUCTION_LABEL by Mean HH-Size",
-                        xlabel = "Mean Household Size",
-                        ylabel = _RINIT_REDUCTION_LABEL,
-                        label = "County",
-                        markerstrokewidth=0),
-                    left_margin = 15mm,
-                    bottom_margin = 10mm,
-                    layout = (1, 2)
-                ),
-                layout = l2
-            ),
-            gemsplot([rd_b, rd_s],
-                left_margin = 15mm,
-                bottom_margin = 10mm),
-            fontfamily = "Times Roman",
-            titlefontsize = round(0.7 * map_titlefontsize()),
-            tickfontsize = round(0.7 * map_legendfontsize()),
-            labelfontsize = round(0.8 * map_legendfontsize()),
-            legendfontsize = round(0.6 * map_legendfontsize()),
-            layout = l,
-            size = 1.5 .* (1800, 1000))
+    l = grid(1, 2, widths = [1 - HI_TIME_SERIES_SHARE, HI_TIME_SERIES_SHARE])
+    l[1, 1] = grid(2, 1, heights = [HI_MAP_SHARE, 1 - HI_MAP_SHARE])
+    l[1, 1][2, 1] = grid(1, 2, widths = [0.46, 0.54])
+    l[1, 2] = grid(3, 1)
+
+    p = plot(
+        county_map,
+        by_county(:age, HI_AGE_STEP, "Mean age", ylabel = _RINIT_REDUCTION_LABEL,
+            xformatter = x -> string(round(Int, x)), left_margin = 1.5mm),
+        by_county(:size, HI_SIZE_STEP, "Mean household size",
+            xformatter = x -> string(round(x, digits = 1)), yformatter = _ -> "",
+            left_margin = -2.5mm, right_margin = 2.5mm), # further left
+        over_time(:TickCases, "Daily infections", "Millions",
+            yformatter = _ro_millions,
+            legend = :topright, foreground_color_legend = FIG_COLORS.lightgray),
+        over_time(:CumulativeCases, "Cumulative infections", "Millions",
+            yformatter = _ro_millions),
+        xlabel!(over_time(:EffectiveReproduction, "Effective reproduction number", "7-day mean",
+            bottom_margin = xlabel_margin), "Day", -0.39),
+        layout = l,
+        size = (100FIG_FULL_WIDTH_IN, 100HI_HEIGHT_IN),
+        fontfamily = FIG_FONT)
+    return draw_legends!(p, df)
+end
+
+# position (left, right, bottom, top; inches from the lower left corner) of the plot area of the subplot `k`
+# of a figure that is laid out; `aspect`: width per height, if fixed (centered in the area that Plots reserves)
+function plot_corners(p, k; aspect = nothing)
+    inches(x) = x.value / 25.4
+    area = p[k].plotarea
+    w, h = inches(Plots.width(area)), inches(Plots.height(area))
+    x, y = inches(Plots.left(area)) + w / 2, p.attr[:size][2] / 100 - inches(Plots.top(area)) - h / 2
+    width = isnothing(aspect) ? w : min(w, h * aspect)
+    height = isnothing(aspect) ? h : width / aspect
+    return (left = x - width / 2, right = x + width / 2, bottom = y - height / 2, top = y + height / 2)
+end
+
+# colorbar of the map (subplot 1) and legends of the scatter plots (lower left corner of the first, upper left
+# corner of the second, where there are no points; subplots 2 and 3) on a transparent canvas in inches above the figure
+function draw_legends!(p, df)
+    Plots.prepare_output(p) # lays out the figure
+    county_map = plot_corners(p, 1, aspect = (HI_MAP_XLIMS[2] - HI_MAP_XLIMS[1]) / (_FIG1_YLIMS[2] - _FIG1_YLIMS[1]))
+    map_right = county_map.left + (county_map.right - county_map.left) / HI_MAP_ROOM
+    by_age, by_size = plot_corners(p, 2), plot_corners(p, 3)
+
+    canvas = length(p.subplots) + 1
+    plot!(p, inset = bbox(0, 0, 1, 1), subplot = canvas, framestyle = :none, ticks = nothing, legend = false,
+        grid = false, widen = false, margin = -2mm, background_color_subplot = :transparent,
+        background_color_inside = :transparent, xlims = (0, FIG_FULL_WIDTH_IN), ylims = (0, HI_HEIGHT_IN))
+
+    county_colorbar!(p, canvas, CountyMap(column = :r0_diff, title = "", note = ""), extrema(df.r0_diff),
+        map_right + HI_COLORBAR_GAP_IN, county_map.bottom, HI_COLORBAR_IN, county_map.top - county_map.bottom,
+        colors = cgrad(:inferno))
+
+    w, h = HI_LEGEND_IN
+    for (left, bottom) in (
+            (by_age.left + HI_LEGEND_GAP_IN, by_age.bottom + HI_LEGEND_GAP_IN),
+            (by_size.left + HI_LEGEND_GAP_IN, by_size.top - HI_LEGEND_GAP_IN - h))
+        plot!(p, left .+ [0, w, w, 0, 0], bottom .+ [0, 0, h, h, 0], subplot = canvas, label = "",
+            seriestype = :shape, fillcolor = :white, linecolor = FIG_COLORS.lightgray, linewidth = 1)
+        scatter!(p, [left + 0.08], [bottom + h / 2], subplot = canvas, label = "",
+            markercolor = 1, markersize = HI_LEGEND_MARKERSIZE, markerstrokewidth = 0)
+        annotate!(p, [(left + w - 0.04, bottom + h / 2,
+            Plots.text("County", FIG_SMALL_FONTSIZE, FIG_FONT, :right, :vcenter))], subplot = canvas)
+    end
+    return p
+end
+
+"""
+    save_household_isolation_figure(rd_b, rd_s, folder)
+
+Saves the figure of the paper (`Fig_15_household_isolation.png`: the plots of
+`plot_scenario_household_isolation` above the code listing, a screenshot of
+`sc_household_isolation_screenshot_file.jl`) and the plots alone (`Fig_15A_household_isolation.png`)
+in `folder`.
+"""
+function save_household_isolation_figure(rd_b, rd_s, folder)
+    plots = figure_image(plot_scenario_household_isolation(rd_b, rd_s))
+    save_figure(plots, :household_isolation, folder, panel = "A")
+
+    width = size(plots, 2)
+    code = load_panel(joinpath(FIG_PANEL_FOLDER, figure_name(:household_isolation, panel = "B", name = "code_listing") * ".png"))
+    return save_figure(combine_panels([
+        section_strip("A) Scenario comparison in GEMS", width), plots,
+        section_strip("B) Scenario code example", width), scale_image(code, width)], direction = :vertical, gap_in = 0.05), :household_isolation, folder)
 end
 
 
@@ -308,11 +501,11 @@ end
 """
     plot_case_fatality(rd)
 
-Plots the infection fatality map (deaths per infection, %, by county; GEMS
+Plots the infection fatality map (deaths per infection, %, by county; as the GEMS map
 `CaseFatalityMap`) without colorbar (see `plot_combined_readouts`).
 """
 function plot_case_fatality(rd)
-    return gemsmap(rd; type = :CaseFatalityMap, _ro_map()...)
+    return agsmap(dataframes(rd)["fatality_per_county"]; _ro_map()...)
 end
 
 
@@ -346,6 +539,17 @@ function _ro_short_labels!(p)
 end
 
 
+# heatmap of the progression categories per age group (as the GEMS plot `ProgressionCategories`)
+function plot_progression_categories(rd; plotargs...)
+    df = dataframes(rd)["progression_ages"]
+    return gemsheatmap(df.age_group, Int.(indexin(df.category, HI_CATEGORIES)), df.count;
+        xformatter = a -> "$a-$(a + HI_AGE_GROUP - 1)",
+        yformatter = k -> HI_CATEGORIES[k],
+        xlabel = "Age Group",
+        xrotation = 45,
+        plotargs...)
+end
+
 # the six GEMS plots of the left column (time series cut to the first 100 days, where
 # the epidemic takes place; counts in millions; legends only where they name series)
 function plot_gemsplots(rd)
@@ -363,12 +567,13 @@ function plot_gemsplots(rd)
             xlims = (0, 100),
             ylims = (0, 4),
             legend = :topright)),
-        # attack rate on its full range (0–100 %), a bit below 0 for the dots on 0
+        # attack rate on its full range (0–100 %), a bit below 0 for the dots on 0; household
+        # sizes up to 6 (GEMS samples only a few larger households)
         gemsplot(rd; type = :HouseholdAttackRate, axes...,
             ar_only = true,
             markersize = 30,
-            xlims = (1.5, 9.5),
-            xticks = 2:9,
+            xlims = (1.5, 6.5),
+            xticks = 2:6,
             ylims = (-0.05, 1.0),
             yticks = 0:0.2:1,
             yformatter = _ro_percent,
@@ -384,7 +589,7 @@ function plot_gemsplots(rd)
             xlims = (0, 41),
             yformatter = _ro_millions,
             legend = :topright),
-        gemsplot(rd; type = :ProgressionCategories, axes...,
+        plot_progression_categories(rd; axes...,
             color = :viridis,
             colorbar = false,
             framestyle = :box,
@@ -400,8 +605,7 @@ attack rate, infection duration, cumulative disease progressions, progression
 categories; left column, A–F) with the maps of the initial reproduction number
 (R_init) and the infection fatality by county (`r0map`, `fatalitymap` from
 `plot_r0_by_region`, `plot_case_fatality`; right column, G–H). `rd` must be a
-default-style ResultData object (`ProgressionCategories` and `CaseFatalityMap` need
-the raw infections).
+ResultData object of the style `HouseholdIsolationRD`.
 
 All panels are drawn by GEMS; this function only sets their axes and fonts (as in
 the first wave figures), adds titles, y labels, and thin colorbars, aligns the plot
@@ -638,7 +842,8 @@ end
         folder = nothing,
         folder_tag = nothing)
 
-Runs the household isolation scenario and all analyses.
+Runs the household isolation scenario and all analyses. The `ResultData` objects of both runs are
+stored in `folder`, from which the figures are drawn (see `replot_household_isolation`).
 
 If `folder` is `nothing`, a new result folder is created, with `folder_tag`
 appended to its timestamp-based name (see `result_folder`).
@@ -654,15 +859,34 @@ function scenario_household_isolation(;
     # create result folder if not passed
     isnothing(folder) ? folder = result_folder(folder_tag) : nothing
 
-    # run simulations and get result data objects
-    rd_b, rd_s, sim = run_household_isolation_sims(
+    # run simulations and store result data objects
+    rd_b, rd_s = run_household_isolation_sims(
         configfile = configfile,
         infected_fraction = infected_fraction,
         stop_criterion = stop_criterion,
         population = population)
+    exportJLD(rd_b, joinpath(folder, HI_BASELINE_FOLDER))
+    exportJLD(rd_s, joinpath(folder, HI_SCENARIO_FOLDER))
 
-    p_hi = plot_scenario_household_isolation(rd_b, rd_s, sim)
-    png(p_hi, joinpath(folder, "sc_household_isolation_r0_reduction.png"))
+    replot_household_isolation(folder)
+end
+
+# subfolders of the stored result data objects
+const HI_BASELINE_FOLDER = joinpath("household_isolation", "baseline")
+const HI_SCENARIO_FOLDER = joinpath("household_isolation", "scenario")
+
+"""
+    replot_household_isolation(folder)
+
+Draws the figures of the household isolation scenario from the `ResultData` objects that
+`scenario_household_isolation()` stored in `folder`, without re-running the simulations (see
+`save_household_isolation_figure` and `plot_combined_readouts`).
+"""
+function replot_household_isolation(folder)
+    rd_b, rd_s = [import_resultdata(joinpath(folder, f, "resultdata.jld2"))
+        for f in (HI_BASELINE_FOLDER, HI_SCENARIO_FOLDER)]
+
+    save_household_isolation_figure(rd_b, rd_s, folder)
 
     # GEMS readouts of the baseline
     p_readouts = plot_combined_readouts(rd_b, plot_r0_by_region(rd_b), plot_case_fatality(rd_b))

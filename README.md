@@ -78,7 +78,7 @@ The first wave example downloads the RKI case data (about 400 MB, checked agains
 
 The contact parameters of the reference model are derived from the POLYMOD survey with [derive_contact_parameters.jl](derive_contact_parameters.jl). It downloads the POLYMOD raw data to `data/polymod/`, writes the parameters and the tables they come from to [inputs/contacts/](inputs/contacts/), and warns about config entries that differ from the derived values.
 
-The parameter sweep stores its results in `sc_sweep_data.csv`; `replot_sweeps(folder)` redraws the figure and rewrites the variability summary from that file without re-running the 8,405 simulations. Likewise, `replot_testing(folder)` redraws the figure and rewrites the tables of the testing scenario from the stored results of its runs.
+The parameter sweep stores its results in `sc_sweep_data.csv`; `replot_sweeps(folder)` redraws the figure and rewrites the variability summary from that file without re-running the 8,405 simulations. Likewise, `replot_household_isolation(folder)` redraws the figures of the household isolation scenario, and `replot_testing(folder)` redraws the figure and rewrites the tables of the testing scenario from the stored results of its runs.
 
 For a quick test, the testing scenario also runs with the population of a smaller state and an outbreak in one of its municipalities, e.g. `scenario_testing(population = "SL", municipality = 10042111)` (Beckingen, Saarland).
 
@@ -383,7 +383,9 @@ Code: [sc_household_isolation.jl](src/sc_household_isolation.jl). Config: refere
 
 All household members, including the symptomatic individual, isolate at home for 14 days. Each new symptomatic household member triggers the strategy again and restarts the 14 days for the whole household.
 
-The baseline run also produces the GEMS readout figure (Fig 15, `sc_household_isolation_baseline_combined.png`): daily infections and deaths, effective reproduction number, household attack rate, infection duration, cumulative disease progressions, progression categories, and maps of the initial reproduction number and the infection fatality per county. Its ResultData object uses the default style, since the progression categories and the fatality map need the raw infections.
+The baseline run also produces the GEMS readout figure (Fig 15, `sc_household_isolation_baseline_combined.png`): daily infections and deaths, effective reproduction number, household attack rate, infection duration, cumulative disease progressions, progression categories, and maps of the initial reproduction number and the infection fatality per county. The ResultData objects of both runs (style `HouseholdIsolationRD`) are stored in `household_isolation/` in the result folder. They hold the aggregated data that the figures need; of the raw infections, these are the infections per progression category and age group and the deaths per infection per county.
+
+Outputs: `Fig_15_household_isolation.png` (the effect of household isolation above the code listing), `Fig_15A_household_isolation.png` (without the listing), and the readout figure.
 
 The Fig 14B listing ([sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl)) uses the same intervention with GEMS defaults ([Section 5.5](#55-performance-benchmark-sec-33-fig-18)) on 100,000 agents, without a fixed random seed.
 

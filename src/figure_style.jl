@@ -6,8 +6,8 @@
 # are drawn at 100 px per inch with font sizes in pt and saved at `FIG_DPI`.
 
 export FIGURE_NUMBERS, figure_name
-export figure_image, load_panel
-export title_strip, combine_panels, save_figure
+export figure_image, load_panel, scale_image
+export title_strip, section_strip, combine_panels, save_figure
 
 
 # 1. SIZES (PLOS)
@@ -125,19 +125,19 @@ function title_text!(p, x, y, title, width_in; size = FIG_HEADING_FONTSIZE, vali
 end
 
 """
-    section_header(txt; width_in = FIG_FULL_WIDTH_IN - 4 / 25.4)
+    section_header(txt; width_in = FIG_FULL_WIDTH_IN - 4 / 25.4, gap_in = 0.12)
 
 Empty subplot carrying the heading of a section of the figure: centered as
 the section titles of the other figures of the paper (e.g.
 `plot_paper_figure_1`), bold and larger than the panel titles, between two
 thin lines that set it apart from them. `width_in` is the width of the
-heading's plot area.
+heading's plot area, `gap_in` the distance of the lines from the (estimated) text.
 """
-function section_header(txt; width_in = FIG_FULL_WIDTH_IN - 4 / 25.4)
+function section_header(txt; width_in = FIG_FULL_WIDTH_IN - 4 / 25.4, gap_in = 0.12)
     p = plot(framestyle = :none, ticks = false, legend = false, grid = false,
         xlims = (0, 1), ylims = (0, 1), margin = 0mm, top_margin = -2mm, bottom_margin = -2mm,
         fontfamily = FIG_FONT)
-    half = (0.5 * text_width_in(txt, FIG_SECTION_FONTSIZE, bold = true) + 0.12) / width_in
+    half = (0.5 * text_width_in(txt, FIG_SECTION_FONTSIZE, bold = true) + gap_in) / width_in
     plot!(p, [0, 0.5 - half, NaN, 0.5 + half, 1], fill(0.5, 5), linecolor = FIG_LINE_COLOR, linewidth = 0.6)
     return annotate!(p, 0.5, 0.5, Plots.text(txt, FIG_SECTION_FONTSIZE, FIG_FONT_BOLD, :center, :vcenter))
 end
@@ -172,6 +172,25 @@ Pixels of a PNG file without transparency (on white).
 function load_panel(file)
     isfile(file) || throw(ArgumentError("The panel $file does not exist."))
     return flatten_pixel.(PNGFiles.load(file))
+end
+
+# share of each of `n` pixels in each pixel of the same row scaled down to `m` pixels
+function scaling_weights(n, m)
+    overlap(i, j) = max(0.0, min(i * m, j * n) - max((i - 1) * m, (j - 1) * n)) / n
+    return [overlap(i, j) for j in 1:m, i in 1:n]
+end
+
+"""
+    scale_image(image, width)
+
+Scales `image` down to `width` pixels, keeping its aspect ratio (means of the covered pixels).
+"""
+function scale_image(image, width)
+    h, w = size(image)
+    width <= w || throw(ArgumentError("The image has only $w pixels, it cannot be scaled to $width."))
+    rows, columns = scaling_weights(h, round(Int, h * width / w)), scaling_weights(w, width)
+    scaled(channel) = clamp.(rows * Float64.(channel.(image)) * columns', 0, 1)
+    return FIG_PIXEL.(scaled(Plots.Colors.red), scaled(Plots.Colors.green), scaled(Plots.Colors.blue))
 end
 
 """
@@ -210,6 +229,18 @@ function title_strip(title, width; height_in = 0.25, offset_in = 0.0)
         left_margin = -2mm, right_margin = -2mm, top_margin = -2mm, bottom_margin = -2mm,
         size = (100width_in, 100height_in), fontfamily = FIG_FONT)
     title_text!(strip, offset_in / width_in, 0.5, title, width_in, valign = :vcenter)
+    return figure_image(strip)
+end
+
+"""
+    section_strip(txt, width; height_in = 0.3)
+
+Strip of `width` pixels with the heading of a section (see `section_header`).
+"""
+function section_strip(txt, width; height_in = 0.3)
+    width_in = width / FIG_DPI
+    strip = section_header(txt, width_in = width_in, gap_in = 0.25)
+    plot!(strip, left_margin = -2mm, right_margin = -2mm, size = (100width_in, 100height_in))
     return figure_image(strip)
 end
 
