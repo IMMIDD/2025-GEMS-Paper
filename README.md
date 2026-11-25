@@ -50,6 +50,8 @@ All disease examples share one **reference model**, [models/DE_model_first_wave.
 | [calibrate_first_wave.jl](calibrate_first_wave.jl) | Calibration of the reference model (transmission scale, generation time, contact factors); not part of `runall()` |
 | [derive_contact_parameters.jl](derive_contact_parameters.jl) | Derivation of the contact parameters of the reference model from POLYMOD; not part of `runall()` |
 | [inputs/](inputs/) | Calibration results read by the scenarios, contact parameters derived from POLYMOD, reference data from official statistics (population, settings, commuting), county income; sources and licenses of every file in [inputs/README.md](inputs/README.md) |
+| [figures/](figures/) | Drawn figures of the paper: PowerPoint deck ([drawn_figures.pptx](figures/drawn_figures.pptx)) and the panels that are combined with plots (`figures/panels/`), see [Section 2](#drawn-figures) |
+| [tools/export_figures.ps1](tools/export_figures.ps1) | Exports the drawn figures from PowerPoint; not part of `runall()` |
 | `data/` | Downloaded on demand, not part of the repository: RKI case data, POLYMOD raw data, KMK class statistics ([inputs/README.md](inputs/README.md#downloaded-at-runtime-not-in-the-repository)) |
 
 ## 2. Reproducing the results
@@ -86,6 +88,18 @@ All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-an
 |---|---|---|---|---|
 | Server | AMD EPYC 9575F (64 cores, 128 threads), 755 GB DDR5 RAM (5200 MT/s, CL52), NVMe SSD | TODO (1.12?) | TODO | TODO: all examples? performance benchmark (Sec. 3.3) |
 | Desktop | Intel i9-14900K, 128 GB DDR5 RAM, 4 TB NVMe SSD | TODO (1.12?) | TODO | desktop runtime of the national model (Sec. 3.3) |
+
+### Drawn figures
+
+The figures that are not generated from data (Fig 1–3, 9, 10, and the strategy of Fig 17) are drawn in [figures/drawn_figures.pptx](figures/drawn_figures.pptx), one figure per slide. The slides have the size of a full page of PLOS (7.5 × 8.75 in), so fonts and lines have their print sizes. On Windows with PowerPoint (closed), export them with
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\export_figures.ps1
+```
+
+This writes a PNG of every figure (300 dpi, cropped to its width and height) to `results/<timestamp>_drawn_figures/`; with `-Tiff`, also as TIFF with LZW compression. The layout of a slide sets the width of its figure (full width 2250 px, text width 1560 px, panel width 750 px). The notes of a slide hold its file name, or `skip` if it is not exported (style sheet).
+
+Slides with `panel` in the second line of their notes are panels that the Julia code combines with a plot. Julia reads them from `figures/panels/`, so PowerPoint is not needed to reproduce the results. After changing such a slide, update its panel with `-UpdatePanels`. The code listing of Fig 15 (`Fig_15B_code_listing.png`) is a screenshot of [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl).
 
 *Terminology:* a *random seed* initializes the random number generator of a simulation; infections that start an epidemic are called *initial infections* (at tick 0) or *introduced infections* (added during the run).
 
