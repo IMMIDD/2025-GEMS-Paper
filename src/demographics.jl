@@ -214,6 +214,9 @@ function demographics(;
     p_kids = plot_kids(sim)
     png(p_kids, joinpath(folder, "fraction_of_kids.png"))
 
+    # map of all households, schools, and workplaces (figure of the paper)
+    settings_map(folder = folder, sim = sim)
+
     # maps of the population per county (figure of the paper)
     demographic_maps(folder = folder, sim = sim, individual_data_df = id)
 

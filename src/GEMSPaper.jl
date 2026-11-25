@@ -91,6 +91,7 @@ include("mobility.jl")
 include("commuter_validation.jl")
 include("contacts.jl")
 include("demographic_maps.jl")
+include("settings_map.jl")
 include("benchmarking.jl")
 
 # INCLUDE CONTACT DATA (POLYMOD)
