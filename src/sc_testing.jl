@@ -304,8 +304,8 @@ end
 
 Compares the `strategy` with each of the other strategies of the `outcomes` (from `outcome_df()`), one row
 per repetition of `run_testing_sims()` (in the order of the random seeds): averted infections, deaths, and
-lost workdays and schooldays, additional tests, and additional tests per averted infection, death, lost workday, and
-lost schoolday.
+workdays and schooldays of absence (`workdays_absent` and `schooldays_absent`), additional tests, and additional
+tests per averted infection, death, workday of absence, and schoolday of absence.
 """
 function comparison_df(outcomes; strategy = "Isolation, Testing & Tracing")
     runs(lab) = sort(outcomes[outcomes.label .== lab, :], :seed)
@@ -320,13 +320,13 @@ function comparison_df(outcomes; strategy = "Isolation, Testing & Tracing")
             seed = a.seed[k],
             averted_infections = averted(:total_infections),
             averted_deaths = averted(:deaths),
-            averted_lost_workdays = averted(:lost_workdays),
-            averted_lost_schooldays = averted(:lost_schooldays),
+            averted_workdays_absent = averted(:workdays_absent),
+            averted_schooldays_absent = averted(:schooldays_absent),
             additional_tests = additional_tests,
             tests_per_averted_infection = additional_tests ./ averted(:total_infections),
             tests_per_averted_death = additional_tests ./ averted(:deaths),
-            tests_per_averted_lost_workday = additional_tests ./ averted(:lost_workdays),
-            tests_per_averted_lost_schoolday = additional_tests ./ averted(:lost_schooldays))
+            tests_per_averted_workday_absent = additional_tests ./ averted(:workdays_absent),
+            tests_per_averted_schoolday_absent = additional_tests ./ averted(:schooldays_absent))
     end)
 end
 
