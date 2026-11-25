@@ -368,11 +368,11 @@ end
 
 # The panels are drawn by GEMS (`gemsplot`); only their axes and labels are set here.
 # Print size, fonts, titles, and section headings as in the population validation
-# figure (full page of PLOS at 300 dpi: 7.5 x 8.75 in, 2250 x 2625 px).
+# figure (width of the page of PLOS; the height leaves room for the caption).
 
 # heights (inches) of the figure, its section headings, its column headers, and its title rows
-const TS_HEIGHT_IN = 8.75
-const TS_HEADER_IN = 0.3
+const TS_HEIGHT_IN = 7.4
+const TS_HEADER_IN = FIG_HEADING_IN
 const TS_COLUMN_IN = 0.28
 const TS_TITLE_IN = 0.22
 
@@ -397,7 +397,19 @@ ts_axes(last_row) = (
     margin = 0mm, right_margin = 1mm, top_margin = -2mm, bottom_margin = last_row ? 1mm : -3mm)
 
 # label of the x axis (close to the tick labels)
-ts_xlabel!(p) = annotate!(p, (0.5, -0.33), Plots.text("Day", PV_FONTSIZE, PV_FONT, :center))
+ts_xlabel!(p) = annotate!(p, (0.5, -0.39), Plots.text("Day", PV_FONTSIZE, PV_FONT, :center))
+
+# labels of the series of GEMS in the legends of the observed epidemic
+const TS_LABELS = Dict(
+    "Mean Estimated R" => "Estimated R",
+    "95% Confidence Band" => "95% CI of the serial interval",
+    "R=1" => "R = 1",
+    "New Detections" => "New detections",
+    "Double Reports" => "Double reports",
+    "False Positives" => "False positives",
+    "New True Cases" => "New true cases",
+    "Detected Cases" => "Detected cases",
+    "Dark Figure" => "Dark figure")
 
 # sets line width (thin outlines of areas) and labels (by GEMS label) of the series that GEMS drew
 function ts_style!(p; labels = Dict())
@@ -430,9 +442,9 @@ function ts_title(title, p = nothing; order = nothing)
     isnothing(order) || sort!(entries, by = s -> something(findfirst(==(s[:label]), order), length(order) + 1))
     x = TS_PLOT_WIDTH_IN # from right to left
     for s in reverse(entries)
-        x -= text_width_in(s[:label], PV_SMALL_FONTSIZE)
-        annotate!(strip, x / TS_PLOT_WIDTH_IN, 0.5, Plots.text(s[:label], PV_SMALL_FONTSIZE, PV_FONT, :left, :vcenter))
-        key = [x - 0.27, x - 0.05] ./ TS_PLOT_WIDTH_IN
+        annotate!(strip, x / TS_PLOT_WIDTH_IN, 0.5, Plots.text(s[:label], PV_SMALL_FONTSIZE, PV_FONT, :right, :vcenter))
+        x -= drawn_width_in(s[:label])
+        key = [x - 0.28, x - 0.06] ./ TS_PLOT_WIDTH_IN
         isnothing(s[:fillrange]) ?
             plot!(strip, key, [0.5, 0.5], linecolor = s[:linecolor], linestyle = s[:linestyle], linewidth = 1.5) :
             plot!(strip, key, [0.7, 0.7], fillrange = 0.3, fillcolor = s[:fillcolor], fillalpha = s[:fillalpha], linewidth = 0)
@@ -469,16 +481,14 @@ function plot_scenario_testing(rds)
         all_runs(:CumulativeIsolations, ts_tick, last_row = true)]
 
     # ONE RUN PER STRATEGY (same y axis for all strategies)
-    per_strategy(type, formatter, ymax; last_row = false, labels = Dict()) =
+    per_strategy(type, formatter, ymax; last_row = false) =
         map(enumerate(typical)) do (k, rd)
             ts_style!(gemsplot(rd; type = type, ts_axes(last_row)...,
                 ylims = (0, ymax),
-                yformatter = k == 1 ? formatter : (y -> "")); labels = labels)
+                yformatter = k == 1 ? formatter : (y -> "")); labels = TS_LABELS)
         end
     highest(f) = maximum(rd -> maximum(skipmissing(f(rd)), init = 0.0), typical)
-    observed = per_strategy(:ObservedReproduction, ts_number, ceil(highest(rd -> observed_R(rd).upper_est_R)),
-        labels = Dict("Mean Estimated R" => "Estimated R", "95% Confidence Band" => "95% CI of the serial interval",
-            "R=1" => "R = 1"))
+    observed = per_strategy(:ObservedReproduction, ts_number, ceil(highest(rd -> observed_R(rd).upper_est_R)))
     detected = per_strategy(:DetectedCases, ts_tick,
         1.1 * highest(rd -> max.(detected_tick_cases(rd).total_reported_cases, detected_tick_cases(rd).exposed_cnt)))
     darkfigure = per_strategy(:ActiveDarkFigure, ts_tick,
@@ -508,6 +518,7 @@ function plot_scenario_testing(rds)
     panel_in = (TS_HEIGHT_IN - 2 * TS_HEADER_IN - TS_COLUMN_IN - 7 * TS_TITLE_IN) / 7
     heights = [TS_HEADER_IN; repeat([TS_TITLE_IN, panel_in], 4);
         TS_HEADER_IN; TS_COLUMN_IN; repeat([TS_TITLE_IN, panel_in], 3)]
+    foreach(p -> keep_margins!(p, text_scaling(PV_WIDTH_IN, TS_HEIGHT_IN)), items)
     p = plot(items...,
         layout = grid(length(items), 1, heights = heights ./ sum(heights)),
         size = (100 * PV_WIDTH_IN, 100 * TS_HEIGHT_IN),
@@ -516,11 +527,15 @@ function plot_scenario_testing(rds)
 
     # same room for the tick labels of all rows, so that the plot areas of a column (and its
     # header) start and end at the same x (subplots: A-D, then headers and E-G by column)
-    Plots.prepare_output(p)
+    layout_figure!(p)
     for ks in ([3, 5, 7, 9, 11, 15, 19, 23], [12, 16, 20, 24], [13, 17, 21, 25]), (i, margin) in ((1, :left_margin), (3, :right_margin))
         room = [p[k].minpad[i] for k in ks]
-        foreach((k, r) -> p[k][margin] += maximum(room) - r, ks, room)
+        foreach((k, r) -> p[k][margin] += (maximum(room) - r) / p.attr[:thickness_scaling], ks, room)
     end
+
+    # line at R = 1 of the effective reproduction number
+    layout_figure!(p)
+    r_threshold_label!(p, add_canvas!(p), 5, halign = :right)
     return p
 end
 
@@ -618,7 +633,7 @@ end
 Generates the figure and the tables of the testing scenario from the `ResultData` objects
 that `scenario_testing()` stored in `folder`, without re-running the simulations:
 
-- `sc_testing_and_observed_progression.png`: figure (see `plot_scenario_testing`)
+- `Fig_18_testing_scenarios.png`: figure (see `plot_scenario_testing`)
 - `sc_testing_outcomes.csv`: outcomes of every run (see `outcome_df`)
 - `sc_testing_daily.csv`: daily data of every run (see `daily_df`)
 - `sc_testing_summary.csv`: statistics of the outcomes over the runs of a strategy (see `summary_df`)
@@ -630,7 +645,7 @@ function replot_testing(folder)
         for f in readdir(joinpath(folder, "runs"), join = true)]
 
     # plot results
-    png(plot_scenario_testing(rds), joinpath(folder, "sc_testing_and_observed_progression.png"))
+    save_figure(plot_scenario_testing(rds), :testing_scenarios, folder)
 
     # extract KPIs and daily data, store as CSV
     outcomes = outcome_df(rds)

@@ -135,12 +135,12 @@ end
 """
     keep_margins!(p, scaling)
 
-Compensates the margins of the subplot `p` for the correction of the text size (`text_scaling`), which
+Compensates the margins of the subplots of `p` for the correction of the text size (`text_scaling`), which
 also scales the margins and the 2 mm that Plots adds to them.
 """
 function keep_margins!(p, scaling)
-    for margin in (:left_margin, :top_margin, :right_margin, :bottom_margin)
-        p[1][margin] = (p[1][margin] + 2mm) / scaling - 2mm
+    for sp in p.subplots, margin in (:left_margin, :top_margin, :right_margin, :bottom_margin)
+        sp[margin] = (sp[margin] + 2mm) / scaling - 2mm
     end
     return p
 end
@@ -177,15 +177,17 @@ function title_text!(p, x, y, title, width_in; size = FIG_HEADING_FONTSIZE, vali
     return annotate!(p, (x + dx, y), Plots.text(rest, size, FIG_FONT, :left, valign))
 end
 
-# width of a heading as it is drawn (inches)
-function heading_width_in(txt)
+# width of a text as it is drawn (inches)
+function drawn_width_in(txt; size = FIG_SMALL_FONTSIZE, font = FIG_FONT)
     p = plot(framestyle = :none, ticks = false, legend = false, xlims = (0, 1), ylims = (0, 1), margin = -2mm,
         size = (100FIG_FULL_WIDTH_IN, 100FIG_HEADING_IN))
-    annotate!(p, 0.5, 0.5, Plots.text(txt, FIG_SECTION_FONTSIZE, FIG_FONT_BOLD, :center, :vcenter))
+    annotate!(p, 0.5, 0.5, Plots.text(txt, size, font, :center, :vcenter))
     image = figure_image(p)
     columns = [c for c in axes(image, 2) if any(x -> Plots.Colors.red(x) < 0.5, view(image, :, c))]
     return (last(columns) - first(columns) + 1) / FIG_DPI
 end
+
+heading_width_in(txt) = drawn_width_in(txt, size = FIG_SECTION_FONTSIZE, font = FIG_FONT_BOLD)
 
 """
     section_header(txt; width_in = FIG_FULL_WIDTH_IN - 4 / 25.4)
