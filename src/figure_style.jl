@@ -7,7 +7,7 @@
 
 export FIGURE_NUMBERS, figure_name
 export figure_image, load_panel
-export titled_panel, combine_panels, save_figure
+export title_strip, combine_panels, save_figure
 
 
 # 1. SIZES (PLOS)
@@ -161,6 +161,9 @@ end
 
 white_image(height, width) = fill(FIG_WHITE, height, width)
 
+# drawn panels and screenshots that are combined with plots
+const FIG_PANEL_FOLDER = joinpath(dirname(@__DIR__), "figures", "panels")
+
 """
     load_panel(file)
 
@@ -194,20 +197,20 @@ function figure_image(p)
 end
 
 """
-    titled_panel(title, image; title_in = 0.25, offset_in = 0.0)
+    title_strip(title, width; height_in = 0.25, offset_in = 0.0)
 
-`image` with its panel title (e.g. `"A) Strategy"`, see `title_text!`) in a strip of `title_in`
-inches above it, starting `offset_in` inches from its left edge.
+Strip of `width` pixels with a panel title (e.g. `"A) Strategy"`, see `title_text!`) that starts
+`offset_in` inches from its left edge.
 """
-function titled_panel(title, image; title_in = 0.25, offset_in = 0.0)
-    width_in = size(image, 2) / FIG_DPI
-    strip = plot(framestyle = :none, ticks = false, legend = false, grid = false,
-        xlims = (0, 1), ylims = (0, 1), widen = false, margin = 0mm,
-        size = (100width_in, 100title_in), fontfamily = FIG_FONT)
+function title_strip(title, width; height_in = 0.25, offset_in = 0.0)
+    width_in = width / FIG_DPI
     # Plots adds 2 mm around a plot area
-    plot!(strip, left_margin = -2mm, right_margin = -2mm, top_margin = -2mm, bottom_margin = -2mm)
+    strip = plot(framestyle = :none, ticks = false, legend = false, grid = false,
+        xlims = (0, 1), ylims = (0, 1), widen = false,
+        left_margin = -2mm, right_margin = -2mm, top_margin = -2mm, bottom_margin = -2mm,
+        size = (100width_in, 100height_in), fontfamily = FIG_FONT)
     title_text!(strip, offset_in / width_in, 0.5, title, width_in, valign = :vcenter)
-    return vcat(figure_image(strip), image)
+    return figure_image(strip)
 end
 
 """

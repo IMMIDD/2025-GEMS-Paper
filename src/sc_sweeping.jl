@@ -1,6 +1,7 @@
 export set_asymptomatic_share!
 export run_sweeps
 export plot_sweeps
+export save_sweep_figure
 export sweep_variability
 export write_sweep_variability
 export replot_sweeps
@@ -143,6 +144,11 @@ function run_sweeps(;
         outvals = outvals)
 end
 
+# size of the heatmap (inches): next to the panel of the strategy (2.5 in) and a gap, it fills the page
+const SWEEP_WIDTH_IN = 4.9
+const SWEEP_HEIGHT_IN = 3.2
+const SWEEP_GAP_IN = 0.1
+
 """
     plot_sweeps(df)
 
@@ -151,27 +157,46 @@ Requires the input of `run_sweeps()`.
 """
 function plot_sweeps(df)
 
-    formattick(x) = Int(round(100x)) |>
-        x -> x % 5 == 0 ? "$x %" : ""
+    # tick labels every 10 % (the y axis starts with 0 % at the top)
+    ticks(vals) = [(k, string(round(Int, 100v))) for (k, v) in enumerate(vals) if round(100v, digits = 6) % 10 == 0]
+    axis(vals) = (first.(ticks(vals)), last.(ticks(vals)))
 
     return gemsheatmap(df.xvals, df.yvals, df.outvals,
-        xlabel = "Fraction of Asymptomatic Cases",
-        ylabel = "Probability of Adherence",
-        colorbar_title = "\nInitial Reproduction Number",
+        xlabel = "Fraction of asymptomatic cases (%)",
+        ylabel = "Probability of adherence (%)",
+        colorbar_title = "\nInitial effective reproduction number",
         xrev = false,
         yrev = true,
-        xformatter = formattick,
-        yformatter = formattick,
+        xticks = axis(sort(unique(df.xvals))),
+        yticks = axis(sort(unique(df.yvals), rev = true)),
         color = :r0,
-        size = (2000, 1200),
-        tickfontsize = 20,
-        labelfontsize = 24,
-        colorbar_fontsize = 24,
-        colorbar_titlefontsize = 24,
-        xrotation = 45,
-        margin = 15mm,
-        right_margin = 18mm)
+        fontfamily = FIG_FONT,
+        tickfontsize = FIG_SMALL_FONTSIZE,
+        guidefontsize = FIG_FONTSIZE,
+        colorbar_tickfontsize = FIG_SMALL_FONTSIZE,
+        colorbar_titlefontsize = FIG_FONTSIZE,
+        tick_direction = :out,
+        right_margin = 3mm,
+        size = (100SWEEP_WIDTH_IN, 100SWEEP_HEIGHT_IN))
+end
 
+"""
+    save_sweep_figure(df, folder)
+
+Saves the figure of the paper (`Fig_17_parameter_sweep.png`: the strategy, drawn in
+`figures/drawn_figures.pptx`, and the heatmap of `plot_sweeps`) and the heatmap alone
+(`Fig_17B_sweep_heatmap.png`) in `folder`.
+"""
+function save_sweep_figure(df, folder)
+    heatmap = figure_image(plot_sweeps(df))
+    save_figure(heatmap, :parameter_sweep, folder, panel = "B", panel_name = "sweep_heatmap")
+
+    strategy = load_panel(joinpath(FIG_PANEL_FOLDER, figure_name(:parameter_sweep, panel = "A", name = "sweep_strategy") * ".png"))
+    titles = combine_panels([
+        title_strip("A) Self-isolation strategy", size(strategy, 2), offset_in = 0.06),
+        title_strip("B) Parameter sweep", size(heatmap, 2))], gap_in = SWEEP_GAP_IN)
+    panels = combine_panels([strategy, heatmap], gap_in = SWEEP_GAP_IN, align = :center)
+    return save_figure(combine_panels([titles, panels], direction = :vertical), :parameter_sweep, folder)
 end
 
 """
@@ -306,16 +331,15 @@ function scenario_sweeping(;
         @warn "Skipping variability summary, as it requires at least two repetitions per combination."
 
     # generate plot
-    p_sw = plot_sweeps(sweeps)
-    png(p_sw, joinpath(folder, "sc_sweep_heatmap.png"))
+    save_sweep_figure(sweeps, folder)
 end
 
 """
     replot_sweeps(folder)
 
-Redraws the heatmap and rewrites the variability summary from the
-`sc_sweep_data.csv` that `scenario_sweeping()` stored in `folder`, without
-re-running the simulations. Overwrites `sc_sweep_heatmap.png` and
+Redraws the figure (see `save_sweep_figure`) and rewrites the variability
+summary from the `sc_sweep_data.csv` that `scenario_sweeping()` stored in
+`folder`, without re-running the simulations. Overwrites the figures and
 `sc_sweep_variability.txt` in `folder`.
 """
 function replot_sweeps(folder)
@@ -327,5 +351,5 @@ function replot_sweeps(folder)
         write_sweep_variability(sweeps, joinpath(folder, "sc_sweep_variability.txt")) :
         @warn "Skipping variability summary, as it requires at least two repetitions per combination."
 
-    png(plot_sweeps(sweeps), joinpath(folder, "sc_sweep_heatmap.png"))
+    save_sweep_figure(sweeps, folder)
 end
