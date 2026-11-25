@@ -6,7 +6,6 @@ export plot_pop_density
 export plot_singles
 export plot_elderly
 export plot_kids
-export plot_combined_demographics
 
 export demographics
 
@@ -162,62 +161,6 @@ function plot_kids(sim)
         fontfamily = "Times Roman")
 end
 
-function plot_combined_demographics(
-    p_pop_density, p_mean_hh_size, p_singles,
-    p_mean_age, p_kids, p_elderly)
-
-    return plot(
-        plot!(p_pop_density,
-            plot_title = "",
-            title = "",
-            xlabel = "Population Density",
-            ytickfontsize = map_legendfontsize()*1.5,
-            colorbar_titlefontsize = map_legendfontsize()*1.5,
-            xlabelfontsize = map_legendfontsize()),
-        plot!(p_mean_hh_size,
-            plot_title = "",
-            title = "",
-            xlabel = "Mean Household Size",
-            ytickfontsize = map_legendfontsize()*1.5,
-            colorbar_titlefontsize = map_legendfontsize()*1.5,
-            xlabelfontsize = map_legendfontsize()),
-        plot!(p_singles,
-            plot_title = "",
-            title = "",
-            xlabel = "Single-Person Households",
-            ytickfontsize = map_legendfontsize()*1.5,
-            colorbar_titlefontsize = map_legendfontsize()*1.5,
-            xlabelfontsize = map_legendfontsize()),
-        plot!(p_mean_age,
-            plot_title = "",
-            title = "",
-            xlabel = "Mean Age",
-            ytickfontsize = map_legendfontsize()*1.5,
-            colorbar_titlefontsize = map_legendfontsize()*1.5,
-            xlabelfontsize = map_legendfontsize()),
-        plot!(p_kids,
-            plot_title = "",
-            title = "",
-            xlabel = "Kids (Age 0-14)",
-            ytickfontsize = map_legendfontsize()*1.5,
-            colorbar_titlefontsize = map_legendfontsize()*1.5,
-            xlabelfontsize = map_legendfontsize()),
-        plot!(p_elderly, 
-            plot_title = "",
-            title = "",
-            xlabel = "Elderly (Age 65+)",
-            ytickfontsize = map_legendfontsize()*1.5,
-            colorbar_titlefontsize = map_legendfontsize()*1.5,
-            xlabelfontsize = map_legendfontsize()),
-        layout = (2, 3),
-        top_margin = -50mm,
-        right_margin = 10mm,
-        bottom_margin = -50mm,
-        left_margin = -55mm,
-        xlabelfontsize = map_legendfontsize() * 2.5,
-        size = (4 * map_dims()[1], 2 * map_dims()[2]))
-end
-
 
 # RUN ALL ANALYSES
 
@@ -271,10 +214,11 @@ function demographics(;
     p_kids = plot_kids(sim)
     png(p_kids, joinpath(folder, "fraction_of_kids.png"))
 
-    p_combined = plot_combined_demographics(
-        p_pop_density, p_mean_hh_size, p_singles,
-        p_mean_age, p_kids, p_elderly)
-    png(p_combined, joinpath(folder, "demographic_maps.png"))
+    # map of all households, schools, and workplaces (figure of the paper)
+    settings_map(folder = folder, sim = sim)
+
+    # maps of the population per county (figure of the paper)
+    demographic_maps(folder = folder, sim = sim, individual_data_df = id)
 
     # compare the population with official statistics (needs all 16 federal states)
     if length(unique(state_code.(id.ags))) == 16

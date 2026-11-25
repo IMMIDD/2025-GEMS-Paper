@@ -9,7 +9,7 @@
 export ContactMatrixPanel
 export contact_age_matrix
 export contact_matrices
-export contact_matrix_table
+export contact_matrix_table, load_contact_matrices
 export plot_contact_matrices
 export contacts
 
@@ -37,6 +37,19 @@ struct ContactMatrixPanel
     name::String
     matrix::Matrix{Float64}
 end
+
+# sections and titles of the panels by name
+const CM_UNIFORM = "Uniform mixing"
+const CM_MIXING = "Mixing assumptions in municipalities"
+const CM_TITLES = Dict(
+    "household" => (CM_UNIFORM, "Households"),
+    "workplace" => (CM_UNIFORM, "Workplaces"),
+    "education" => (CM_UNIFORM, "Educational settings"),
+    "municipality_uniform" => (CM_MIXING, "Uniform mixing"),
+    "municipality_polymod" => (CM_MIXING, "POLYMOD"),
+    "municipality_strict" => (CM_MIXING, "Strict mixing"))
+
+contact_panel(name, matrix) = ContactMatrixPanel(CM_TITLES[name]..., name, matrix)
 
 # counts the contacts (ego × contact age group) that the members of `setting` draw in
 # one time step with the contact sampling method of the setting; `stream` separates
@@ -122,23 +135,18 @@ function contact_matrices(sim)
     municipalities = settings(sim, Municipality)
     original = deepcopy(contact_sampling_method.(municipalities))
 
-    uniform, mixing = "Uniform mixing", "Mixing assumptions in municipalities"
     panels = [
-        ContactMatrixPanel(uniform, "Households", "household",
-            contact_age_matrix(sim, [Household])),
-        ContactMatrixPanel(uniform, "Workplaces", "workplace",
-            contact_age_matrix(sim, [Office, Department, Workplace, WorkplaceSite])),
-        ContactMatrixPanel(uniform, "Educational settings", "education",
-            contact_age_matrix(sim, [SchoolClass, SchoolYear, School, SchoolComplex]))]
+        contact_panel("household", contact_age_matrix(sim, [Household])),
+        contact_panel("workplace", contact_age_matrix(sim, [Office, Department, Workplace, WorkplaceSite])),
+        contact_panel("education", contact_age_matrix(sim, [SchoolClass, SchoolYear, School, SchoolComplex]))]
 
-    municipality(title, name) =
-        ContactMatrixPanel(mixing, title, name, contact_age_matrix(sim, [Municipality]))
+    municipality(name) = contact_panel(name, contact_age_matrix(sim, [Municipality]))
     try
-        polymod = municipality("POLYMOD", "municipality_polymod")
+        polymod = municipality("municipality_polymod")
         use_municipality_mixing!(sim, :uniform)
-        push!(panels, municipality("Uniform mixing", "municipality_uniform"), polymod)
+        push!(panels, municipality("municipality_uniform"), polymod)
         use_municipality_mixing!(sim, :same_age)
-        push!(panels, municipality("Strict mixing", "municipality_strict"))
+        push!(panels, municipality("municipality_strict"))
     finally
         contact_sampling_method!.(municipalities, original)
     end
@@ -159,41 +167,56 @@ contact_matrix_table(panels) = DataFrame([(
     for p in panels for i in 1:CM_GROUPS for j in 1:CM_GROUPS])
 
 
+const CM_DATA_FILE = "contact_matrices.csv"
+
+"""
+    load_contact_matrices(folder)
+
+Reads the panels of `contact_matrices` from the table saved by `contacts`, to redraw the figure without
+loading the population.
+"""
+function load_contact_matrices(folder)
+    table = CSV.read(joinpath(folder, CM_DATA_FILE), DataFrame)
+    return map(unique(table.panel)) do name
+        matrix = zeros(CM_GROUPS, CM_GROUPS)
+        for r in eachrow(table[table.panel .== name, :])
+            matrix[cm_group(r.ego_age), cm_group(r.contact_age)] = r.contacts_per_day
+        end
+        contact_panel(name, matrix)
+    end
+end
+
+
 # 2. LAYOUT
 
-# The figure is drawn on one canvas in pixel coordinates, so that all distances are
-# fixed: size of a panel, gaps between the columns and rows, height of the section
-# headings and panel titles, and room for the axis labels and the colorbar
-const CM_PANEL = 960
-const CM_COLUMN_GAP = 55
-const CM_ROW_GAP = 40
-const CM_HEADING_HEIGHT = 115
-const CM_TITLE_HEIGHT = 95
-const CM_LEFT = 178
-const CM_BOTTOM = 168
-const CM_COLORBAR_GAP = 45
-const CM_COLORBAR_WIDTH = 60
-const CM_COLORBAR_LABELS = 204
+# The figure is drawn on one canvas in inches, so that all distances are fixed: size of a panel, gaps
+# between the columns and rows, height of the section headings and panel titles, and room for the axis
+# labels and the colorbar (together as wide as the text, `FIG_TEXT_WIDTH_IN`)
+const CM_PANEL = 1.32
+const CM_COLUMN_GAP = 0.1
+const CM_ROW_GAP = 0.08
+const CM_HEADING_HEIGHT = 0.28
+const CM_TITLE_HEIGHT = 0.22
+const CM_LEFT = 0.45
+const CM_BOTTOM = 0.4
+const CM_COLORBAR_GAP = 0.08
+const CM_COLORBAR_WIDTH = 0.09
+const CM_COLORBAR_LABELS = 0.42
 
-# distances of the labels (px): lines from the (estimated) ends of a section heading,
-# panel letters and titles above a panel, length of the ticks, tick labels and axis
+# distances of the labels (inches): panel titles above a panel, length of the ticks, tick labels and axis
 # labels from the axis, label of the colorbar
-const CM_HEADING_GAP = 110
-const CM_LETTER_OFFSET = 46
-const CM_TITLE_OFFSET = 42
-const CM_TICK = 12
-const CM_MINOR_TICK = 7
-const CM_TICKLABEL_OFFSET = 22
-const CM_XTICKLABEL_OFFSET = 50
-const CM_XLABEL_OFFSET = 122
-const CM_YLABEL_OFFSET = 144
-const CM_COLORBAR_LABEL_OFFSET = 167
+const CM_TITLE_OFFSET = 0.11
+const CM_TICK = 0.03
+const CM_MINOR_TICK = 0.02
+const CM_TICKLABEL_OFFSET = 0.06
+const CM_XTICKLABEL_OFFSET = 0.11
+const CM_XLABEL_OFFSET = 0.28
+const CM_YLABEL_OFFSET = 0.35
+const CM_COLORBAR_LABEL_OFFSET = 0.34
 
-# fonts as in the other combined figures (bold letters, titles in regular weight)
-const CM_LETTER_FONTSIZE = 50
-const CM_HEADING_FONTSIZE = 46
-const CM_TITLE_FONTSIZE = 42
-const CM_TICK_FONTSIZE = 37
+# widths of the lines of the axes and of the grid
+const CM_LINEWIDTH = 0.6
+const CM_GRID_LINEWIDTH = 0.4
 
 # logarithmic color scale: all values up to the lower limit get the lowest color;
 # from a pale tint over the blue of the GEMS data to navy
@@ -215,21 +238,21 @@ cm_age_ticks() = [[(cm_position(a), string(a)) for a in CM_AGE_TICKS];
 
 # 3. DRAWING
 
-cm_text!(p, x, y, s, size, halign; font = PV_FONT, rotation = 0) =
-    annotate!(p, x, y, Plots.text(s, size, halign, font, CM_BLACK, rotation = rotation))
+cm_text!(p, x, y, s, halign; size = FIG_SMALL_FONTSIZE, rotation = 0) =
+    canvas_text!(p, 1, x, y, s, size = size, halign = halign, rotation = rotation)
 
-cm_line!(p, x, y; color = CM_BLACK, linewidth = 3) =
+cm_line!(p, x, y; color = CM_BLACK, linewidth = CM_LINEWIDTH) =
     plot!(p, x, y, color = color, linewidth = linewidth, label = "")
 
 cm_frame!(p, x, y, w, h) = cm_line!(p, [x, x + w, x + w, x, x], [y, y, y + h, y + h, y])
 
 # section heading between two lines (as in the population validation figure)
 function cm_heading!(p, heading, x, y, width)
-    half = text_width_in(heading, CM_HEADING_FONTSIZE, bold = true) * Plots.DPI / 2 + CM_HEADING_GAP
+    half = 0.5 * heading_width_in(heading) + FIG_HEADING_GAP_IN
     center = x + width / 2
-    cm_text!(p, center, y, heading, CM_HEADING_FONTSIZE, :center, font = PV_FONT_BOLD)
+    canvas_text!(p, 1, center, y, heading, size = FIG_SECTION_FONTSIZE, font = FIG_FONT_BOLD)
     for side in ([x, center - half], [center + half, x + width])
-        cm_line!(p, side, [y, y], color = PV_LINE_COLOR)
+        cm_line!(p, side, [y, y], color = FIG_LINE_COLOR)
     end
 end
 
@@ -239,31 +262,28 @@ function cm_panel!(p, panel, letter, x, y)
     heatmap!(p, x .+ edges, y .+ edges, permutedims(cm_log.(panel.matrix)),
         color = CM_COLORS, clims = cm_log.(CM_LIMITS), colorbar = false)
     for e in edges[2:end-1]
-        cm_line!(p, [x + e, x + e], [y, y + CM_PANEL], color = CM_WHITE, linewidth = 2)
-        cm_line!(p, [x, x + CM_PANEL], [y + e, y + e], color = CM_WHITE, linewidth = 2)
+        cm_line!(p, [x + e, x + e], [y, y + CM_PANEL], color = CM_WHITE, linewidth = CM_GRID_LINEWIDTH)
+        cm_line!(p, [x, x + CM_PANEL], [y + e, y + e], color = CM_WHITE, linewidth = CM_GRID_LINEWIDTH)
     end
     cm_frame!(p, x, y, CM_PANEL, CM_PANEL)
-    cm_text!(p, x, y + CM_PANEL + CM_LETTER_OFFSET, "$letter)", CM_LETTER_FONTSIZE, :left,
-        font = PV_FONT_BOLD)
-    cm_text!(p, x + CM_PANEL / 2, y + CM_PANEL + CM_TITLE_OFFSET, panel.title,
-        CM_TITLE_FONTSIZE, :center)
+    canvas_title!(p, 1, x, y + CM_PANEL + CM_TITLE_OFFSET, letter, panel.title)
 end
 
 function cm_xaxis!(p, x, y)
     for (pos, label) in cm_age_ticks()
         cm_line!(p, [x + pos, x + pos], [y, y - CM_TICK])
-        cm_text!(p, x + pos, y - CM_XTICKLABEL_OFFSET, label, CM_TICK_FONTSIZE, :center)
+        cm_text!(p, x + pos, y - CM_XTICKLABEL_OFFSET, label, :center)
     end
-    cm_text!(p, x + CM_PANEL / 2, y - CM_XLABEL_OFFSET, "Ego age", CM_TITLE_FONTSIZE, :center)
+    cm_text!(p, x + CM_PANEL / 2, y - CM_XLABEL_OFFSET, "Ego age", :center, size = FIG_FONTSIZE)
 end
 
 function cm_yaxis!(p, x, y)
     for (pos, label) in cm_age_ticks()
         cm_line!(p, [x, x - CM_TICK], [y + pos, y + pos])
-        cm_text!(p, x - CM_TICKLABEL_OFFSET, y + pos, label, CM_TICK_FONTSIZE, :right)
+        cm_text!(p, x - CM_TICKLABEL_OFFSET, y + pos, label, :right)
     end
-    cm_text!(p, x - CM_YLABEL_OFFSET, y + CM_PANEL / 2, "Contact age", CM_TITLE_FONTSIZE,
-        :center, rotation = 90)
+    cm_text!(p, x - CM_YLABEL_OFFSET, y + CM_PANEL / 2, "Contact age", :center, size = FIG_FONTSIZE,
+        rotation = 90)
 end
 
 # vertical colorbar with labeled ticks and the minor ticks of a logarithmic axis
@@ -278,16 +298,16 @@ function cm_colorbar!(p, x, y, height)
     cm_frame!(p, x, y, CM_COLORBAR_WIDTH, height)
     for v in [k * 10.0^e for e in -3:1 for k in 1:9]
         CM_LIMITS[1] <= v <= CM_LIMITS[2] || continue
-        cm_line!(p, [right, right + CM_MINOR_TICK], fill(position(v), 2), linewidth = 2)
+        cm_line!(p, [right, right + CM_MINOR_TICK], fill(position(v), 2), linewidth = CM_GRID_LINEWIDTH)
     end
     for v in CM_COLORBAR_TICKS
         label = isinteger(v) ? string(Int(v)) : string(v)
         cm_line!(p, [right, right + CM_TICK], fill(position(v), 2))
         cm_text!(p, right + CM_TICKLABEL_OFFSET, position(v),
-            v == CM_LIMITS[1] ? "≤$label" : label, CM_TICK_FONTSIZE, :left)
+            v == CM_LIMITS[1] ? "≤$label" : label, :left)
     end
     cm_text!(p, right + CM_COLORBAR_LABEL_OFFSET, y + height / 2,
-        "Contacts per person and day (log scale)", CM_TITLE_FONTSIZE, :center, rotation = 90)
+        "Contacts per person and day (log scale)", :center, size = FIG_FONTSIZE, rotation = 90)
 end
 
 """
@@ -307,7 +327,7 @@ function plot_contact_matrices(panels)
     height = length(rows) * row_height + (length(rows) - 1) * CM_ROW_GAP + CM_BOTTOM
 
     p = plot(
-        size = (width, height),
+        size = (100width, 100height),
         xlims = (0, width),
         ylims = (0, height),
         framestyle = :none,
@@ -316,8 +336,8 @@ function plot_contact_matrices(panels)
         legend = false,
         colorbar = false,
         widen = false,
-        margin = 0mm,
-        fontfamily = PV_FONT)
+        margin = -2mm,
+        fontfamily = FIG_FONT)
 
     letters = Iterators.Stateful('A':'Z')
     for (r, (section, row)) in enumerate(zip(sections, rows))
@@ -343,12 +363,14 @@ end
     contacts(;
         folder = nothing,
         folder_tag = nothing,
-        sim = DE_sim())
+        panels = nothing,
+        sim = isnothing(panels) ? DE_sim() : nothing)
 
-Runs the contact analysis: draws the contact figure (`contact_matrices.png`) and
+Runs the contact analysis: draws the contact figure (`Fig_08_contact_matrices.png`) and
 writes its data (`contact_matrices.csv`). By default with the reference model and
 the population of Germany, as in the paper. Simulations without age-based contact
-sampling in the municipalities are skipped with a warning.
+sampling in the municipalities are skipped with a warning. Pass `panels` (from
+`load_contact_matrices`) to redraw the figure without loading the population.
 
 If `folder` is `nothing`, a new result folder is created, with `folder_tag`
 appended to its timestamp-based name (see `result_folder`).
@@ -356,9 +378,10 @@ appended to its timestamp-based name (see `result_folder`).
 function contacts(;
         folder = nothing,
         folder_tag = nothing,
-        sim = DE_sim())
+        panels = nothing,
+        sim = isnothing(panels) ? DE_sim() : nothing)
 
-    if !has_age_based_municipalities(sim)
+    if isnothing(panels) && !has_age_based_municipalities(sim)
         @warn "The contact figure is skipped, as it needs age-based contact sampling in the municipalities (e.g. models/DE_model_first_wave.toml)."
         return
     end
@@ -366,7 +389,7 @@ function contacts(;
     # create result folder if not passed
     isnothing(folder) ? folder = result_folder(folder_tag) : nothing
 
-    panels = contact_matrices(sim)
-    CSV.write(joinpath(folder, "contact_matrices.csv"), contact_matrix_table(panels))
-    png(plot_contact_matrices(panels), joinpath(folder, "contact_matrices.png"))
+    isnothing(panels) && (panels = contact_matrices(sim))
+    CSV.write(joinpath(folder, CM_DATA_FILE), contact_matrix_table(panels))
+    save_figure(plot_contact_matrices(panels), :contact_matrices, folder)
 end

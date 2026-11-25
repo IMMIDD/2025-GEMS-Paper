@@ -15,6 +15,7 @@ using Revise
 using Reexport
 import Downloads
 import LinearAlgebra
+import PNGFiles
 import Random
 import SHA
 import TOML
@@ -75,6 +76,9 @@ map_dims() = (1600, 2000)
 map_titlefontsize() = 34
 map_legendfontsize() = 24
 
+# INCLUDE FIGURE STYLE
+include("figure_style.jl")
+
 # INCLUDE MODEL EXTENSIONS
 include("infectiousness_profile.jl")
 
@@ -86,6 +90,8 @@ include("settings.jl")
 include("mobility.jl")
 include("commuter_validation.jl")
 include("contacts.jl")
+include("demographic_maps.jl")
+include("settings_map.jl")
 include("benchmarking.jl")
 
 # INCLUDE CONTACT DATA (POLYMOD)
@@ -183,7 +189,6 @@ function runall(;
 
     printinfo("### RUNNING TESTING SCENARIOS")
     scenario_testing(
-        population = population,
         folder = folder
     )
 
