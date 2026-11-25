@@ -235,7 +235,7 @@ end
         cap = 0.95,
         colormap = :inferno)
 
-Figure 1 of the paper.
+Fig 11 of the paper (written as `sc_first_wave_paper_figure_1_*.png`).
 
 A: maps of the RKI (top row) and GEMS (bottom row) incidence per county (`tbl`,
 from `rki_weekly_table`) for `weeks` (columns), with one color scale up to the
@@ -536,9 +536,10 @@ end
         peaks = true,
         locator = true)
 
-Figure 2 of the paper: daily cases per 100,000 (7-day means) per state from
-`first_day` to `last_day` (default: the first and last day of `states`), one
-panel per state of `st` (`rki_state_table`, for the populations) with a shared
+Fig 12 of the paper (written as `sc_first_wave_paper_figure_2_*.png`): daily
+cases per 100,000 (7-day means) per state from `first_day` to `last_day`
+(default: the first and last day of `states`), one panel per state of `st`
+(`rki_state_table`, for the populations) with a shared
 y scale: RKI (reference, grey) and GEMS (mean of the runs of `states`, from
 `rki_state_summary`) with the 90% band of the calibration runs (`band`, as
 `states`; if `nothing`, the range of the `runs` runs of `states`, with a

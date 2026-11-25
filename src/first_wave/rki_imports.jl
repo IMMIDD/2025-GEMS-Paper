@@ -9,12 +9,36 @@ export ImportParams
 
 
 """
+    RKI_ABROAD_EARLY
+
+Cases with exposure abroad (sum of the listed countries) in the RKI situation
+reports of 04., 06., and 08.03.2020 (Tab. 2).
+"""
+const RKI_ABROAD_EARLY = [(Date(2020, 3, 4), 64), (Date(2020, 3, 6), 130), (Date(2020, 3, 8), 223)]
+
+"""
+    imports_week9(reports = RKI_ABROAD_EARLY; date = Date(2020, 3, 2))
+
+Imported cases reported up to the end of ISO week 9 of 2020: log-linear
+least-squares fit of the cases with exposure abroad in `reports`, evaluated at
+`date` (start of week 10). Gives 35.3 for the default reports (`RKI_IMPORTS`
+uses 35). Stands for all imports reported up to the end of week 9 (assumption).
+"""
+function imports_week9(reports = RKI_ABROAD_EARLY; date::Date = Date(2020, 3, 2))
+    x = [Float64(Dates.value(d - date)) for (d, _) in reports]
+    y = [log(n) for (_, n) in reports]
+    slope = sum((x .- mean(x)) .* (y .- mean(y))) / sum((x .- mean(x)) .^ 2)
+    return exp(mean(y) - slope * mean(x))
+end
+
+
+"""
     RKI_IMPORTS
 
 Cases with infection country abroad per ISO reporting week 2020.
 
 - `abroad`: weeks 10-17 from the RKI situation report of 27.04.2020 (Fig. 3).
-  Week 9 is extrapolated from the reports of 04.-08.03. (64, 130, 223 cases).
+  Week 9 is extrapolated from the reports of 04.-08.03. (`imports_week9`).
 - `alpine_share`: share of Austria and Italy, from the country tables of the
   reports up to 08.03. (0.90), 08.-22.03. (0.90), and 22.-26.03. (0.84).
 - `italy_share`: share of Italy in the Alpine imports, from the country tables
@@ -25,7 +49,7 @@ The RKI counts mentions; a case can name several countries.
 """
 const RKI_IMPORTS = DataFrame(
     week = 9:17,
-    abroad = [35, 262, 2781, 6454, 3814, 1095, 267, 113, 31],
+    abroad = [round(Int, imports_week9()), 262, 2781, 6454, 3814, 1095, 267, 113, 31],
     alpine_share = [0.90, 0.90, 0.90, 0.90, 0.84, 0.84, 0.84, 0.84, 0.84],
     italy_share = [1.0, 1.0, 0.21, 0.21, 0.07, 0.07, 0.07, 0.07, 0.07])
 
@@ -231,6 +255,35 @@ const TIROL_REGION = Dict(1 => :Nord, 2 => :Nord, 3 => :Nord, 4 => :Nord, 5 => :
     15 => :Ost, 16 => :Ost)
 
 """
+    fit_distance_decay(geo = county_geography(); income_elasticity = 0.0)
+
+Distance decay of the ski imports (`ImportParams.distance_decay`): negative
+slope of the least-squares fit of ln(Tyrol overnight stays per inhabitant,
+`TIROL_NIGHTS`) on ln(population-weighted mean distance to Ischgl) over the 7
+origin regions. With `income_elasticity > 0`, the stays are first divided by
+the population-weighted mean of the relative income^`income_elasticity` of the
+region. The default of `ImportParams` (0.4) rounds the fit without income
+adjustment (0.39; 0.25 with `income_elasticity = 1`).
+"""
+function fit_distance_decay(geo::DataFrame = county_geography(); income_elasticity::Real = 0.0)
+    income = _relative_income(geo) .^ income_elasticity
+    region = [TIROL_REGION[s] for s in geo.state]
+    regions = collect(keys(TIROL_NIGHTS))
+    x = Float64[]
+    y = Float64[]
+    for r in regions
+        k = region .== r
+        pop = sum(geo.population[k])
+        distance = sum(geo.population[k] .* geo.distance_km[k]) / pop
+        inc = sum(geo.population[k] .* income[k]) / pop
+        push!(x, log(distance))
+        push!(y, log(TIROL_NIGHTS[r] / pop / inc))
+    end
+    slope = sum((x .- mean(x)) .* (y .- mean(y))) / sum((x .- mean(x)) .^ 2)
+    return -slope
+end
+
+"""
     SCHOOL_HOLIDAYS_2020
 
 School holidays from mid-February to March 2020 by state number (incl. adjacent
@@ -258,8 +311,9 @@ const SCHOOL_HOLIDAYS_2020 = Dict(
 Parameters of the tourism-based import allocation (`tourism_weights`):
 
 - `distance_decay`: distance decay within a Tyrol origin region (slope of the
-  Tyrol overnight stays across the regions)
-- `income_elasticity`: income elasticity of ski trips (T-MONA guest survey)
+  Tyrol overnight stays across the regions, `fit_distance_decay`)
+- `income_elasticity`: income elasticity of ski trips (assumption: trips
+  proportional to income)
 - `holiday_factor`: additional ski trips during school holidays (assumption)
 - `bw_coverage`: share of schools with carnival holidays in Baden-Württemberg (assumption)
 - `italy_ski_share`: share of ski trips in the imports from Italy (RKI situation reports)

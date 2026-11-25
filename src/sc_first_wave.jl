@@ -498,8 +498,8 @@ function _figures_final(folder, s::RKISettings, b)
     png(plot_rki_state_maps(tbl, RKI_MAP_WEEKS, basis = b), png_file("states", "maps"))
 end
 
-# paper figures 1 and 2 of the final runs (reported cases only), with the band of the
-# calibration runs if it exists (figure 2: else with the range of the final runs). Drawn before
+# paper Fig 11 and 12 (files paper_figure_1/2) of the final runs (reported cases only), with the
+# band of the calibration runs if it exists (Fig 12: else with the range of the final runs). Drawn before
 # all other figures: GR maps each new color to an entry of a color table that lasts for the
 # whole Julia session, and once the county maps of the other figures have filled it, colors
 # requested for the first time are drawn wrong (grey annotations come out teal).
