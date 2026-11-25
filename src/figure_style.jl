@@ -47,7 +47,7 @@ const FIG_COLORS = (
     purple = "#9467BD",
     orange = "#FFA500",
     gray = "#9AA0A8",
-    darkgray = "#404040",
+    darkgray = "#444444",
     lightgray = "#D9D9D9")
 
 
