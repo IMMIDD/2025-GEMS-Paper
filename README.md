@@ -52,6 +52,7 @@ All disease examples share one **reference model**, [models/DE_model_first_wave.
 | [inputs/](inputs/) | Calibration results read by the scenarios, contact parameters derived from POLYMOD, reference data from official statistics (population, settings, commuting), county income; sources and licenses of every file in [inputs/README.md](inputs/README.md) |
 | [figures/](figures/) | Drawn figures of the paper: PowerPoint deck ([drawn_figures.pptx](figures/drawn_figures.pptx)) and the panels that are combined with plots (`figures/panels/`), see [Section 2](#drawn-figures) |
 | [tools/export_figures.ps1](tools/export_figures.ps1) | Exports the drawn figures from PowerPoint; not part of `runall()` |
+| [tools/convert_to_tiff.ps1](tools/convert_to_tiff.ps1) | Converts the PNG figures of a folder to TIFF, see [Section 2](#tiff-files-for-the-submission); not part of `runall()` |
 | `data/` | Downloaded on demand, not part of the repository: RKI case data, POLYMOD raw data, KMK class statistics ([inputs/README.md](inputs/README.md#downloaded-at-runtime-not-in-the-repository)) |
 
 ## 2. Reproducing the results
@@ -100,6 +101,16 @@ powershell -ExecutionPolicy Bypass -File tools\export_figures.ps1
 This writes a PNG of every figure (300 dpi, cropped to its width and height) to `results/<timestamp>_drawn_figures/`; with `-Tiff`, also as TIFF with LZW compression. The layout of a slide sets the width of its figure (full width 2250 px, text width 1560 px, panel width 750 px). The notes of a slide hold its file name, or `skip` if it is not exported (style sheet).
 
 Slides with `panel` in the second line of their notes are panels that the Julia code combines with a plot. Julia reads them from `figures/panels/`, so PowerPoint is not needed to reproduce the results. After changing such a slide, update its panel with `-UpdatePanels`. The code listing of Fig 15 (`Fig_15B_code_listing.png`) is a screenshot of [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl).
+
+### TIFF files for the submission
+
+PLOS requires the figures as TIFF files. On Windows, convert all PNG figures of a folder with
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\convert_to_tiff.ps1 results\<folder>
+```
+
+This writes a TIFF of the same name next to every PNG (LZW compression, 300 dpi, white background, same pixels). Existing TIFF files are overwritten, subfolders are not searched. With `-Out <folder>`, the files are written to another folder. The script warns about figures above the limits of PLOS (2250 × 2625 px, 10 MB).
 
 *Terminology:* a *random seed* initializes the random number generator of a simulation; infections that start an epidemic are called *initial infections* (at tick 0) or *introduced infections* (added during the run).
 
