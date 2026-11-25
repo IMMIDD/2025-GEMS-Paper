@@ -82,7 +82,7 @@ The parameter sweep stores its results in `sc_sweep_data.csv`; `replot_sweeps(fo
 
 For a quick test, the testing scenario also runs with the population of a smaller state and an outbreak in one of its municipalities, e.g. `scenario_testing(population = "SL", municipality = 10042111)` (Beckingen, Saarland).
 
-All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-and-configuration)). Bit-identical results require the same number of Julia threads.
+All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-and-configuration)). Bit-identical results require the same number of Julia threads. Simulations with interventions are only exactly reproducible on a single thread in GEMS v1.0.2 (fixed in v1.1.1).
 
 **Machines used for the paper**
 
@@ -440,7 +440,9 @@ To focus on the regime where tracing can be decisive, we assume that other measu
 
 The tests in Isolation & Testing have no follow-up: the scenario detects cases without changing the spread, so it differs from Isolation Only only by the random seed. The tracing scenario corresponds to Fig 10 of the paper.
 
-The top panels of the figure (`Fig_18_testing_scenarios.png`) show all runs, the bottom panels the run with the median peak day of infections of each scenario. The scenario stores the results of every run (`runs/seed_*/resultdata.jld2`, GEMS `ResultData` in the style `TestingRD`) and writes the outcomes of every run (`sc_testing_outcomes.csv`), their statistics per scenario (`sc_testing_summary.csv`: mean, standard deviation, minimum, maximum, and 95 % confidence interval of the mean), and the daily data of every run (`sc_testing_daily.csv`). If it is interrupted, calling it again with the same `folder` and parameters skips the stored runs.
+The top panels of the figure (`Fig_18_testing_scenarios.png`) show all runs, the bottom panels the run with the median peak day of infections of each scenario. The scenario stores the results of every run (`runs/seed_*/resultdata.jld2`, GEMS `ResultData` in the style `TestingRD`) and writes the outcomes of every run (`sc_testing_outcomes.csv`), their statistics per scenario (`sc_testing_summary.csv`: mean, standard deviation, minimum, maximum, and 95 % confidence interval of the mean), the comparison of tracing with the other scenarios (`sc_testing_comparison.csv`: averted infections, deaths, and workdays and schooldays of absence, additional tests, and additional tests per averted infection, death, workday of absence, and schoolday of absence; same statistics), and the daily data of every run (`sc_testing_daily.csv`). If it is interrupted, calling it again with the same `folder` and parameters skips the stored runs.
+
+The outcomes are defined in `outcome_df()`. The duration of the wave is the number of days between 5 % and 95 % of all infections. Absent workers and students are isolated, severely ill, or in hospital. Their days are split into isolated and infected, isolated and not infected, and severely ill without isolation. The lost workdays and schooldays are the isolated days. Every day of the week counts, and students are the members of all educational settings. The isolations after false positive tests (individuals and days) are computed from the individual tests when a run is stored, and left empty for runs stored before this was added. The number of workers and students is stored with each run, too. If no run in the folder has it, `replot_testing(folder, population = "NRW")` counts them in the population.
 
 ### 5.5 Performance benchmark (Sec. 3.3, Fig 19)
 
