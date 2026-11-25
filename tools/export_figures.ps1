@@ -10,7 +10,7 @@ For every slide that is not empty, the script
 - keeps its left part up to the width in the name of the slide layout, e.g. "Full width (19.05 cm)"
   (2250 px) or "Text width (13.21 cm)" (1560 px)
 - crops the empty space above and below (2 pt of white space remain)
-- saves a PNG without transparency, tagged with 300 dpi (and a TIFF with -Tiff)
+- saves a PNG without transparency, tagged with 300 dpi
 
 The notes of a slide control its export:
 
@@ -32,20 +32,16 @@ Output folder. Default: a new folder results/<timestamp>_drawn_figures.
 .PARAMETER UpdatePanels
 Also replaces the panels that are part of the repository (folder "panels" next to the deck).
 
-.PARAMETER Tiff
-Also writes TIFF files (LZW compression), as required by PLOS for the submission.
-
 .EXAMPLE
 powershell -ExecutionPolicy Bypass -File tools\export_figures.ps1
 
 .EXAMPLE
-powershell -ExecutionPolicy Bypass -File tools\export_figures.ps1 -UpdatePanels -Tiff
+powershell -ExecutionPolicy Bypass -File tools\export_figures.ps1 -UpdatePanels
 #>
 param(
     [string]$Deck,
     [string]$Out,
-    [switch]$UpdatePanels,
-    [switch]$Tiff)
+    [switch]$UpdatePanels)
 
 $ErrorActionPreference = "Stop"
 
@@ -184,13 +180,6 @@ function Save-Figure($png, $width, $path) {
         $graphics.Dispose()
 
         $figure.Save("$path.png", [System.Drawing.Imaging.ImageFormat]::Png)
-        if ($Tiff) {
-            $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq "image/tiff" }
-            $options = New-Object System.Drawing.Imaging.EncoderParameters(1)
-            $options.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter(
-                [System.Drawing.Imaging.Encoder]::Compression, [long][System.Drawing.Imaging.EncoderValue]::CompressionLZW)
-            $figure.Save("$path.tif", $codec, $options)
-        }
         $figure.Dispose()
         return @($width, $height)
     }
@@ -247,9 +236,7 @@ try {
             Write-Host "    updated panels\$name.png"
         }
         foreach ($problem in (Get-FigureProblems $slide $width)) { Write-Warning "$name - $problem" }
-        foreach ($file in (Get-ChildItem (Join-Path $Out "$name.*") -Include "$name.png", "$name.tif")) {
-            if ($file.Length -gt $MaxFileSize) { Write-Warning "$name - $($file.Name) is larger than 10 MB" }
-        }
+        if ((Get-Item (Join-Path $Out "$name.png")).Length -gt $MaxFileSize) { Write-Warning "$name - larger than 10 MB" }
     }
     Write-Host "Saved in $Out"
 }

@@ -33,21 +33,21 @@ export plot_age_pyramid, plot_household_size_panel
 
 # STYLE
 
-const PV_FONT = "Times Roman"
-const PV_FONTSIZE = 9
-const PV_SMALL_FONTSIZE = 8
-const PV_HEADING_FONTSIZE = 10
-const PV_SECTION_FONTSIZE = 12
-const PV_FONT_BOLD = "Times Bold"
+# fonts, sizes, and resolution of all figures (`figure_style.jl`)
+const PV_FONT = FIG_FONT
+const PV_FONTSIZE = FIG_FONTSIZE
+const PV_SMALL_FONTSIZE = FIG_SMALL_FONTSIZE
+const PV_HEADING_FONTSIZE = FIG_HEADING_FONTSIZE
+const PV_FONT_BOLD = FIG_FONT_BOLD
 # GEMS in blue, the reference data in orange (the first two GEMS colors)
 const PV_MODEL_COLOR = gemscolors(2)[1]
 const PV_REFERENCE_COLOR = gemscolors(2)[2]
 const PV_REFERENCE_ALPHA = 0.45
-const PV_LINE_COLOR = "#9aa0a8"
+const PV_LINE_COLOR = FIG_LINE_COLOR
 
 # print width (inches; the height follows from the layout) and export resolution
-const PV_WIDTH_IN = 7.5
-const PV_DPI = 300
+const PV_WIDTH_IN = FIG_FULL_WIDTH_IN
+const PV_DPI = FIG_DPI
 
 # name of the model data: the default population of GEMS, generated with Gesyland
 const PV_MODEL_LABEL = "GEMS (Gesyland)"
@@ -1729,25 +1729,6 @@ end
 
 # 4. FIGURE
 
-"""
-    section_header(txt; width_in = PV_WIDTH_IN - 4 / 25.4)
-
-Empty subplot carrying the heading of a section of the figure: centered as
-the section titles of the other figures of the paper (e.g.
-`plot_paper_figure_1`), bold and larger than the panel titles, between two
-thin lines that set it apart from them. `width_in` is the width of the
-heading's plot area.
-"""
-function section_header(txt; width_in = PV_WIDTH_IN - 4 / 25.4)
-    p = plot(framestyle = :none, ticks = false, legend = false, grid = false,
-        xlims = (0, 1), ylims = (0, 1), margin = 0mm, top_margin = -2mm, bottom_margin = -2mm,
-        fontfamily = PV_FONT)
-    half = (0.5 * text_width_in(txt, PV_SECTION_FONTSIZE, bold = true) + 0.12) / width_in
-    plot!(p, [0, 0.5 - half, NaN, 0.5 + half, 1], fill(0.5, 5), linecolor = PV_LINE_COLOR, linewidth = 0.6)
-    return annotate!(p, 0.5, 0.5, Plots.text(txt, PV_SECTION_FONTSIZE, PV_FONT_BOLD, :center, :vcenter))
-end
-
-
 # AXIS TEXT, LEGENDS AND LAYOUT OF THE FIGURE
 #
 # GR places tick labels and axis labels at distances relative to the largest
@@ -1766,34 +1747,8 @@ const PV_TITLE_GAP_IN = 0.07
 # legend entries: distance from the marker to its label, and between entries (inches)
 const PV_MARKER_GAP_IN = 0.1
 const PV_ENTRY_GAP_IN = 0.14
-# estimated character widths of Times, as shares of the font size (digits and capitals are wider
-# than the average lowercase letter, bold text by about 10 %)
-const PV_CHAR_WIDTH = 0.42
-char_width(c) = c == '%' ? 0.83 : isdigit(c) ? 0.5 : c in "MW" ? 0.89 : isuppercase(c) ? 0.66 : c == ' ' ? 0.25 :
-    c in ".,:;()|/–-" ? 0.33 : c in "ijlftr" ? 0.3 : c in "mw" ? 0.72 : PV_CHAR_WIDTH
 # name of the reference data in the figure (the sources are named in the caption)
 const PV_REFERENCE_NAME = "Official statistics"
-
-text_width_in(s, size; bold = false) = (bold ? 1.1 : 1.0) * sum(char_width, s; init = 0.0) * size / 72
-line_height_in(size) = 1.2 * size / 72
-"""
-    title_text!(p, x, y, title, width_in; size = PV_HEADING_FONTSIZE, valign = :bottom)
-
-Draws a panel title at the relative position (`x`, `y`) of `p`, left
-aligned: its letter ("A)") in bold, as in the other figures of the paper,
-followed by the rest in regular weight. `width_in` is the width of the plot
-area, to place the rest after the letter.
-"""
-function title_text!(p, x, y, title, width_in; size = PV_HEADING_FONTSIZE, valign = :bottom)
-    m = match(r"^([A-Z]\))\s*(.*)$", title)
-    letter, rest = isnothing(m) ? ("", title) : (m.captures[1], m.captures[2])
-    dx = 0.0
-    if !isempty(letter)
-        annotate!(p, (x, y), Plots.text(letter, size, PV_FONT_BOLD, :left, valign))
-        dx = (text_width_in(letter, size, bold = true) + 0.3size / 72) / width_in
-    end
-    return annotate!(p, (x + dx, y), Plots.text(rest, size, PV_FONT, :left, valign))
-end
 
 """
     panel_title!(p, width_in, height_in)

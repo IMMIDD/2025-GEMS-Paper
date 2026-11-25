@@ -15,6 +15,7 @@ using Revise
 using Reexport
 import Downloads
 import LinearAlgebra
+import PNGFiles
 import Random
 import SHA
 import TOML
@@ -74,6 +75,9 @@ Returns standard map dimensions (for Germany).
 map_dims() = (1600, 2000)
 map_titlefontsize() = 34
 map_legendfontsize() = 24
+
+# INCLUDE FIGURE STYLE
+include("figure_style.jl")
 
 # INCLUDE MODEL EXTENSIONS
 include("infectiousness_profile.jl")

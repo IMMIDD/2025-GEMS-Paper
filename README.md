@@ -41,6 +41,7 @@ All disease examples share one **reference model**, [models/DE_model_first_wave.
 | [src/GEMSPaper.jl](src/GEMSPaper.jl) | Package entry point and `runall()` |
 | [src/infectiousness_profile.jl](src/infectiousness_profile.jl) | `InfectiousnessProfile` transmission function |
 | `src/sc_*.jl` | One file per example scenario |
+| [src/figure_style.jl](src/figure_style.jl) | Sizes, fonts, colors, and file names of the figures; titling, combining, and saving of panels |
 | [src/first_wave/](src/first_wave/) | RKI data, imported and introduced infections, intervention phases of March 2020 (fitted contact reductions), calibration, comparison of municipality mixing assumptions, and figures of the first wave example |
 | [src/contacts/](src/contacts/) | POLYMOD contact data: download, contacts per setting layer, household contact sampling (`HouseholdSizeSampling`), age-age matrix of the municipality contacts, derivation of the contact parameters of the config, and scaling of contact parameters |
 | [src/demographics.jl](src/demographics.jl), [src/demographic_maps.jl](src/demographic_maps.jl), [src/settings.jl](src/settings.jl), [src/mobility.jl](src/mobility.jl), [src/contacts.jl](src/contacts.jl) | Population analyses (Fig 4–7) |
@@ -98,7 +99,7 @@ The figures that are not generated from data (Fig 1–3, 9, 10, and the strategy
 powershell -ExecutionPolicy Bypass -File tools\export_figures.ps1
 ```
 
-This writes a PNG of every figure (300 dpi, cropped to its width and height) to `results/<timestamp>_drawn_figures/`; with `-Tiff`, also as TIFF with LZW compression. The layout of a slide sets the width of its figure (full width 2250 px, text width 1560 px, panel width 750 px). The notes of a slide hold its file name, or `skip` if it is not exported (style sheet).
+This writes a PNG of every figure (300 dpi, cropped to its width and height) to `results/<timestamp>_drawn_figures/`. The layout of a slide sets the width of its figure (full width 2250 px, text width 1560 px, panel width 750 px). The notes of a slide hold its file name, or `skip` if it is not exported (style sheet).
 
 Slides with `panel` in the second line of their notes are panels that the Julia code combines with a plot. Julia reads them from `figures/panels/`, so PowerPoint is not needed to reproduce the results. After changing such a slide, update its panel with `-UpdatePanels`. The code listing of Fig 15 (`Fig_15B_code_listing.png`) is a screenshot of [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl).
 
