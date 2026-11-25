@@ -400,7 +400,7 @@ function commuter_panels(data)
         markeralpha = 0.35,
         # the many small flows over long distances below the fewer, larger ones nearby
         reverse_groups = true,
-        title = "B) Flows between counties")
+        title = "B) Shares of out-commuters")
 
     d = distance_shares(data)
     p_distance = plot_paired_bars(d.reference, d.model, d.labels,
@@ -409,6 +409,7 @@ function commuter_panels(data)
         reference_label = "BA",
         legend = :topright,
         xrotation = PV_TICK_ROTATION)
+    plot!(p_distance, ylabel = "Share of workers")
     return p_pairs, p_distance
 end
 
@@ -554,12 +555,12 @@ function balance_legend!(figure, k, width_in, height_in, max_net)
         peak!(0.05, y - sign(n) * peak_height(n, max_net) / 2, n)
         label!(0.13, y, s)
     end
-    for (x, n) in zip((1.42, 1.78, 2.14), (10_000, 100_000, 200_000))
+    for (x, n) in zip((1.18, 1.49, 1.8), (10_000, 100_000, 200_000))
         peak!(x, base, n)
         label!(x, base - PV_TICK_GAP_IN, "$(n ÷ 1000)k", halign = :center, valign = :top)
     end
 
-    x0 = 2.48
+    x0 = 2.06
     label!(x0, base + 0.24, "Individuals per km²")
     lims = log10.(CV_DENSITY_LIMS)
     bar_width, n = width_in - x0 - 0.02, 100
@@ -596,45 +597,22 @@ end
 
 # 4. FIGURE
 
-"""
-    COMMUTER_PANEL_NOTES
-
-What the values of each panel (A–C) mean, printed in one line below its
-title (`panel_header!`), so that the axes only need to name the source.
-Details (e.g. the distance between the county centres) belong in the
-caption.
-"""
-const COMMUTER_PANEL_NOTES = [
-    "Net commuters and population density per county",
-    "Share of home county's out-commuters",
-    "Share of workers by distance",
-]
 const COMMUTER_MAP_TITLE = "A) Commuting balance (GEMS)"
 
-# width of the commuter figure (inches), between the text width (5.2 in) and the print width of PLOS
-const CV_WIDTH_IN = 6.0
-
-# height of a panel header: title and one line of its note (inches)
-const CV_HEADER_IN = line_height_in(PV_HEADING_FONTSIZE) + PV_TITLE_GAP_IN / 2 +
-    line_height_in(PV_SMALL_FONTSIZE) + PV_TITLE_GAP_IN
+# height of the titles of the panels, distance of the y axis labels of B and C from the axes (inches)
+const CV_HEADER_IN = 0.22
+const CV_YLABEL_IN = 0.33
 
 # legend below the map: its height and its distance from the map (inches)
 const CV_LEGEND_IN = 0.56
 const CV_LEGEND_GAP_IN = 0.04
 
-"""
-    panel_header!(p, title, note, width_in, height_in; offset_in = 0.0)
-
-Draws the header of a panel above its plot area (`width_in` × `height_in`
-inches): the `title` (`title_text!`) at the top of the room `CV_HEADER_IN`,
-and below it the `note` in small font, both starting `offset_in` inches left
-of the plot area.
-"""
-function panel_header!(p, title, note, width_in, height_in; offset_in = 0.0)
-    x = -offset_in / width_in
-    title_text!(p, x, 1 + CV_HEADER_IN / height_in, title, width_in, valign = :top)
-    y = CV_HEADER_IN - line_height_in(PV_HEADING_FONTSIZE) - PV_TITLE_GAP_IN / 2 - line_height_in(PV_SMALL_FONTSIZE) / 2
-    return annotate!(p, (x, 1 + y / height_in), Plots.text(note, PV_SMALL_FONTSIZE, PV_FONT, :left, :vcenter))
+# moves the y axis label of a panel (before `axis_text!`) to `CV_YLABEL_IN` left of its axis
+function align_ylabel!(p, width_in)
+    label = p[1][:yaxis][:guide]
+    plot!(p, yguide = "")
+    return annotate!(p, (-CV_YLABEL_IN / width_in, 0.5), Plots.text(label, PV_FONTSIZE, PV_FONT, :center, :bottom,
+        rotation = 90))
 end
 
 """
@@ -642,7 +620,7 @@ end
 
 Sizes of the commuter figure (`commuter_figure`), in inches, measured from
 the plot areas that Plots computes (fitted by `fit_commuter_layout`):
-- `width_in`: width of the figure (default `CV_WIDTH_IN`)
+- `width_in`: width of the figure (default `FIG_TEXT_WIDTH_IN`)
 - `map_padding_in`, `panel_padding_in`: width of the left and right column
   besides the plot area of the map and of the panels
 - `row_padding_in`: height of the rows of B and C besides their plot areas
@@ -651,18 +629,15 @@ the plot areas that Plots computes (fitted by `fit_commuter_layout`):
   leaves to its legend
 - `map_bottom_mm`: bottom margin of the map, so that its plot area ends
   where the one of C ends
-- `header_offset_in`: distance of the plot areas of B and C from the left
-  edge of their column, where their headers start
 """
 Base.@kwdef struct CommuterLayout
-    width_in::Float64 = CV_WIDTH_IN
+    width_in::Float64 = FIG_TEXT_WIDTH_IN
     map_padding_in::Float64 = 0.05
     panel_padding_in::Float64 = 0.8
     row_padding_in::Vector{Float64} = [0.95, 1.1]
     map_top_in::Float64 = 0.45
     below_in::Float64 = 0.65
     map_bottom_mm::Float64 = 16.5
-    header_offset_in::Float64 = 0.6
 end
 
 with_layout(l::CommuterLayout; changes...) = CommuterLayout(;
@@ -695,10 +670,9 @@ in two columns:
 - right: the flows between counties (B) above the commuting distance (C)
   (`commuter_panels`), with square plot areas
 
-Above each plot area its header (`panel_header!`), for B and C starting at
-the left edge of their column; titles, notes and axis text are placed at
-fixed distances (`axis_text!`), as in the population validation. The panels
-are marked A–C (`mark_panel!`).
+Above each plot area its title, starting at its left edge; titles and axis
+text are placed at fixed distances (`axis_text!`), as in the population
+validation. The panels are marked A–C (`mark_panel!`).
 """
 function build_commuter_figure(data, layout::CommuterLayout; extent = map_extent(), dpi = PV_DPI)
     l = layout
@@ -713,25 +687,25 @@ function build_commuter_figure(data, layout::CommuterLayout; extent = map_extent
     foreach(p -> plot!(p, title = ""), (p_pairs, p_distance))
 
     # axis text of the panels, legend of the distance bands
-    # the y axis label of the flows closer to its tick labels: their width ("0.01%") is overestimated
-    # by about 0.05 in (`text_width_in`)
-    rooms = [axis_text!(p_pairs, s, s, guide_gap_in = PV_GUIDE_GAP_IN - 0.05), axis_text!(p_distance, s, s)]
-    inset_legend!(p_pairs, getfield.(DISTANCE_BANDS, :label), group_colors(length(DISTANCE_BANDS)), s, s)
+    foreach(p -> align_ylabel!(p, s), (p_pairs, p_distance))
+    left = CV_YLABEL_IN + line_height_in(PV_FONTSIZE)
+    rooms = [(left = left, bottom = axis_text!(p, s, s).bottom) for p in (p_pairs, p_distance)]
+    inset_legend!(p_pairs, getfield.(DISTANCE_BANDS, :label), group_colors(length(DISTANCE_BANDS)), s, s, y = 1.0)
 
-    for (k, (p, w, h, offset)) in enumerate(((p_map, map_w, map_h, 0.0), (p_pairs, s, s, l.header_offset_in),
-            (p_distance, s, s, l.header_offset_in)))
-        panel_header!(p, titles[k], COMMUTER_PANEL_NOTES[k], w, h, offset_in = offset)
+    for (k, (p, w, h)) in enumerate(((p_map, map_w, map_h), (p_pairs, s, s), (p_distance, s, s)))
+        title_text!(p, 0, 1 + CV_HEADER_IN / 2h, titles[k], w, valign = :vcenter)
         mark_panel!(p, string('A' + k - 1))
     end
 
-    # margins: Plots adds 2 mm above a plot area without title; the rotated labels of C get some extra
+    # margins: Plots adds 2 mm around a plot area without title; the rotated labels of C get some extra
     # room below (their length is estimated), the right edge some room for the axis label of B
     top = (25.4CV_HEADER_IN - 2) * mm
-    plot!(p_map, top_margin = top, bottom_margin = l.map_bottom_mm * mm, left_margin = 0mm, right_margin = 0mm)
-    for (k, p) in enumerate((p_pairs, p_distance))
-        plot!(p, top_margin = top, right_margin = 4mm)
-        reserve!(p, rooms[k], l.width_in, height_in, cushion_mm = 3, bottom_cushion_mm = 4.5)
+    plot!(p_map, top_margin = top, bottom_margin = l.map_bottom_mm * mm, left_margin = -2mm, right_margin = 0mm)
+    for (p, room, bottom_cushion_mm) in zip((p_pairs, p_distance), rooms, (1.5, 4.5))
+        plot!(p, top_margin = top, right_margin = 1mm)
+        reserve!(p, room, l.width_in, height_in, cushion_mm = 1.5, bottom_cushion_mm = bottom_cushion_mm)
     end
+    foreach(p -> keep_margins!(p, text_scaling(l.width_in, height_in)), (p_map, p_pairs, p_distance))
 
     right = plot(p_pairs, p_distance, layout = grid(2, 1, heights = (s .+ l.row_padding_in) ./ height_in))
     figure = plot(p_map, right,
@@ -745,7 +719,7 @@ function build_commuter_figure(data, layout::CommuterLayout; extent = map_extent
     k = length(figure.subplots) + 1
     plot!(figure, inset = (a, bbox(0.0, 1 + CV_LEGEND_GAP_IN / map_h, 1.0, CV_LEGEND_IN / map_h)), subplot = k)
     balance_legend!(figure, k, map_w, CV_LEGEND_IN, maximum(abs, net_commuters(data.counties)))
-    return figure
+    return set_text_size!(figure)
 end
 
 """
@@ -754,9 +728,8 @@ end
 Adjusts `layout` to the plot areas that Plots computes for the figure
 (`plot_areas`), until all deviations are below `tolerance_in`: the plot
 areas have the sizes of `commuter_sizes`, B and C start at the same
-position, and the map ends where C ends. Warns if a note is (by the
-estimate of `text_width_in`) wider than the room up to the edge of its
-column, or if the legend of the map does not fit below it.
+position, and the map ends where C ends. Warns if the legend of the map
+does not fit below it.
 """
 function fit_commuter_layout(data; layout = CommuterLayout(), extent = map_extent(), iterations = 12, tolerance_in = 0.005)
     l = layout
@@ -769,13 +742,8 @@ function fit_commuter_layout(data; layout = CommuterLayout(), extent = map_exten
         map_bottom, c_bottom = A.top + A.height, C.top + C.height
         deviation = maximum(abs, [A.width - z.map_width, A.height - z.map_width / ratio,
             B.width - z.side, B.height - z.side, C.width - z.side, C.height - z.side, B.left - C.left,
-            map_bottom - c_bottom, B.left - left_width - l.header_offset_in])
+            map_bottom - c_bottom])
         if deviation < tolerance_in
-            rooms = [z.map_width, l.width_in - left_width, l.width_in - left_width]
-            for (k, n) in enumerate(COMMUTER_PANEL_NOTES)
-                text_width_in(n, PV_SMALL_FONTSIZE) <= rooms[k] - 0.1 ||
-                    @warn "The note of panel $('A' + k - 1) may not fit into one line: \"$n\""
-            end
             CV_LEGEND_GAP_IN + CV_LEGEND_IN <= l.below_in ||
                 @warn "The legend of the map does not fit into the room below it."
             return l
@@ -786,8 +754,7 @@ function fit_commuter_layout(data; layout = CommuterLayout(), extent = map_exten
             row_padding_in = (z.side .+ l.row_padding_in) .- [B.height, C.height],
             map_top_in = A.top,
             below_in = z.height - c_bottom,
-            map_bottom_mm = l.map_bottom_mm + 25.4 * (map_bottom - c_bottom),
-            header_offset_in = B.left - left_width)
+            map_bottom_mm = l.map_bottom_mm + 25.4 * (map_bottom - c_bottom))
     end
     @warn "The layout of the commuter figure did not converge in $iterations iterations."
     return l
@@ -796,7 +763,7 @@ end
 """
     commuter_figure(data; layout = fit_commuter_layout(data), dpi = PV_DPI)
 
-Figure of the commuting in GEMS and its validation (`CV_WIDTH_IN` wide), in
+Figure of the commuting in GEMS and its validation (`FIG_TEXT_WIDTH_IN` wide), in
 two columns: the map of the commuting balance and the population density per
 county in GEMS (A, `balance_map`), and beside it the flows between counties
 (B) and the commuting distance (C), both against the BA data. The BA data
@@ -814,7 +781,7 @@ commuter_figure(data; layout = fit_commuter_layout(data), dpi = PV_DPI) =
         county_commutes_df = nothing)
 
 Compares the commutes between counties in GEMS with the BA commuter
-statistics of 30.06.2019 and saves the figure (`commuter_figure`, PNG) and
+statistics of 30.06.2019 and saves the figure (`commuter_figure`, `Fig_07_commuting.png`) and
 its data (CSV) to `folder`. Pass `data` (from `commuter_validation_data` or
 `load_commuter_data`) to redraw the figure without loading the population.
 Otherwise the data come from `sim` (default: the German population), with
@@ -841,6 +808,6 @@ function commuter_validation(;
     save_commuter_data(data, folder)
 
     p = commuter_figure(data)
-    png(p, joinpath(folder, "commuter_validation.png"))
+    save_figure(p, :commuting, folder)
     return p
 end

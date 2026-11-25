@@ -125,7 +125,7 @@ const FIRST_WAVE_PARTS = (
     FIRST_WAVE_PAPER_PARTS
 
 Parts of `scenario_first_wave` whose results go into the paper (Sec. 3.1.1,
-Figs. 10-11): the final runs, the band, the runs with random seed counties, the
+Figs. 11-12): the final runs, the band, the runs with random seed counties, the
 comparison of the municipality mixing, and the figures.
 """
 const FIRST_WAVE_PAPER_PARTS = (:final, :band, :random_seeds, :mixing, :figures)

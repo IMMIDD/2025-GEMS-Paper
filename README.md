@@ -20,13 +20,13 @@ All disease examples share one **reference model**, [models/DE_model_first_wave.
    - [4.4 Progression assignment](#44-progression-assignment)
    - [4.5 Transition durations](#45-transition-durations)
 5. [Example-specific parameterization](#5-example-specific-parameterization)
-   - [5.1 First wave 2020 (Sec. 3.1.1, Fig 10–11)](#51-first-wave-2020-sec-311-fig-1011)
-   - [5.2 Scenario modeling (Sec. 3.2.1, Fig 14–15)](#52-scenario-modeling-sec-321-fig-1415)
-   - [5.3 Parameter sweep (Sec. 3.2.2, Fig 16)](#53-parameter-sweep-sec-322-fig-16)
-   - [5.4 Multi-criteria strategy evaluation (Sec. 3.2.3, Fig 17, Tab 2)](#54-multi-criteria-strategy-evaluation-sec-323-fig-17-tab-2)
-   - [5.5 Performance benchmark (Sec. 3.3, Fig 18)](#55-performance-benchmark-sec-33-fig-18)
+   - [5.1 First wave 2020 (Sec. 3.1.1, Fig 11–12)](#51-first-wave-2020-sec-311-fig-1112)
+   - [5.2 Scenario modeling (Sec. 3.2.1, Fig 15–16)](#52-scenario-modeling-sec-321-fig-1516)
+   - [5.3 Parameter sweep (Sec. 3.2.2, Fig 17)](#53-parameter-sweep-sec-322-fig-17)
+   - [5.4 Multi-criteria strategy evaluation (Sec. 3.2.3, Fig 18, Tab 2)](#54-multi-criteria-strategy-evaluation-sec-323-fig-18-tab-2)
+   - [5.5 Performance benchmark (Sec. 3.3, Fig 19)](#55-performance-benchmark-sec-33-fig-19)
 6. [Population analyses and validation](#6-population-analyses-and-validation)
-   - [6.1 Population and contact figures (Fig 4–7)](#61-population-and-contact-figures-fig-47)
+   - [6.1 Population and contact figures (Fig 4, 6–8)](#61-population-and-contact-figures-fig-4-68)
    - [6.2 Population validation](#62-population-validation)
    - [6.3 Commuting validation](#63-commuting-validation)
 7. [References](#7-references)
@@ -44,10 +44,10 @@ All disease examples share one **reference model**, [models/DE_model_first_wave.
 | [src/figure_style.jl](src/figure_style.jl) | Sizes, fonts, colors, and file names of the figures; titling, combining, and saving of panels |
 | [src/first_wave/](src/first_wave/) | RKI data, imported and introduced infections, intervention phases of March 2020 (fitted contact reductions), calibration, comparison of municipality mixing assumptions, and figures of the first wave example |
 | [src/contacts/](src/contacts/) | POLYMOD contact data: download, contacts per setting layer, household contact sampling (`HouseholdSizeSampling`), age-age matrix of the municipality contacts, derivation of the contact parameters of the config, and scaling of contact parameters |
-| [src/demographics.jl](src/demographics.jl), [src/demographic_maps.jl](src/demographic_maps.jl), [src/settings_map.jl](src/settings_map.jl), [src/settings.jl](src/settings.jl), [src/mobility.jl](src/mobility.jl), [src/contacts.jl](src/contacts.jl) | Population analyses (Fig 4–7) |
+| [src/demographics.jl](src/demographics.jl), [src/demographic_maps.jl](src/demographic_maps.jl), [src/settings_map.jl](src/settings_map.jl), [src/settings.jl](src/settings.jl), [src/mobility.jl](src/mobility.jl), [src/contacts.jl](src/contacts.jl) | Population analyses (Fig 4, 6–8) |
 | [src/population_validation.jl](src/population_validation.jl), [src/setting_validation.jl](src/setting_validation.jl) | Population validation against official statistics: age, sex, households, employment and education, setting sizes ([Section 6.2](#62-population-validation)) |
 | [src/commuter_validation.jl](src/commuter_validation.jl) | Commuting balance and validation against the BA commuter statistics ([Section 6.3](#63-commuting-validation)) |
-| [src/benchmarking.jl](src/benchmarking.jl) | Performance benchmark (Fig 18) |
+| [src/benchmarking.jl](src/benchmarking.jl) | Performance benchmark (Fig 19) |
 | [calibrate_first_wave.jl](calibrate_first_wave.jl) | Calibration of the reference model (transmission scale, generation time, contact factors); not part of `runall()` |
 | [derive_contact_parameters.jl](derive_contact_parameters.jl) | Derivation of the contact parameters of the reference model from POLYMOD; not part of `runall()` |
 | [inputs/](inputs/) | Calibration results read by the scenarios, contact parameters derived from POLYMOD, reference data from official statistics (population, settings, commuting), county income; sources and licenses of every file in [inputs/README.md](inputs/README.md) |
@@ -72,7 +72,7 @@ runall()                  # all analyses and scenarios, written to results/<time
 
 Each example can also be run on its own: `scenario_first_wave()`, `scenario_household_isolation()`, `scenario_sweeping()`, `scenario_testing()`, `benchmark()`, `contacts()`, `demographics()`, `mobility()`, `settinganalyses()`.
 
-With a population of all 16 federal states, `demographics()` also runs the population validation (`population_validation()`) and `mobility()` the commuting validation (`commuter_validation()`). The settings map, the demographic maps, and both validations save their data as CSV files, so the figures can be redrawn without loading the population: `settings_map(data = load_settings_per_pixel(folder))`, `demographic_maps(data = load_county_demographics(folder))`, `population_validation(data = load_validation_data(folder))` and `commuter_validation(data = load_commuter_data(folder))`.
+With a population of all 16 federal states, `demographics()` also runs the population validation (`population_validation()`) and `mobility()` the commuting validation (`commuter_validation()`). The settings map, the demographic maps, the contact patterns, and both validations save their data as CSV files, so the figures can be redrawn without loading the population: `settings_map(data = load_settings_per_pixel(folder))`, `contacts(panels = load_contact_matrices(folder))`, `demographic_maps(data = load_county_demographics(folder))`, `population_validation(data = load_validation_data(folder))` and `commuter_validation(data = load_commuter_data(folder))`.
 
 The first wave example downloads the RKI case data (about 400 MB, checked against a SHA-256 checksum) to `data/` on its first run. Its calibrated contact factors are read from `inputs/`; to recalibrate, run [calibrate_first_wave.jl](calibrate_first_wave.jl). The population validation downloads the KMK class statistics to `data/` on its first run.
 
@@ -119,18 +119,18 @@ This writes a TIFF of the same name next to every PNG (LZW compression, 300 dpi,
 
 | Paper element | Script → function | Config | Population | Horizon | Runs / random seeds |
 |---|---|---|---|---|---|
-| Fig 4–6 (population, demographics, commuting) | `demographics.jl`, `settings.jl`, `mobility.jl` | none | DE | – | – |
-| Population validation | [population_validation.jl](src/population_validation.jl) → `population_validation()` (part of `demographics()`) | none | DE | – | – |
+| Fig 4, 6, 7 (population, demographics, commuting) | `demographics.jl`, `settings.jl`, `mobility.jl` | none | DE | – | – |
+| Fig 5 (population validation) | [population_validation.jl](src/population_validation.jl) → `population_validation()` (part of `demographics()`) | none | DE | – | – |
 | Commuting validation | [commuter_validation.jl](src/commuter_validation.jl) → `commuter_validation()` (part of `mobility()`) | none | DE | – | – |
-| Fig 7 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | reference model, plus uniform and strict mixing in the municipalities | DE | – | 1 day, all members of all settings |
+| Fig 8 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | reference model, plus uniform and strict mixing in the municipalities | DE | – | 1 day, all members of all settings |
 | Contact parameters (Sec. 2.4, reference model) | [derive_contact_parameters.jl](derive_contact_parameters.jl) → `derive_contact_parameters()` | reference model | DE (age weights) | – | – |
-| Sec. 3.1.1 First wave 2020 (Fig 10–11), incl. municipality mixing comparison | [sc_first_wave.jl](src/sc_first_wave.jl) → `scenario_first_wave()` | reference model | DE | 10.02.–31.05.2020 | see [5.1](#51-first-wave-2020-sec-311-fig-1011) |
-| Sec. 3.1.2 RSV immunization 2025/26 (Fig 12–13) | separate repository: [IMMIDD/2025-RSV-scenario](https://github.com/IMMIDD/2025-RSV-scenario) | – | – | – | – |
-| Sec. 3.2.1 Scenario modeling (Fig 14A, baseline readouts Fig 15) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 180 d | 1 per scenario / 0 |
-| Fig 14B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
-| Sec. 3.2.2 Parameter sweep (Fig 16) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 5 / 1–8405 |
-| Sec. 3.2.3 Multi-criteria evaluation (Fig 17, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | NRW | 365 d | 11 per scenario / 0–32 |
-| Sec. 3.3 Performance (Fig 18) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | GEMS defaults | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / 1–11 |
+| Sec. 3.1.1 First wave 2020 (Fig 11–12), incl. municipality mixing comparison | [sc_first_wave.jl](src/sc_first_wave.jl) → `scenario_first_wave()` | reference model | DE | 10.02.–31.05.2020 | see [5.1](#51-first-wave-2020-sec-311-fig-1112) |
+| Sec. 3.1.2 RSV immunization 2025/26 (Fig 13–14) | separate repository: [IMMIDD/2025-RSV-scenario](https://github.com/IMMIDD/2025-RSV-scenario) | – | – | – | – |
+| Sec. 3.2.1 Scenario modeling (Fig 15A, baseline readouts Fig 16) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 180 d | 1 per scenario / 0 |
+| Fig 15B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
+| Sec. 3.2.2 Parameter sweep (Fig 17) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 5 / 1–8405 |
+| Sec. 3.2.3 Multi-criteria evaluation (Fig 18, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | NRW | 365 d | 11 per scenario / 0–32 |
+| Sec. 3.3 Performance (Fig 19) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | GEMS defaults | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / 1–11 |
 
 ## 4. Reference model (COVID-19, wild type, first wave 2020)
 
@@ -263,7 +263,7 @@ All durations are Poisson(λ) distributed, in days. GEMS adds 1 day to every exp
 
 Interventions use the Trigger–Strategy–Measure (TriSM) framework ([Ponge et al. 2024](https://doi.org/10.1109/WSC63780.2024.10838778)), listed as trigger → strategy (condition) → measures (offset).
 
-### 5.1 First wave 2020 (Sec. 3.1.1, Fig 10–11)
+### 5.1 First wave 2020 (Sec. 3.1.1, Fig 11–12)
 
 Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave/). Config: reference model. Calibrated on the RKI cases by symptom onset; compared with the RKI cases by reporting date (also by symptom onset with `diagnostics = true`).
 
@@ -365,7 +365,7 @@ By default, `scenario_first_wave()` runs only the parts of the paper (`FIRST_WAV
 | Age and settings | age groups of cases and deaths, mean age of the infected, share of transmissions per setting type, share of municipality transmissions within the same 10-year age band, expected municipality contacts per member relative to c |
 | Outputs | `sc_first_wave_mixing_summary.csv` (one column per model), `sc_first_wave_mixing_ages.csv`, and the outputs of each variant (`sc_first_wave_mixing_<variant>[_random_seeds]_*.csv`) |
 
-### 5.2 Scenario modeling (Sec. 3.2.1, Fig 14–15)
+### 5.2 Scenario modeling (Sec. 3.2.1, Fig 15–16)
 
 Code: [sc_household_isolation.jl](src/sc_household_isolation.jl). Config: reference model.
 
@@ -383,13 +383,13 @@ Code: [sc_household_isolation.jl](src/sc_household_isolation.jl). Config: refere
 
 All household members, including the symptomatic individual, isolate at home for 14 days. Each new symptomatic household member triggers the strategy again and restarts the 14 days for the whole household.
 
-The baseline run also produces the GEMS readout figure (Fig 15, `Fig_16_baseline_readouts.png`): daily infections, effective reproduction number, household attack rate (household sizes 2–6), infection duration, cumulative disease progressions, progression categories, and maps of the initial reproduction number and the infection fatality per county. The ResultData objects of both runs (style `HouseholdIsolationRD`) are stored in `household_isolation/` in the result folder. They hold the aggregated data that the figures need; of the raw infections, these are the infections per progression category and age group and the deaths per infection per county.
+The baseline run also produces the GEMS readout figure (Fig 16, `Fig_16_baseline_readouts.png`): daily infections, effective reproduction number, household attack rate (household sizes 2–6), infection duration, cumulative disease progressions, progression categories, and maps of the initial reproduction number and the infection fatality per county. The ResultData objects of both runs (style `HouseholdIsolationRD`) are stored in `household_isolation/` in the result folder. They hold the aggregated data that the figures need; of the raw infections, these are the infections per progression category and age group and the deaths per infection per county.
 
 Outputs: `Fig_15_household_isolation.png` (the effect of household isolation above the code listing), `Fig_15A_household_isolation.png` (without the listing), and the readout figure.
 
-The Fig 14B listing ([sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl)) uses the same intervention with GEMS defaults ([Section 5.5](#55-performance-benchmark-sec-33-fig-18)) on 100,000 agents, without a fixed random seed.
+The Fig 15B listing ([sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl)) uses the same intervention with GEMS defaults ([Section 5.5](#55-performance-benchmark-sec-33-fig-19)) on 100,000 agents, without a fixed random seed.
 
-### 5.3 Parameter sweep (Sec. 3.2.2, Fig 16)
+### 5.3 Parameter sweep (Sec. 3.2.2, Fig 17)
 
 Code: [sc_sweeping.jl](src/sc_sweeping.jl). Config: reference model.
 
@@ -412,7 +412,7 @@ To focus on the regime where self-isolation can be decisive, we assume that othe
 
 The heatmap shows the mean R_init per combination. Alongside the data (`sc_sweep_data.csv`) and the figure (`Fig_17_parameter_sweep.png`, with the [drawn](#drawn-figures) strategy; the heatmap alone is `Fig_17B_sweep_heatmap.png`), the scenario writes `sc_sweep_variability.txt`, which summarizes the variability between replicates: the per-cell sample SD across replicates, aggregated over the grid as the pooled SD (root of the mean variance), mean, 95th percentile, and maximum; the per-cell range (maximum − minimum) across replicates, aggregated as its minimum, maximum, mean, and median; the standard error of the cell means; and the number of cells whose replicates lie on both sides of R = 1.
 
-### 5.4 Multi-criteria strategy evaluation (Sec. 3.2.3, Fig 17, Tab 2)
+### 5.4 Multi-criteria strategy evaluation (Sec. 3.2.3, Fig 18, Tab 2)
 
 Code: [sc_testing.jl](src/sc_testing.jl). Config: reference model.
 
@@ -437,13 +437,13 @@ To focus on the regime where tracing can be decisive, we assume that other measu
 | | | Isolate & Test Contacts (not yet detected) | `SelfIsolation(14)` (0); `Test(Antigen)` (0) → negative: *Cancel Isolation* |
 | | | Cancel Isolation | `CancelSelfIsolation` (0) |
 
-The tests in Isolation & Testing have no follow-up: the scenario detects cases without changing the spread, so it differs from Isolation Only only by the random seed. The tracing scenario corresponds to Fig 9 of the paper.
+The tests in Isolation & Testing have no follow-up: the scenario detects cases without changing the spread, so it differs from Isolation Only only by the random seed. The tracing scenario corresponds to Fig 10 of the paper.
 
 The top panels of the figure (`sc_testing_and_observed_progression.png`) show all runs, the bottom panels the run with the median peak day of infections of each scenario. The scenario stores the results of every run (`runs/seed_*/resultdata.jld2`, GEMS `ResultData` in the style `TestingRD`) and writes the outcomes of every run (`sc_testing_outcomes.csv`), their statistics per scenario (`sc_testing_summary.csv`: mean, standard deviation, minimum, maximum, and 95 % confidence interval of the mean), and the daily data of every run (`sc_testing_daily.csv`). If it is interrupted, calling it again with the same `folder` and parameters skips the stored runs.
 
-### 5.5 Performance benchmark (Sec. 3.3, Fig 18)
+### 5.5 Performance benchmark (Sec. 3.3, Fig 19)
 
-GEMS default parameterization ([data/DefaultConf.toml @ 7f3b79e](https://github.com/IMMIDD/GEMS/blob/7f3b79e51752f1d316a836c2e9d78a76d73572fe/data/DefaultConf.toml)), also used for Fig 14B.
+GEMS default parameterization ([data/DefaultConf.toml @ 7f3b79e](https://github.com/IMMIDD/GEMS/blob/7f3b79e51752f1d316a836c2e9d78a76d73572fe/data/DefaultConf.toml)), also used for Fig 15B.
 
 | Parameter | Value |
 |---|---|
@@ -462,12 +462,13 @@ Protocol: one warm-up run, then 11 runs per population (random seeds 1–11), me
 
 No disease parameters are involved. All analyses use the GEMS population model of Germany (84,563,726 individuals, Gesyland).
 
-### 6.1 Population and contact figures (Fig 4–7)
+### 6.1 Population and contact figures (Fig 4, 6–8)
 
 - **Fig 4:** settings map (`demographics()`, `Fig_04_settings_map.png` and `settings_map.csv.gz`). All households, school classes, and offices are counted per pixel of the figure (1 pixel is about 420 m), and the pixels are colored: households from dark gray to black (darker for more households), schools in blue and workplaces in green in pixels with fewer than 150 households. `coloring = household_opacity` draws the households black and partly opaque above schools and workplaces instead.
-- **Fig 5:** demographic maps per county (`demographics()`, `demographic_maps.png` and `demographic_maps.csv`). The values follow the definitions of the GEMS maps: individuals per km² (cadastral area, municipalities without an area in the GEMS shapefile left out), mean size of households with up to 10 members, share of single-person households, mean age, and shares of persons aged 0–14 and 65 or older. Eisenach (16056) is merged into the Wartburgkreis (16063), as in the GEMS county shapes.
-- **Fig 6:** commuting. `mobility()` writes the shares of in- and out-commuters per county as CSV and draws the commuting figure ([Section 6.3](#63-commuting-validation)). The earlier maps of the commuter shares are drawn with `mobility(share_maps = true)`.
-- **Fig 7:** contact patterns, as mean daily contacts per person by age (`contacts()`, `contact_matrices.png` and `contact_matrices.csv`). Every member of every setting draws contacts once with the GEMS sampling functions, and the sums are divided by all persons of the ego's age group. Panels A–C: households, workplaces, and educational settings (uniform mixing), summed over all levels of the setting hierarchy, with the contact parameters of the reference model ([Section 4.2](#42-contacts)). Panels D–F: municipalities with uniform mixing, with the POLYMOD matrix of the reference model, and with strict mixing (own age group only), i.e. the variants of the mixing comparison ([Section 5.1](#51-first-wave-2020-sec-311-fig-1011)). The age groups have five years (top group 85+). The contact matrices of E and F end with the group 70+.
+- **Fig 5:** population validation, see [Section 6.2](#62-population-validation).
+- **Fig 6:** demographic maps per county (`demographics()`, `Fig_06_demographic_maps.png` and `demographic_maps.csv`). The values follow the definitions of the GEMS maps: individuals per km² (cadastral area, municipalities without an area in the GEMS shapefile left out), mean size of households with up to 10 members, share of single-person households, mean age, and shares of persons aged 0–14 and 65 or older. Eisenach (16056) is merged into the Wartburgkreis (16063), as in the GEMS county shapes.
+- **Fig 7:** commuting. `mobility()` writes the shares of in- and out-commuters per county as CSV and draws the commuting figure ([Section 6.3](#63-commuting-validation)). The earlier maps of the commuter shares are drawn with `mobility(share_maps = true)`.
+- **Fig 8:** contact patterns, as mean daily contacts per person by age (`contacts()`, `Fig_08_contact_matrices.png` and `contact_matrices.csv`). Every member of every setting draws contacts once with the GEMS sampling functions, and the sums are divided by all persons of the ego's age group. Panels A–C: households, workplaces, and educational settings (uniform mixing), summed over all levels of the setting hierarchy, with the contact parameters of the reference model ([Section 4.2](#42-contacts)). Panels D–F: municipalities with uniform mixing, with the POLYMOD matrix of the reference model, and with strict mixing (own age group only), i.e. the variants of the mixing comparison ([Section 5.1](#51-first-wave-2020-sec-311-fig-1112)). The age groups have five years (top group 85+). The contact matrices of E and F end with the group 70+.
 
 `demographics()`, `settinganalyses()`, `mobility()`, and `contacts()` use the population of Germany by default, as in the paper. For quick tests, pass a smaller population, e.g. `sim = Simulation(population = "SL")`. The validations then are skipped, as they compare all 16 federal states. `contacts()` also needs the reference model, e.g. `sim = Simulation(configfile = "models/DE_model_first_wave.toml", population = "SL")`.
 
@@ -490,7 +491,7 @@ GEMS has no relationships between household members, so family types are classif
 
 ### 6.3 Commuting validation
 
-`commuter_validation()` ([src/commuter_validation.jl](src/commuter_validation.jl)) compares the commutes between counties in GEMS with the commuter statistics of the Bundesagentur für Arbeit (BA) of 30.06.2019 (employees subject to social insurance) and writes `commuter_validation.png` and its data (`commuter_validation_*.csv`). Reference data: [inputs/README.md](inputs/README.md#commuters-reference-data-for-the-validation-of-commuting).
+`commuter_validation()` ([src/commuter_validation.jl](src/commuter_validation.jl)) compares the commutes between counties in GEMS with the commuter statistics of the Bundesagentur für Arbeit (BA) of 30.06.2019 (employees subject to social insurance) and writes `Fig_07_commuting.png` and its data (`commuter_validation_*.csv`). Reference data: [inputs/README.md](inputs/README.md#commuters-reference-data-for-the-validation-of-commuting).
 
 | Panel | Content |
 |---|---|

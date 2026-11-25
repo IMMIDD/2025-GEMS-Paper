@@ -68,27 +68,23 @@ load_county_demographics(folder) = CSV.read(joinpath(folder, DM_DATA_FILE), Data
 """
     CountyMap
 
-A map of the figure: the `column` of `county_demographics`, the panel `title`
-and its `note` (what the values mean), whether the values are shares, labeled in
-percent (`share`), and whether the color scale is logarithmic (`log_scale`).
+A map of the figure: the `column` of `county_demographics`, the panel `title`,
+whether the values are shares, labeled in percent (`share`), and whether the color scale is logarithmic (`log_scale`).
 """
 Base.@kwdef struct CountyMap
     column::Symbol
-    title::String
-    note::String
+    title::String = ""
     share::Bool = false
     log_scale::Bool = false
 end
 
 const DEMOGRAPHIC_MAPS = [
-    CountyMap(column = :density, title = "Population density", note = "Individuals per km² (log scale)",
-        log_scale = true),
-    CountyMap(column = :household_size, title = "Household size", note = "Mean persons per household"),
-    CountyMap(column = :single_households, title = "Single-person households", note = "Share of households",
-        share = true),
-    CountyMap(column = :mean_age, title = "Age", note = "Mean age in years"),
-    CountyMap(column = :children, title = "Children", note = "Share of population aged 0–14", share = true),
-    CountyMap(column = :elderly, title = "Older people", note = "Share of population aged 65+", share = true),
+    CountyMap(column = :density, title = "Individuals per km²", log_scale = true),
+    CountyMap(column = :household_size, title = "Mean household size"),
+    CountyMap(column = :single_households, title = "Single-person households", share = true),
+    CountyMap(column = :mean_age, title = "Mean age (years)"),
+    CountyMap(column = :children, title = "Children (0–14)", share = true),
+    CountyMap(column = :elderly, title = "Older people (65+)", share = true),
 ]
 
 # colors of the population model: grey, as the population density in the commuter figure (inferno is left
@@ -184,15 +180,15 @@ const DM_COLORBAR_SHARE = 0.75
 const DM_PADDING_MM = 2
 
 """
-    demographic_maps_figure(data; maps = DEMOGRAPHIC_MAPS, width_in = PV_WIDTH_IN, dpi = PV_DPI)
+    demographic_maps_figure(data; maps = DEMOGRAPHIC_MAPS, width_in = FIG_TEXT_WIDTH_IN, dpi = FIG_DPI)
 
 Figure of the `maps` of `data` (`county_demographics`), `DM_COLUMNS` per row
 and `width_in` inches wide (fonts as in the population validation figure).
-Above each map its letter, title and note (`panel_header!`), and to its right
+Above each map its letter and title, and to its right
 its colorbar, which spans the values of all counties. Shows the counties in
 `data` with their land areas (`land_shapes`).
 """
-function demographic_maps_figure(data; maps = DEMOGRAPHIC_MAPS, width_in = PV_WIDTH_IN, dpi = PV_DPI)
+function demographic_maps_figure(data; maps = DEMOGRAPHIC_MAPS, width_in = FIG_TEXT_WIDTH_IN, dpi = FIG_DPI)
     shapes = land_shapes()
     shapes = shapes[in.(shapes.county, Ref(Set(data.county))), :]
     extent = shape_extent(shapes.geometry)
@@ -229,22 +225,8 @@ function demographic_maps_figure(data; maps = DEMOGRAPHIC_MAPS, width_in = PV_WI
         county_map!(figure, i + 1, shapes, values, lims, extent)
         county_colorbar!(figure, canvas, m, lims, x + map_w + DM_COLORBAR_GAP_IN, y + map_h * (1 - DM_COLORBAR_SHARE) / 2,
             DM_COLORBAR_IN, map_h * DM_COLORBAR_SHARE)
-        county_map_header!(figure, canvas, m, 'A' + i - 1, x, y + map_h)
+        canvas_title!(figure, canvas, x, y + map_h + CV_HEADER_IN / 2, 'A' + i - 1, m.title)
     end
-    return figure
-end
-
-# header of a map (as `panel_header!`) in subplot `k` of `figure` (in inches), above its upper left
-# corner (x, y)
-function county_map_header!(figure, k, m::CountyMap, letter, x, y)
-    top = y + CV_HEADER_IN
-    title_y = top - line_height_in(PV_HEADING_FONTSIZE) / 2
-    note_y = top - line_height_in(PV_HEADING_FONTSIZE) - PV_TITLE_GAP_IN / 2 - line_height_in(PV_SMALL_FONTSIZE) / 2
-    dx = text_width_in("$letter)", PV_HEADING_FONTSIZE, bold = true) + 0.3PV_HEADING_FONTSIZE / 72
-    text!(x, y, s, size, font) = annotate!(figure, [(x, y, Plots.text(s, size, font, :left, :vcenter))], subplot = k)
-    text!(x, title_y, "$letter)", PV_HEADING_FONTSIZE, PV_FONT_BOLD)
-    text!(x + dx, title_y, m.title, PV_HEADING_FONTSIZE, PV_FONT)
-    text!(x, note_y, m.note, PV_SMALL_FONTSIZE, PV_FONT)
     return figure
 end
 
@@ -257,7 +239,7 @@ end
         individual_data_df = nothing)
 
 Draws the demographic maps of the population (`demographic_maps_figure`) and
-saves the figure (`demographic_maps.png`) and its data (`demographic_maps.csv`)
+saves the figure (`Fig_06_demographic_maps.png`) and its data (`demographic_maps.csv`)
 to `folder`. Pass `data` (from `county_demographics` or
 `load_county_demographics`) to redraw the figure without loading the
 population. Otherwise the data come from `sim` (default: the German
@@ -284,6 +266,6 @@ function demographic_maps(;
     CSV.write(joinpath(folder, DM_DATA_FILE), data)
 
     p = demographic_maps_figure(data)
-    png(p, joinpath(folder, "demographic_maps.png"))
+    save_figure(p, :demographic_maps, folder)
     return p
 end

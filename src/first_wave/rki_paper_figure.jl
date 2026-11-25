@@ -272,7 +272,7 @@ function plot_paper_figure_1(tbl::DataFrame, daily::DataFrame, weeks;
     end
     bottom, top = corners(last(gems_maps)).bottom, corners(last(rki_maps)).top
     bar = _FIG1_COLORBAR.share * (top - bottom)
-    county_colorbar!(p, canvas, CountyMap(column = :incidence, title = "", note = ""), (0.0, Float64(c)),
+    county_colorbar!(p, canvas, CountyMap(column = :incidence), (0.0, Float64(c)),
         corners(last(rki_maps)).right + _FIG1_COLORBAR.gap, (top + bottom - bar) / 2, _FIG1_COLORBAR.width, bar,
         colors = cmap)
 

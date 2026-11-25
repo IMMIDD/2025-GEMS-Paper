@@ -305,7 +305,7 @@ plot_county_map(df; plotargs...) = agsmap(df;
 function map_colorbar!(p, canvas, k, lims)
     area = plot_corners(p, k, aspect = _FIG1_ASPECT)
     x = area.right + HI_COLORBAR_GAP_IN
-    return county_colorbar!(p, canvas, CountyMap(column = :value, title = "", note = ""), lims,
+    return county_colorbar!(p, canvas, CountyMap(column = :value), lims,
         x, area.bottom, HI_COLORBAR_IN, area.top - area.bottom, colors = cgrad(:inferno))
 end
 
@@ -529,7 +529,7 @@ function plot_baseline_readouts(rd)
     # colorbar of the heatmap
     area = corners(n)
     counts = dataframes(rd)["progression_ages"].count ./ 1e6
-    county_colorbar!(p, canvas, CountyMap(column = :value, title = "", note = ""), extrema(counts),
+    county_colorbar!(p, canvas, CountyMap(column = :value), extrema(counts),
         area.right + RO_COLORBAR_GAP_IN, area.bottom, RO_COLORBAR_IN, area.top - area.bottom, colors = cgrad(:viridis))
     canvas_text!(p, canvas, area.right + RO_COLORBAR_LABEL_IN, (area.bottom + area.top) / 2, "Millions", rotation = 90)
 

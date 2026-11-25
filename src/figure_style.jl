@@ -108,16 +108,40 @@ end
 # width / height in portrait images (measured: the letters of a text of 12 pt)
 const GR_TEXT_SCALE = 1.16
 
+text_scaling(width, height) = 1 / (GR_TEXT_SCALE * min(1, width / height))
+
+"""
+    set_text_size!(p)
+
+Gives the text of the figure `p` its size in print when it is drawn or laid out.
+"""
+function set_text_size!(p)
+    p.attr[:thickness_scaling] = text_scaling(p.attr[:size]...)
+    return p
+end
+
 """
     layout_figure!(p)
 
 Lays out the figure `p`, with the text in its size in print. Required before positions are taken
-from the layout (`plot_corners`).
+from the layout (`plot_corners`). Only for figures without insets that are placed relative to a
+subplot (they move when a figure is laid out twice).
 """
 function layout_figure!(p)
-    width, height = p.attr[:size]
-    p.attr[:thickness_scaling] = 1 / (GR_TEXT_SCALE * min(1, width / height))
-    Plots.prepare_output(p)
+    Plots.prepare_output(set_text_size!(p))
+    return p
+end
+
+"""
+    keep_margins!(p, scaling)
+
+Compensates the margins of the subplot `p` for the correction of the text size (`text_scaling`), which
+also scales the margins and the 2 mm that Plots adds to them.
+"""
+function keep_margins!(p, scaling)
+    for margin in (:left_margin, :top_margin, :right_margin, :bottom_margin)
+        p[1][margin] = (p[1][margin] + 2mm) / scaling - 2mm
+    end
     return p
 end
 
@@ -371,7 +395,7 @@ numbers of pixels; differences of up to two pixels are evened out with white (or
 function figure_image(p)
     width, height = fig_px.(p.attr[:size] ./ 100)
     p.attr[:dpi] = FIG_DPI
-    layout_figure!(p)
+    set_text_size!(p)
     image = mktempdir() do dir
         file = joinpath(dir, "plot.png")
         png(p, file)
