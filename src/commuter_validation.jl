@@ -414,19 +414,22 @@ function commuter_panels(data)
 end
 
 """
-    inset_legend!(p, labels, colors, width_in, height_in; x = 0.04, y = 0.96)
+    inset_legend!(p, labels, colors, width_in, height_in; x = 0.04, y = 0.96,
+        line_in = line_height_in(PV_SMALL_FONTSIZE))
 
 Color legend inside the plot area of `p` (`width_in` × `height_in` inches),
-one entry per line from the relative position (`x`, `y`) downward: a marker
+one entry per line (`line_in` high) from the relative position (`x`, `y`) downward: a marker
 in each of `colors` followed by its label. Works on linear and logarithmic
 axes.
 """
-function inset_legend!(p, labels, colors, width_in, height_in; x = 0.04, y = 0.96)
+function inset_legend!(p, labels, colors, width_in, height_in; x = 0.04, y = 0.96,
+    line_in = line_height_in(PV_SMALL_FONTSIZE))
+
     axis_value(lims, scale, f) = scale == :log10 ? lims[1] * (lims[2] / lims[1])^f : lims[1] + f * (lims[2] - lims[1])
     sp = p[1]
     data_x(f) = axis_value(xlims(p), sp[:xaxis][:scale], f)
     data_y(f) = axis_value(ylims(p), sp[:yaxis][:scale], f)
-    line = line_height_in(PV_SMALL_FONTSIZE) / height_in
+    line = line_in / height_in
     for (k, (l, c)) in enumerate(zip(labels, colors))
         yk = y - (k - 0.5) * line
         # a marker, not a text symbol: GR draws text in the nearest color of its color table

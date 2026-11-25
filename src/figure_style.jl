@@ -154,6 +154,10 @@ char_width(c) = c == '%' ? 0.83 : isdigit(c) ? 0.5 : c in "MW" ? 0.89 : isupperc
 text_width_in(s, size; bold = false) = (bold ? 1.1 : 1.0) * sum(char_width, s; init = 0.0) * size / 72
 line_height_in(size) = 1.2 * size / 72
 
+# width of a bold panel letter ("A)"; I and J are narrower than the other capitals)
+letter_width_in(s, size) = text_width_in(s, size, bold = true) -
+    (startswith(s, "I") ? 0.33 : startswith(s, "J") ? 0.2 : 0.0) * size / 72
+
 """
     title_text!(p, x, y, title, width_in; size = FIG_HEADING_FONTSIZE, valign = :bottom)
 
@@ -168,7 +172,7 @@ function title_text!(p, x, y, title, width_in; size = FIG_HEADING_FONTSIZE, vali
     dx = 0.0
     if !isempty(letter)
         annotate!(p, (x, y), Plots.text(letter, size, FIG_FONT_BOLD, :left, valign))
-        dx = (text_width_in(letter, size, bold = true) + 0.3size / 72) / width_in
+        dx = (letter_width_in(letter, size) + 0.3size / 72) / width_in
     end
     return annotate!(p, (x + dx, y), Plots.text(rest, size, FIG_FONT, :left, valign))
 end
@@ -272,7 +276,7 @@ Draws a panel title (bold letter and title) on the `canvas` of the figure `p`, s
 """
 function canvas_title!(p, canvas, x, y, letter, title)
     canvas_text!(p, canvas, x, y, "$letter)", size = FIG_HEADING_FONTSIZE, font = FIG_FONT_BOLD, halign = :left)
-    x += text_width_in("$letter)", FIG_HEADING_FONTSIZE, bold = true) + 0.3FIG_HEADING_FONTSIZE / 72
+    x += letter_width_in("$letter)", FIG_HEADING_FONTSIZE) + 0.3FIG_HEADING_FONTSIZE / 72
     return canvas_text!(p, canvas, x, y, title, size = FIG_HEADING_FONTSIZE, halign = :left)
 end
 

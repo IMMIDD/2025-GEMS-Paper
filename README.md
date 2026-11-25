@@ -474,7 +474,7 @@ No disease parameters are involved. All analyses use the GEMS population model o
 
 ### 6.2 Population validation
 
-`population_validation()` ([src/population_validation.jl](src/population_validation.jl), setting sizes in [src/setting_validation.jl](src/setting_validation.jl)) compares the population model with official statistics and writes `population_validation.png` and its data (`validation_*.csv`). The reference data are listed with table codes, reference dates, and licenses in [inputs/README.md](inputs/README.md#population-reference-data-for-the-validation-of-the-population-model).
+`population_validation()` ([src/population_validation.jl](src/population_validation.jl), setting sizes in [src/setting_validation.jl](src/setting_validation.jl)) compares the population model with official statistics and writes `Fig_05_population_validation.png` and its data (`validation_*.csv`). The reference data are listed with table codes, reference dates, and licenses in [inputs/README.md](inputs/README.md#population-reference-data-for-the-validation-of-the-population-model).
 
 | Panel | Comparison (Germany) | Reference |
 |---|---|---|

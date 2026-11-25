@@ -1253,7 +1253,7 @@ function plot_paired_bars(reference, model, labels;
         linewidth = 0, label = PV_MODEL_LABEL)
     for i in findall(ismissing, reference)
         annotate!(p, x[i] - w / 2, 0.02ymax,
-            Plots.text("n/a", PV_SMALL_FONTSIZE, PV_FONT, :left, :vcenter, rotation = 90, color = PV_LINE_COLOR))
+            Plots.text("n/a", PV_SMALL_FONTSIZE, PV_FONT, :left, :vcenter, rotation = 90))
     end
     return p
 end
@@ -1383,6 +1383,8 @@ end
         markersize = 4,
         markeralpha = nothing,
         reverse_groups = false,
+        legend_areas = [],
+        label_shifts = Dict{Tuple{String, Bool}, Float64}(),
         kwargs...)
 
 Scatter plot of model values (y) against reference values (x), with the
@@ -1394,8 +1396,8 @@ logarithmic. Values are shares and labeled as percentages, unless
 
 `groups` (one integer from 1 to n per point) colors the points by group
 (`group_colors`); without groups, all points have the model color. The
-legend of the groups is drawn separately (`legend_strip`), so that panels
-with and without groups keep the same size. `markersize` and `markeralpha`
+legend of the groups is drawn separately (`group_legend!`); the labels leave
+its `legend_areas` free (`label_shifts` moves single ones). `markersize` and `markeralpha`
 (default 0.8 without groups, 0.9 with groups) set the points, e.g. small and
 transparent for many points. The groups are drawn in their order, the last
 on top, or with `reverse_groups = true` the first on top.
@@ -1418,6 +1420,8 @@ function plot_agreement(reference, model;
         markersize = 4,
         markeralpha = nothing,
         reverse_groups = false,
+        legend_areas = [],
+        label_shifts = Dict{Tuple{String, Bool}, Float64}(),
         kwargs...)
 
     vals = [reference; model]
@@ -1474,7 +1478,7 @@ function plot_agreement(reference, model;
     summary_width = 0.6 * PV_SMALL_FONTSIZE * length(summary) / panel_width_pt
     blocked = isempty(summary) ? [] : [(0.95 - summary_width, 1.0, 0.0, 0.03 + 1.3 * PV_SMALL_FONTSIZE / panel_height_pt)]
     place_labels!(p, frac.(reference), frac.(model), labels, deviation, unfrac;
-        nlabels = nlabels, blocked = blocked, panel_width_pt = panel_width_pt, panel_height_pt = panel_height_pt)
+        nlabels = nlabels, blocked = [blocked; legend_areas], shifts = label_shifts, panel_width_pt = panel_width_pt, panel_height_pt = panel_height_pt)
 
     isempty(summary) || annotate!(p, unfrac(0.97), unfrac(0.03),
         pv_text(summary, PV_SMALL_FONTSIZE, :right, :bottom))
@@ -1484,7 +1488,8 @@ end
 """
     place_labels!(p, xf, yf, labels, deviation, unfrac;
         nlabels = 3, min_visible = 0.03, blocked = [], panel_width_pt = 145,
-        panel_height_pt = 150, fontsize = PV_SMALL_FONTSIZE)
+        panel_height_pt = 150, fontsize = PV_SMALL_FONTSIZE, shared_distance = 0.13,
+        shifts = Dict{Tuple{String, Bool}, Float64}())
 
 Labels the `nlabels` points with the largest `deviation` in an agreement
 plot, but only those whose distance from the diagonal is visible (at least
@@ -1497,22 +1502,28 @@ Text sizes are estimated from the number of characters and the font size
 relative to the panel size (`panel_width_pt`, `panel_height_pt`). Each label
 tries several positions: next to its point (to the right in the left half
 of the panel, to the left in the right half), then moved away from the
-diagonal in steps, then on the other side, then moved toward the diagonal.
+diagonal in steps, then on the other side, then moved toward the diagonal,
+and finally above or below its point.
 The first position that stays inside the panel, on the same side of the
 diagonal as its point, and does not cover a point, another label or a
 blocked area is used; if there is none, the point stays unlabeled. Labels
 that are not directly next to their point get a faint line to it, which
 cannot cross the diagonal either, since label and point are on the same side.
+Points with the same label on the same side of the diagonal share one label,
+with a line to each of them (`shared_distance`: length of these lines).
+`shifts` moves single labels to the right, by label and whether it is above the
+diagonal (fractions of the axis).
 """
 function place_labels!(p, xf, yf, labels, deviation, unfrac;
         nlabels = 3, min_visible = 0.03, blocked = [], panel_width_pt = 145, panel_height_pt = 150,
-        fontsize = PV_SMALL_FONTSIZE)
+        fontsize = PV_SMALL_FONTSIZE, shared_distance = 0.13, shifts = Dict{Tuple{String, Bool}, Float64}())
 
     pad, inner, step = 0.025, 0.02, 0.07
-    width(s) = 0.48 * fontsize * length(s) / panel_width_pt
-    height = 1.6 * fontsize / panel_height_pt      # line height with some spacing
+    width(s) = 0.45 * fontsize * length(s) / panel_width_pt
+    height = 1.4 * fontsize / panel_height_pt      # line height with some spacing
     dot = 0.015                                 # radius of a point
     taken = Tuple{Float64, Float64, Float64, Float64}[blocked...]
+    lines = Tuple{NTuple{2, Float64}, NTuple{2, Float64}}[]
 
     overlaps(a, b) = a[1] < b[2] && b[1] < a[2] && a[3] < b[4] && b[3] < a[4]
     # a box lies entirely above the diagonal if its lower right corner does,
@@ -1522,6 +1533,10 @@ function place_labels!(p, xf, yf, labels, deviation, unfrac;
         box[1] >= inner && box[2] <= 1 - inner && box[3] >= inner && box[4] <= 1 - inner || return false
         same_side(box, own) || return false
         any(t -> overlaps(box, t), taken) && return false
+        for (a, b) in lines, f in 0:0.05:1
+            x, y = a .+ f .* (b .- a)
+            box[1] - 0.01 < x < box[2] + 0.01 && box[3] - 0.01 < y < box[4] + 0.01 && return false
+        end
         for k in eachindex(xf)
             k == own && continue
             overlaps(box, (xf[k] - dot, xf[k] + dot, yf[k] - dot, yf[k] + dot)) && return false
@@ -1529,9 +1544,42 @@ function place_labels!(p, xf, yf, labels, deviation, unfrac;
         return true
     end
 
+    # faint line from the near edge of a label to just before a point
+    function leader!(box, i)
+        a = (clamp(xf[i], box[1], box[2]), clamp(yf[i], box[3], box[4]))
+        d = (xf[i], yf[i]) .- a
+        r = hypot(d...)
+        b = a .+ (r > 0 ? max(0.0, (r - 1.2dot) / r) : 0.0) .* d
+        push!(lines, (a, b))
+        plot!(p, unfrac.([a[1], b[1]]), unfrac.([a[2], b[2]]),
+            linecolor = :gray, linealpha = 0.5, linewidth = 0.6, label = "")
+    end
+
     # the largest deviations, but only points whose distance from the diagonal is visible
     idx = filter(i -> abs(yf[i] - xf[i]) >= min_visible,
         collect(partialsortperm(deviation, 1:min(nlabels, length(deviation)), rev = true)))
+    # points with the same label on the same side of the diagonal: one label, about `shared_distance` away from
+    # each of them
+    side(i) = yf[i] > xf[i]
+    for (s, above) in unique([(labels[i], side(i)) for i in idx])
+        points = filter(i -> labels[i] == s && side(i) == above, idx)
+        length(points) < 2 && continue
+        w = width(s)
+        best, error = nothing, Inf
+        for x in 0.05:0.01:0.95, y in 0.05:0.01:0.95
+            box = (x - w / 2, x + w / 2, y - height / 2, y + height / 2)
+            all(i -> free(box, i), points) || continue
+            distances = [hypot(xf[i] - clamp(xf[i], box[1], box[2]), yf[i] - clamp(yf[i], box[3], box[4])) for i in points]
+            e = sum(abs2, distances .- shared_distance)
+            e < error && ((best, error) = (box, e))
+        end
+        isnothing(best) && continue
+        push!(taken, best)
+        foreach(i -> leader!(best, i), points)
+        annotate!(p, unfrac((best[1] + best[2]) / 2), unfrac((best[3] + best[4]) / 2), pv_text(s, fontsize, :center))
+        idx = setdiff(idx, points)
+    end
+
     for i in idx
         s, w = labels[i], width(labels[i])
         away = yf[i] < xf[i] ? -1 : 1              # away from the diagonal
@@ -1540,27 +1588,29 @@ function place_labels!(p, xf, yf, labels, deviation, unfrac;
         # away from the diagonal first, then toward it
         for dir in (away, -away), right in (preferred, !preferred), k in (dir == away ? (0:9) : (1:9))
             y = yf[i] + dir * k * step
-            x = xf[i] + (right ? pad : -pad)
+            x = xf[i] + (right ? pad : -pad) + get(shifts, (s, side(i)), 0.0)
             box = right ? (x, x + w, y - height / 2, y + height / 2) : (x - w, x, y - height / 2, y + height / 2)
             if free(box, i)
                 choice = (x = x, y = y, right = right, box = box, leader = k > 0 || right != preferred)
                 break
             end
         end
+        # above or below the point, as centered as possible
+        if isnothing(choice)
+            for dir in (away, -away), k in 1:9, shift in sort(-0.3:0.02:0.3, by = abs)
+                x, y = xf[i] + shift - w / 2, yf[i] + dir * k * step
+                box = (x, x + w, y - height / 2, y + height / 2)
+                if free(box, i)
+                    choice = (x = x, y = y, right = true, box = box, leader = true)
+                    break
+                end
+            end
+        end
         # no free position: leave the point unlabeled rather than covering something
         isnothing(choice) && continue
         push!(taken, choice.box)
 
-        if choice.leader
-            # from the near edge of the text to just before the point
-            x0 = clamp(xf[i], choice.box[1], choice.box[2])
-            y0 = clamp(yf[i], choice.box[3], choice.box[4])
-            dx, dy = xf[i] - x0, yf[i] - y0
-            r = hypot(dx, dy)
-            f = r > 0 ? max(0.0, (r - 1.2dot) / r) : 0.0
-            plot!(p, unfrac.([x0, x0 + f * dx]), unfrac.([y0, y0 + f * dy]),
-                linecolor = :gray, linealpha = 0.5, linewidth = 0.6, label = "")
-        end
+        choice.leader && leader!(choice.box, i)
         annotate!(p, unfrac(choice.x), unfrac(choice.y), pv_text(s, fontsize, choice.right ? :left : :right))
     end
     return p
@@ -1639,18 +1689,22 @@ function activity_indicators(data)
 end
 
 """
-    state_agreement_panels(data; first_letter = 'C')
+    state_agreement_panels(data; first_letter = 'C', size_in = (2.0, 2.0))
 
 Agreement plots of the federal states: share of the national population,
 age structure (10-year groups), household sizes, household family types,
 household senior status and activity indicators (`ACTIVITY_INDICATORS`),
 each GEMS against the reference (axes labeled with the source names
-of `reference_labels(data)`). Returns the panels and, separately, the
-contents of their color legends (`nothing` for the population panel): the
-group labels and a title.
+of `reference_labels(data)`). Their plot areas are `size_in` inches wide and
+high. Returns the panels and, separately, the contents of their color legends
+(`nothing` for the population panel): the group labels, a title, and the order
+of the entries. Wide entries come first where they would reach the points otherwise.
 """
-function state_agreement_panels(data; first_letter = 'C')
+function state_agreement_panels(data; first_letter = 'C', size_in = (2.0, 2.0))
     letter(k) = string(first_letter + k)
+    legend(labels; title = "", order = eachindex(labels)) = (labels = labels, title = title, order = order)
+    longest_first(labels) = sortperm(text_width_in.(labels, PV_SMALL_FONTSIZE), rev = true)
+    sizes = (panel_width_pt = 72size_in[1], panel_height_pt = 72size_in[2])
     sources = reference_labels(data)
 
     # share of the national population
@@ -1667,7 +1721,7 @@ function state_agreement_panels(data; first_letter = 'C')
 
     # shares of categories per state, flattened to one point per state and
     # category, colored by category (labels name the state; the color names the category)
-    function category_panel(df, key, categories, reference_label, title; nlabels = 3)
+    function category_panel(df, key, categories, reference_label, title, legend; nlabels = 3, kwargs...)
         m, r = state_shares(df, key, categories)
         lab = [STATE_NAMES_EN[s] for s in 1:16, _ in eachindex(categories)]
         grp = [c for _ in 1:16, c in eachindex(categories)]
@@ -1678,31 +1732,37 @@ function state_agreement_panels(data; first_letter = 'C')
             summary = "mean |Δ| = $(round(100 * mean(abs.(m .- r)), digits = 2)) pp",
             reference_label = reference_label,
             show_ylabel = false,
-            title = title)
+            legend_areas = legend_areas(legend, size_in...),
+            title = title; sizes..., kwargs...)
     end
 
     age = transform(data.age_sex, :age => (a -> min.(a .÷ 10, 8)) => :group)
     # decades (the oldest group is open-ended); the caption names the 10-year groups
-    age_labels = ["<10"; [string(10g, "s") for g in 1:7]; "80+"]
-    p_age = category_panel(age, :group, 0:8, sources.age_sex, "$(letter(1))) Age groups", nlabels = 4)
+    age_legend = legend(["<10"; [string(10g, "s") for g in 1:7]; "80+"])
+    p_age = category_panel(age, :group, 0:8, sources.age_sex, "$(letter(1))) Age groups", age_legend, nlabels = 4)
 
     hh_sizes = 1:maximum(data.household_sizes.size)
-    hh_labels = category_label.(hh_sizes, last(hh_sizes))
+    hh_legend = legend(category_label.(hh_sizes, last(hh_sizes)), title = "Persons")
     p_hh = category_panel(data.household_sizes, :size, hh_sizes, sources.household_sizes,
-        "$(letter(3))) Household sizes")
+        "$(letter(3))) Household sizes", hh_legend)
 
     # family types: shares of all households, "other" = no core family type (see `FAMILY_TYPES`)
+    types_legend = legend(getfield.(FAMILY_TYPES, :label), order = longest_first(getfield.(FAMILY_TYPES, :label)))
     p_types = category_panel(family_type_counts(data.household_types), :category,
-        getfield.(FAMILY_TYPES, :key), sources.household_types, "$(letter(4))) Household family types")
+        getfield.(FAMILY_TYPES, :key), sources.household_types, "$(letter(4))) Household family types", types_legend,
+        label_shifts = Dict(("Berlin", true) => 0.06))
 
     seniors = getfield.(SENIOR_STATUS, :key)
+    seniors_legend = legend(getfield.(SENIOR_STATUS, :label))
     p_seniors = category_panel(data.senior_status, :category, seniors, sources.senior_status,
-        "$(letter(5))) Household senior status")
+        "$(letter(5))) Household senior status", seniors_legend)
 
     # activity indicators: separate shares of the population, each against its own source
     # (not mutually exclusive in the official data, see `activity_indicators`)
     ind = activity_indicators(data)
     keys_ind = getfield.(ACTIVITY_INDICATORS, :key)
+    activity_labels = getfield.(ACTIVITY_INDICATORS, :label)
+    activity_legend = legend(activity_labels, order = longest_first(activity_labels))
     im = [ind.model[s, k] for s in 1:16, k in keys_ind]
     ir = [ind.reference[s, k] for s in 1:16, k in keys_ind]
     p_activity = plot_agreement(vec(ir), vec(im),
@@ -1711,18 +1771,12 @@ function state_agreement_panels(data; first_letter = 'C')
         summary = "mean |Δ| = $(round(100 * mean(abs.(im .- ir)), digits = 2)) pp",
         reference_label = "Census / Destatis",
         show_ylabel = false,
-        title = "$(letter(2))) Employment and education")
+        legend_areas = legend_areas(activity_legend, size_in...),
+        title = "$(letter(2))) Employment and education"; sizes...)
 
     # persons (population, age, activity), then households (sizes, family types, senior status)
     panels = [p_pop, p_age, p_activity, p_hh, p_types, p_seniors]
-    legends = [
-        nothing,
-        (labels = age_labels, title = "Age"),
-        (labels = getfield.(ACTIVITY_INDICATORS, :label), title = ""),
-        (labels = hh_labels, title = "Persons"),
-        (labels = getfield.(FAMILY_TYPES, :label), title = ""),
-        (labels = getfield.(SENIOR_STATUS, :label), title = ""),
-    ]
+    legends = [nothing, age_legend, activity_legend, hh_legend, types_legend, seniors_legend]
     return panels, legends
 end
 
@@ -1742,11 +1796,16 @@ const PV_TICK_ROTATION = 35
 # distance of tick labels from the axis, and of axis labels from the tick labels (inches)
 const PV_TICK_GAP_IN = 0.03
 const PV_GUIDE_GAP_IN = 0.04
-# distance below a panel title (and below the color legend of an agreement plot, inches)
+# distance below a panel title, room above the agreement plots for their titles (inches)
 const PV_TITLE_GAP_IN = 0.07
-# legend entries: distance from the marker to its label, and between entries (inches)
+const PV_STATE_TITLE_IN = 0.2
+# legend entries: distance from the marker to its label (inches)
 const PV_MARKER_GAP_IN = 0.1
-const PV_ENTRY_GAP_IN = 0.14
+# legends of the agreement plots: position in the plot area (share of its width, inches below its top), height
+# of a line (inches)
+const PV_LEGEND_LEFT = 0.03
+const PV_LEGEND_TOP_IN = 0.03
+const PV_LEGEND_LINE_IN = 0.112
 # name of the reference data in the figure (the sources are named in the caption)
 const PV_REFERENCE_NAME = "Official statistics"
 
@@ -1843,69 +1902,31 @@ function reserve!(p, room, figure_width_in, figure_height_in; cushion_mm = 0.5, 
 end
 
 """
-    legend_flow(legend, width_in)
+    group_legend!(p, legend, width_in, height_in)
 
-Positions of the entries of a color legend (`legend` from
-`state_agreement_panels`: labels and an optional title) that flow like text
-over a width of `width_in` inches: each entry (marker and label) follows the
-previous one and moves to the next line when the line is full. Lines after
-the first start where the entries of the first line start (after the
-title). Returns the start of the entries (`x0`), the line and position
-(inches) of each entry, and the number of lines.
+Color legend of the groups of an agreement plot (`legend` from `state_agreement_panels`)
+in the upper left corner of its plot area (`width_in` × `height_in` inches).
 """
-function legend_flow(legend, width_in)
-    s = PV_SMALL_FONTSIZE
-    x0 = isempty(legend.title) ? 0.0 : text_width_in(legend.title, s) + 0.08
-    positions = Tuple{Int, Float64}[]
-    line, x = 1, x0
-    for l in legend.labels
-        w = PV_MARKER_GAP_IN + text_width_in(l, s)
-        if x > x0 && x + w > width_in
-            line, x = line + 1, x0
-        end
-        push!(positions, (line, x))
-        x += w + PV_ENTRY_GAP_IN
+function group_legend!(p, legend, width_in, height_in)
+    line = PV_LEGEND_LINE_IN / height_in
+    y = 1 - PV_LEGEND_TOP_IN / height_in
+    if !isempty(legend.title)
+        annotate!(p, (PV_LEGEND_LEFT, y - line / 2), Plots.text(legend.title, PV_SMALL_FONTSIZE, PV_FONT, :left, :vcenter))
+        y -= line
     end
-    return (x0 = x0, positions = positions, lines = isempty(positions) ? 0 : last(positions)[1])
-end
-
-legend_lines(legend, width_in) = isnothing(legend) ? 0 : legend_flow(legend, width_in).lines
-
-"""
-    legend_strip(title, legend, width_in, height_in; flow_width_in = width_in)
-
-Strip above an agreement plot: the panel `title` and, below it, the color
-legend of its groups (`legend` from `state_agreement_panels`, or `nothing`):
-an optional legend title followed by the group labels, flowing like text
-(`legend_flow`) over `flow_width_in` inches, which may reach into the space
-between the columns (the strip's plot area is `width_in` wide).
-"""
-function legend_strip(title, legend, width_in, height_in; flow_width_in = width_in)
-    p = plot(framestyle = :none, ticks = false, legend = false, grid = false,
-        xlims = (0, 1), ylims = (0, 1), margin = 0mm, top_margin = -2mm, bottom_margin = -2mm,
-        fontfamily = PV_FONT)
-    title_text!(p, 0.0, 1.0, title, width_in, valign = :top)
-    isnothing(legend) && return p
-
-    s = PV_SMALL_FONTSIZE
-    line = line_height_in(s) / height_in
-    top = 1 - (line_height_in(PV_HEADING_FONTSIZE) + PV_TITLE_GAP_IN) / height_in
-    line_y(r) = top - (r - 0.5) * line
-    flow = legend_flow(legend, flow_width_in)
     colors = group_colors(length(legend.labels))
-    isempty(legend.title) || annotate!(p, 0, line_y(1), Plots.text(legend.title, s, PV_FONT, :left, :vcenter))
-    for (k, (l, (r, x))) in enumerate(zip(legend.labels, flow.positions))
-        # a marker, not a text symbol: GR draws text in the nearest color of its color table
-        scatter!(p, [(x + 0.03) / width_in], [line_y(r)], markercolor = colors[k], markerstrokewidth = 0,
-            markersize = 4)
-        annotate!(p, (x + PV_MARKER_GAP_IN) / width_in, line_y(r), Plots.text(l, s, PV_FONT, :left, :vcenter))
-    end
-    return p
+    return inset_legend!(p, legend.labels[legend.order], colors[legend.order], width_in, height_in,
+        x = PV_LEGEND_LEFT, y = y, line_in = PV_LEGEND_LINE_IN)
 end
 
-# height of a legend strip with `rows` rows of entries (inches)
-strip_height_in(rows) = line_height_in(PV_HEADING_FONTSIZE) + PV_TITLE_GAP_IN +
-    rows * line_height_in(PV_SMALL_FONTSIZE) + PV_TITLE_GAP_IN
+# areas of the lines of a legend drawn by `group_legend!` (x0, x1, y0, y1 as fractions of the axes)
+function legend_areas(legend, width_in, height_in)
+    lines = legend.labels[legend.order]
+    isempty(legend.title) || (lines = [legend.title; lines])
+    right(s) = PV_LEGEND_LEFT + 0.02 + (PV_MARKER_GAP_IN + 1.08 * text_width_in(s, PV_SMALL_FONTSIZE)) / width_in
+    y(r) = 1 - (PV_LEGEND_TOP_IN + r * PV_LEGEND_LINE_IN) / height_in
+    return [(0.0, right(s), y(r), y(r - 1)) for (r, s) in enumerate(lines)]
+end
 
 """
     reference_legend!(p, width_in)
@@ -1936,7 +1957,7 @@ Sizes of the figure of the population validation (`validation_figure`), in
 inches unless noted:
 - `header_in`: section headers; `bar_row_in`: each of the two rows of bar
   charts;
-  `state_row_in`: each row of agreement plots (without its legend strip)
+  `state_row_in`: each row of agreement plots
 - `pyramid_width`: share of the figure width taken by the age pyramid;
   `state_widths`: widths of the three columns of agreement plots (shares)
 - `pyramid_left_mm`, `bars_right_mm`: extra margins (mm) that align the
@@ -1946,14 +1967,15 @@ inches unless noted:
 - `bar_plot_in`: target height of the plot areas of the bar charts
 - `state_gap_mm`, `state_row_gap_mm`: extra space (mm) between the columns
   and between the rows of agreement plots
-- `state_scale`: size of the agreement plots relative to the largest size
-  the width allows; the width they leave free goes into the space between
-  the columns (`state_extra_gap_mm`, fitted)
+- `state_scale`: width of the agreement plots relative to the largest width
+  the figure allows; the width they leave free goes into the space between
+  the columns (`state_extra_gap_mm`, fitted); `state_ratio`: their height
+  relative to their width
 - measured plot areas (`fit_validation_layout`), used to place the axis
   text: `pyramid_size`, `bar_width_in`, `state_side_in`
 """
 Base.@kwdef struct ValidationLayout
-    header_in::Float64 = 0.2
+    header_in::Float64 = FIG_HEADING_IN
     bar_row_in::Float64 = 1.7
     state_row_in::Float64 = 2.4
     pyramid_width::Float64 = 0.3
@@ -1961,14 +1983,15 @@ Base.@kwdef struct ValidationLayout
     pyramid_left_mm::Float64 = 0.0
     bars_right_mm::Float64 = 1.0
     last_bar_bottom_mm::Float64 = 0.0
-    bar_plot_in::Float64 = 0.7
+    bar_plot_in::Float64 = 0.62
     pyramid_size::Tuple{Float64, Float64} = (1.8, 2.8)
     bar_width_in::Float64 = 1.0
     state_side_in::Float64 = 1.9
     state_gap_mm::Float64 = 5.0
-    state_scale::Float64 = 0.95
+    state_scale::Float64 = 0.98
+    state_ratio::Float64 = 0.85
     state_extra_gap_mm::Float64 = 0.0
-    state_row_gap_mm::Float64 = 1.5
+    state_row_gap_mm::Float64 = 0.5
 end
 
 with_layout(l::ValidationLayout; changes...) = ValidationLayout(;
@@ -1984,31 +2007,7 @@ so that `plot_areas` finds it in the figure.
 function build_validation_figure(data, layout::ValidationLayout; dpi = PV_DPI)
     l = layout
 
-    # the agreement plots first, as their axis text and legend strips set the height of the figure;
-    # the first column labels the y axis, the last row the x axis
-    panels, legends = state_agreement_panels(data, first_letter = 'H')
-    panel_right_mm(k) = mod1(k, 3) < 3 ? l.state_gap_mm + l.state_extra_gap_mm : 1.0
-    titles = [p[1][:title] for p in panels]
-    rooms = map(enumerate(panels)) do (k, p)
-        plot!(p, title = "", xlabel = k > 3 ? PV_REFERENCE_NAME : "", ylabel = mod1(k, 3) == 1 ? PV_MODEL_LABEL : "",
-            # square by the layout (`fit_validation_layout`); a fixed aspect ratio would shrink
-            # the plot areas while the layout is fitted
-            aspect_ratio = :auto, top_margin = -2mm,
-            right_margin = panel_right_mm(k) * mm)
-        axis_text!(p, l.state_side_in, l.state_side_in)
-    end
-    # legend strips in rows of their own, so that their plot areas reach across the space between
-    # the columns (markers outside a plot area are clipped). Plots divides a row by the widths of
-    # the plot areas, so each strip gets the width of its panel's plot area plus the space right
-    # of it (Plots adds 2 mm to each side of a plot area): the cells of both rows coincide. Each
-    # strip starts where its panel's plot area starts (`reserve!` leaves `room.left` plus its
-    # cushion of 0.5 mm left of it).
-    strip_left_in(k) = rooms[k].left + 0.5 / 25.4
-    strip_width_in(k) = l.state_side_in + (2 + panel_right_mm(k)) / 25.4
-    strip_rows = [maximum(k -> legend_lines(legends[k], strip_width_in(k) - 0.05), r .+ (1:3)) for r in (0, 3)]
-    strips_in = strip_height_in.(strip_rows)
-    rows = [strips_in[1], l.state_row_in, strips_in[2], l.state_row_in]
-    heights = [l.header_in, 2l.bar_row_in, l.header_in, sum(rows)]
+    heights = [l.header_in, 2l.bar_row_in, l.header_in, 2l.state_row_in]
     width_in, height_in = PV_WIDTH_IN, sum(heights)
 
     # Germany: age pyramid with the reference legend below it, bar charts of households and settings
@@ -2045,26 +2044,30 @@ function build_validation_figure(data, layout::ValidationLayout; dpi = PV_DPI)
     mark_panel!(pyramid, "A")
     foreach(((k, p),) -> mark_panel!(p, string('B' + k - 1)), enumerate(bars))
 
-    # the pyramid spans both rows of bar charts (Plots gives it the bottom padding of the lower row)
-    top = plot(pyramid, plot(bars..., layout = grid(2, 3)),
-        layout = grid(1, 2, widths = [l.pyramid_width, 1 - l.pyramid_width]))
-
-    # State level: agreement plots in two rows of three, each with a strip of title and color
-    # legend above it
-    strips = map(enumerate(panels)) do (k, p)
-        reserve!(p, rooms[k], width_in, height_in)
+    # State level: agreement plots in two rows of three, with their color legends inside; the first column labels
+    # the y axis, the last row the x axis
+    state_size = (l.state_side_in, l.state_ratio * l.state_side_in)
+    panels, legends = state_agreement_panels(data, first_letter = 'H', size_in = state_size)
+    for (k, (p, legend)) in enumerate(zip(panels, legends))
+        plot!(p, xlabel = k > 3 ? PV_REFERENCE_NAME : "", ylabel = mod1(k, 3) == 1 ? PV_MODEL_LABEL : "",
+            # size by the layout (`fit_validation_layout`); a fixed aspect ratio would shrink the plot
+            # areas while the layout is fitted
+            aspect_ratio = :auto,
+            right_margin = (mod1(k, 3) < 3 ? l.state_gap_mm + l.state_extra_gap_mm : 1.0) * mm)
+        panel_title!(p, state_size...)
+        plot!(p, top_margin = (25.4PV_STATE_TITLE_IN - 2) * mm)
+        reserve!(p, axis_text!(p, state_size...), width_in, height_in)
+        isnothing(legend) || group_legend!(p, legend, state_size...)
         k <= 3 && plot!(p, bottom_margin = p[1][:bottom_margin] + l.state_row_gap_mm * mm)
         mark_panel!(p, string('H' + k - 1))
-        s = legend_strip(titles[k], legends[k], strip_width_in(k), strips_in[k <= 3 ? 1 : 2],
-            flow_width_in = strip_width_in(k) - 0.05)
-        # Plots adds 2 mm on each side of a plot area
-        plot!(s, left_margin = (25.4strip_left_in(k) - 2) * mm, right_margin = -2mm)
     end
+
+    # the pyramid spans both rows of bar charts (Plots gives it the bottom padding of the lower row)
+    foreach(p -> keep_margins!(p, text_scaling(width_in, height_in)), [pyramid; bars; panels])
+    top = plot(pyramid, plot(bars..., layout = grid(2, 3)),
+        layout = grid(1, 2, widths = [l.pyramid_width, 1 - l.pyramid_width]))
     row(v) = plot(v..., layout = grid(1, 3, widths = l.state_widths))
-    strip_widths = strip_width_in.(1:3) ./ sum(strip_width_in.(1:3))
-    strip_row(v) = plot(v..., layout = grid(1, 3, widths = strip_widths))
-    bottom = plot(strip_row(strips[1:3]), row(panels[1:3]), strip_row(strips[4:6]), row(panels[4:6]),
-        layout = grid(4, 1, heights = rows ./ sum(rows)))
+    bottom = plot(row(panels[1:3]), row(panels[4:6]), layout = grid(2, 1))
 
     figure = plot(section_header("National level"), top, section_header("State level"), bottom,
         layout = grid(4, 1, heights = heights ./ sum(heights)),
@@ -2080,7 +2083,7 @@ function build_validation_figure(data, layout::ValidationLayout; dpi = PV_DPI)
     plot!(figure, inset = (a, bbox(0.0, 1 + legend_top_in / h, 1.0, legend_height_in / h)), subplot = k,
         framestyle = :none, ticks = false, legend = false, grid = false, xlims = (0, 1), ylims = (0, 1))
     reference_legend!(figure[k], l.pyramid_size[1])
-    return figure
+    return set_text_size!(figure)
 end
 
 # empty series that names a panel by its letter (subplots are copied when plots are combined)
@@ -2108,13 +2111,13 @@ function plot_areas(figure)
 end
 
 """
-    fit_validation_layout(data; layout = ValidationLayout(), iterations = 8, tolerance_in = 0.005)
+    fit_validation_layout(data; layout = ValidationLayout(), iterations = 20, tolerance_in = 0.005)
 
 Adjusts `layout` to the plot areas that Plots computes for the figure
 (`plot_areas`), until all deviations are below `tolerance_in`:
 - the three columns of agreement plots have plot areas of the same width,
-  and their rows are as high as these are wide (square plots: the axes have
-  the same limits)
+  and their rows have `layout.state_ratio` of this width as height (the axes
+  have the same limits)
 - the plot area of the age pyramid starts where those of the agreement
   plots in the first column start
 - the plot areas of the rightmost bar charts end where those of the
@@ -2124,7 +2127,7 @@ Adjusts `layout` to the plot areas that Plots computes for the figure
   age pyramid
 - the sizes used to place the axis text are the measured ones
 """
-function fit_validation_layout(data; layout = ValidationLayout(), iterations = 8, tolerance_in = 0.005)
+function fit_validation_layout(data; layout = ValidationLayout(), iterations = 20, tolerance_in = 0.005)
     l = layout
     for _ in 1:iterations
         a = plot_areas(build_validation_figure(data, l))
@@ -2140,7 +2143,7 @@ function fit_validation_layout(data; layout = ValidationLayout(), iterations = 8
         # x axis of the lower bar charts at the x axis of the pyramid
         shift_bottom = (a["E"].top + a["E"].height) - (a["A"].top + a["A"].height)
         pyramid = (a["A"].width, a["A"].height)
-        deviation = maximum(abs, [widths .- side; a["H"].height - side; a["B"].height - l.bar_plot_in;
+        deviation = maximum(abs, [widths .- side; a["H"].height - l.state_ratio * side; a["B"].height - l.bar_plot_in;
             extra_gap_in - l.state_extra_gap_mm / 25.4;
             shift_left; shift_right; shift_bottom; collect(pyramid .- l.pyramid_size); a["B"].width - l.bar_width_in;
             side - l.state_side_in])
@@ -2149,7 +2152,7 @@ function fit_validation_layout(data; layout = ValidationLayout(), iterations = 8
             bar_row_in = l.bar_row_in - a["B"].height + l.bar_plot_in,
             state_widths = (padding .+ [1, 1, 0] .* extra_gap_in .+ side) ./ PV_WIDTH_IN,
             state_extra_gap_mm = 25.4extra_gap_in,
-            state_row_in = l.state_row_in - a["H"].height + side,
+            state_row_in = l.state_row_in - a["H"].height + l.state_ratio * side,
             pyramid_left_mm = l.pyramid_left_mm + 25.4shift_left,
             bars_right_mm = l.bars_right_mm - 25.4shift_right,
             last_bar_bottom_mm = l.last_bar_bottom_mm + 25.4shift_bottom,
@@ -2171,11 +2174,11 @@ Figure of the population validation at the print width of a PLOS figure
   senior status; shares of households) and the setting panels (E–G,
   `setting_size_panels`)
 - "State level": the agreement plots (`state_agreement_panels`, H–M) in
-  two rows of three, each with its title and color legend above it; the
+  two rows of three, each with its color legend inside; the
   first column labels the y axis (GEMS), the last row the x axis
 
 The reference data are named `PV_REFERENCE_NAME`; the sources belong in the
-caption. The sizes come from `fit_validation_layout`: square agreement plots
+caption. The sizes come from `fit_validation_layout`: agreement plots
 that use the full width, a pyramid that starts at their left edge and bar
 charts that end at their right edge. The height of the figure follows.
 """
@@ -2192,7 +2195,8 @@ validation_figure(data; layout = fit_validation_layout(data), dpi = PV_DPI) =
         individual_data_df = nothing)
 
 Compares the GEMS population with official statistics (`reference`, see
-`VALIDATION_REFERENCES`) and saves the figure (PNG) and its data (CSV) to
+`VALIDATION_REFERENCES`) and saves the figure
+(`Fig_05_population_validation.png`) and its data (CSV) to
 `folder`. Pass `data` (from `validation_data` or
 `load_validation_data`) to redraw the figure without loading the
 population; otherwise `sim` (default: the German population) is used.
@@ -2220,6 +2224,6 @@ function population_validation(;
     save_validation_data(data, folder)
 
     p = validation_figure(data)
-    png(p, joinpath(folder, "population_validation.png"))
+    save_figure(p, :population_validation, folder)
     return p
 end
