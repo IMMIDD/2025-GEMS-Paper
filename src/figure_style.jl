@@ -143,7 +143,102 @@ function section_header(txt; width_in = FIG_FULL_WIDTH_IN - 4 / 25.4, gap_in = 0
 end
 
 
-# 5. IMAGES
+# 5. CANVAS
+# Texts, legends, and colorbars around the plots of a figure are drawn on a transparent canvas in
+# inches above them.
+
+"""
+    plot_corners(p, k; aspect = nothing)
+
+Position (left, right, bottom, top; inches from the lower left corner) of the plot area of the
+subplot `k` of the figure `p`, which must be laid out (`Plots.prepare_output`). `aspect` is its width
+per height, if it is fixed (then it is centered in the area that Plots reserves).
+"""
+function plot_corners(p, k; aspect = nothing)
+    inches(x) = x.value / 25.4
+    area = p[k].plotarea
+    w, h = inches(Plots.width(area)), inches(Plots.height(area))
+    x, y = inches(Plots.left(area)) + w / 2, p.attr[:size][2] / 100 - inches(Plots.top(area)) - h / 2
+    width = isnothing(aspect) ? w : min(w, h * aspect)
+    height = isnothing(aspect) ? h : width / aspect
+    return (left = x - width / 2, right = x + width / 2, bottom = y - height / 2, top = y + height / 2)
+end
+
+"""
+    add_canvas!(p)
+
+Adds a transparent canvas above the figure `p` and returns its subplot number. Its coordinates are
+inches from the lower left corner.
+"""
+function add_canvas!(p)
+    canvas = length(p.subplots) + 1
+    width, height = p.attr[:size] ./ 100
+    plot!(p, inset = bbox(0, 0, 1, 1), subplot = canvas, framestyle = :none, ticks = nothing, legend = false,
+        grid = false, widen = false, margin = -2mm, background_color_subplot = :transparent,
+        background_color_inside = :transparent, xlims = (0, width), ylims = (0, height))
+    return canvas
+end
+
+"""
+    canvas_text!(p, canvas, x, y, txt; size = FIG_FONTSIZE, font = FIG_FONT, halign = :center, rotation = 0)
+
+Draws `txt` at the position (`x`, `y`) of the `canvas` of the figure `p`, vertically centered.
+"""
+canvas_text!(p, canvas, x, y, txt; size = FIG_FONTSIZE, font = FIG_FONT, halign = :center, rotation = 0) =
+    annotate!(p, [(x, y, Plots.text(txt, size, font, halign, :vcenter, rotation = rotation))], subplot = canvas)
+
+"""
+    canvas_title!(p, canvas, x, y, letter, title)
+
+Draws a panel title (bold letter and title) on the `canvas` of the figure `p`, starting at (`x`, `y`).
+"""
+function canvas_title!(p, canvas, x, y, letter, title)
+    canvas_text!(p, canvas, x, y, "$letter)", size = FIG_HEADING_FONTSIZE, font = FIG_FONT_BOLD, halign = :left)
+    x += text_width_in("$letter)", FIG_HEADING_FONTSIZE, bold = true) + 0.3FIG_HEADING_FONTSIZE / 72
+    return canvas_text!(p, canvas, x, y, title, size = FIG_HEADING_FONTSIZE, halign = :left)
+end
+
+
+# sizes of a legend on the canvas (inches): distance of its frame from the axes and from its entries,
+# length of the keys, and distance between keys and labels
+const FIG_LEGEND_GAP_IN = 0.02
+const FIG_LEGEND_PADDING_IN = 0.05
+const FIG_LEGEND_KEY_IN = 0.16
+const FIG_LEGEND_LABEL_GAP_IN = 0.05
+
+"""
+    canvas_legend!(p, canvas, k, labels)
+
+Draws a legend of the series in the subplot `k` of the figure `p` on the `canvas`, in the upper right
+corner of the plot area. `labels` are pairs of the labels of the series and those in the legend.
+"""
+function canvas_legend!(p, canvas, k, labels)
+    area = plot_corners(p, k)
+    row = line_height_in(FIG_SMALL_FONTSIZE)
+    w = FIG_LEGEND_KEY_IN + FIG_LEGEND_LABEL_GAP_IN + 2FIG_LEGEND_PADDING_IN +
+        1.05 * maximum(text_width_in.(last.(labels), FIG_SMALL_FONTSIZE))
+    h = row * length(labels) + 2FIG_LEGEND_PADDING_IN
+    x, top = area.right - FIG_LEGEND_GAP_IN - w, area.top - FIG_LEGEND_GAP_IN
+    plot!(p, x .+ [0, w, w, 0], top .- [0, 0, h, h], subplot = canvas, label = "", seriestype = :shape,
+        fillcolor = :white, linecolor = FIG_COLORS.lightgray, linewidth = 1)
+    for (i, (name, label)) in enumerate(labels)
+        s = first(s for s in p[k].series_list if s[:label] == name)
+        y = top - FIG_LEGEND_PADDING_IN - (i - 0.5) * row
+        key = x .+ FIG_LEGEND_PADDING_IN .+ [0, FIG_LEGEND_KEY_IN]
+        if s[:seriestype] == :shape || !isnothing(s[:fillrange])
+            plot!(p, key[[1, 2, 2, 1]], y .+ 0.3row .* [-1, -1, 1, 1], subplot = canvas, label = "",
+                seriestype = :shape, fillcolor = s[:fillcolor], linewidth = 0, linecolor = s[:fillcolor])
+        else
+            plot!(p, key, [y, y], subplot = canvas, label = "", linecolor = s[:linecolor],
+                linestyle = s[:linestyle], linewidth = 1.5)
+        end
+        canvas_text!(p, canvas, key[2] + FIG_LEGEND_LABEL_GAP_IN, y, label, size = FIG_SMALL_FONTSIZE, halign = :left)
+    end
+    return p
+end
+
+
+# 6. IMAGES
 # Panels from different sources (plots, drawn panels, screenshots) are combined as pixels, so
 # that none of them is resampled.
 
