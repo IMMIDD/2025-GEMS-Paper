@@ -6,6 +6,7 @@ export FIRST_WAVE_PARTS
 export FIRST_WAVE_PAPER_PARTS
 export scenario_first_wave
 export calibrate_first_wave
+export replot_first_wave
 
 
 """
@@ -498,34 +499,36 @@ function _figures_final(folder, s::RKISettings, b)
     png(plot_rki_state_maps(tbl, RKI_MAP_WEEKS, basis = b), png_file("states", "maps"))
 end
 
-# paper figures 1 and 2 of the final runs (reported cases only), with the band of the
-# calibration runs if it exists (figure 2: else with the range of the final runs). Drawn before
-# all other figures: GR maps each new color to an entry of a color table that lasts for the
-# whole Julia session, and once the county maps of the other figures have filled it, colors
-# requested for the first time are drawn wrong (grey annotations come out teal).
-function _figures_paper(folder, s::RKISettings)
+"""
+    replot_first_wave(folder; phase_dates = PHASE_DATES)
+
+Draws the paper figures of the final runs (reported cases only) that `scenario_first_wave()` stored in
+`folder`, without re-running the simulations: `Fig_11_first_wave.png` (see `plot_paper_figure_1`) and
+`Fig_12_first_wave_states.png` (see `plot_paper_figure_2`), with the band of the calibration runs if it
+exists (else with the range of the final runs).
+"""
+function replot_first_wave(folder; phase_dates = PHASE_DATES)
     b = :report
-    file(kind) = joinpath(folder, first_wave_file("final", kind, b))
-    isfile(file("daily")) || return
-    band_file(kind) = joinpath(folder, first_wave_file("band", kind, b))
-    png_file(kind) = joinpath(folder, first_wave_file(kind, "", b, ext = "png"))
-    tbl = _read_counties(file("counties"))
+    file(part, kind) = joinpath(folder, first_wave_file(part, kind, b))
+    isfile(file("final", "daily")) || return
+    read_if_exists(f) = isfile(f) ? CSV.read(f, DataFrame) : nothing
+    tbl = _read_counties(file("final", "counties"))
 
-    png(plot_paper_figure_1(tbl, CSV.read(file("daily"), DataFrame), RKI_MAP_WEEKS,
-            band = isfile(band_file("daily")) ? CSV.read(band_file("daily"), DataFrame) : nothing,
-            phase_dates = s.dates,
-            cutoff = RKI_CUTOFF,
-            basis = b),
-        png_file("paper_figure_1"))
+    p = plot_paper_figure_1(tbl, CSV.read(file("final", "daily"), DataFrame), RKI_MAP_WEEKS,
+        band = read_if_exists(file("band", "daily")),
+        phase_dates = phase_dates,
+        cutoff = RKI_CUTOFF,
+        basis = b)
+    save_figure(p, :first_wave, folder)
 
-    stats_file = joinpath(folder, first_wave_file("final", "stats"))
-    png(plot_paper_figure_2(rki_state_table(tbl, RKI_WEEKS), CSV.read(file("states"), DataFrame),
-            band = isfile(band_file("states")) ? CSV.read(band_file("states"), DataFrame) : nothing,
-            runs = isfile(stats_file) ? nrow(CSV.read(stats_file, DataFrame)) : nothing,
-            cutoff = RKI_CUTOFF,
-            last_day = RKI_LAST_DAY,
-            basis = b),
-        png_file("paper_figure_2"))
+    stats = read_if_exists(joinpath(folder, first_wave_file("final", "stats")))
+    p = plot_paper_figure_2(rki_state_table(tbl, RKI_WEEKS), CSV.read(file("final", "states"), DataFrame),
+        band = read_if_exists(file("band", "states")),
+        runs = isnothing(stats) ? nothing : nrow(stats),
+        cutoff = RKI_CUTOFF,
+        last_day = RKI_LAST_DAY,
+        basis = b)
+    return save_figure(p, :first_wave_states, folder)
 end
 
 # county metrics (Spearman correlations of the windows and single weeks, see `rki_county_metrics`)
@@ -637,7 +640,9 @@ end
 # (and the county metrics) of the parts whose results exist in `folder`
 function _rki_figures(folder, s::RKISettings; diagnostics = false)
     _seeding_summary(folder, s)
-    _figures_paper(folder, s)
+    # before all other figures: GR maps each new color to an entry of a color table that lasts for the whole
+    # Julia session, and once the county maps of the other figures have filled it, new colors are drawn wrong
+    replot_first_wave(folder, phase_dates = s.dates)
     if !diagnostics
         _paper_metrics(folder)
         return

@@ -78,7 +78,7 @@ The first wave example downloads the RKI case data (about 400 MB, checked agains
 
 The contact parameters of the reference model are derived from the POLYMOD survey with [derive_contact_parameters.jl](derive_contact_parameters.jl). It downloads the POLYMOD raw data to `data/polymod/`, writes the parameters and the tables they come from to [inputs/contacts/](inputs/contacts/), and warns about config entries that differ from the derived values.
 
-The parameter sweep stores its results in `sc_sweep_data.csv`; `replot_sweeps(folder)` redraws the figure and rewrites the variability summary from that file without re-running the 8,405 simulations. Likewise, `replot_household_isolation(folder)` redraws the figures of the household isolation scenario, and `replot_testing(folder)` redraws the figure and rewrites the tables of the testing scenario from the stored results of its runs.
+The parameter sweep stores its results in `sc_sweep_data.csv`; `replot_sweeps(folder)` redraws the figure and rewrites the variability summary from that file without re-running the 8,405 simulations. Likewise, `replot_first_wave(folder)` redraws the figures of the first wave, `replot_household_isolation(folder)` redraws the figures of the household isolation scenario, and `replot_testing(folder)` redraws the figure and rewrites the tables of the testing scenario from the stored results of its runs.
 
 For a quick test, the testing scenario also runs with the population of a smaller state and an outbreak in one of its municipalities, e.g. `scenario_testing(population = "SL", municipality = 10042111)` (Beckingen, Saarland).
 
@@ -341,7 +341,7 @@ Code: [sc_first_wave.jl](src/sc_first_wave.jl), [src/first_wave/](src/first_wave
 
 **Parts of the scenario** (`FIRST_WAVE_PARTS`)
 
-By default, `scenario_first_wave()` runs only the parts of the paper (`FIRST_WAVE_PAPER_PARTS`, marked *paper*) and writes the outputs of the paper (cases by reporting date, the paper figures `sc_first_wave_paper_figure_1_reported.png` and `…_2_reported.png`, the seeding summary, the county metrics, and the mixing comparison) and the files they are built from. The other parts can be selected with `parts`, e.g. `scenario_first_wave(parts = (:projections, :figures), diagnostics = true)`; `diagnostics = true` also writes the comparisons by symptom onset and the figures of all parts.
+By default, `scenario_first_wave()` runs only the parts of the paper (`FIRST_WAVE_PAPER_PARTS`, marked *paper*) and writes the outputs of the paper (cases by reporting date, the paper figures `Fig_11_first_wave.png` and `Fig_12_first_wave_states.png`, the seeding summary, the county metrics, and the mixing comparison) and the files they are built from. The other parts can be selected with `parts`, e.g. `scenario_first_wave(parts = (:projections, :figures), diagnostics = true)`; `diagnostics = true` also writes the comparisons by symptom onset and the figures of all parts.
 
 | Part | Setup | Runs / random seeds | Paper |
 |---|---|---|---|

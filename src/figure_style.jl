@@ -6,8 +6,9 @@
 # are drawn at 100 px per inch with font sizes in pt and saved at `FIG_DPI`.
 
 export FIGURE_NUMBERS, figure_name
+export layout_figure!
 export figure_image, load_panel, scale_image
-export title_strip, section_strip, combine_panels, save_figure
+export title_strip, section_strip, stack_sections, combine_panels, save_figure
 
 
 # 1. SIZES (PLOS)
@@ -38,6 +39,13 @@ const FIG_SMALL_FONTSIZE = 8
 
 # thin lines next to section headings
 const FIG_LINE_COLOR = "#9aa0a8"
+
+# headings that span the figure (inches): height of their rows (the text is in the middle), distance of their
+# lines from the text, and distances of the rows from the panels above and below them
+const FIG_HEADING_IN = 0.3
+const FIG_HEADING_GAP_IN = 0.15
+const FIG_HEADING_ABOVE_IN = 0.1
+const FIG_HEADING_BELOW_IN = 0.045
 
 # theme colors of the drawn figures (figures/drawn_figures.pptx): the first four are GEMS colors
 const FIG_COLORS = (
@@ -96,6 +104,23 @@ end
 
 # 4. TEXT
 
+# GR draws text larger than its size in pt: by this factor in landscape images, and by this factor times
+# width / height in portrait images (measured: the letters of a text of 12 pt)
+const GR_TEXT_SCALE = 1.16
+
+"""
+    layout_figure!(p)
+
+Lays out the figure `p`, with the text in its size in print. Required before positions are taken
+from the layout (`plot_corners`).
+"""
+function layout_figure!(p)
+    width, height = p.attr[:size]
+    p.attr[:thickness_scaling] = 1 / (GR_TEXT_SCALE * min(1, width / height))
+    Plots.prepare_output(p)
+    return p
+end
+
 # estimated character widths of Times, as shares of the font size (digits and capitals are wider
 # than the average lowercase letter, bold text by about 10 %)
 const FIG_CHAR_WIDTH = 0.42
@@ -124,20 +149,30 @@ function title_text!(p, x, y, title, width_in; size = FIG_HEADING_FONTSIZE, vali
     return annotate!(p, (x + dx, y), Plots.text(rest, size, FIG_FONT, :left, valign))
 end
 
+# width of a heading as it is drawn (inches)
+function heading_width_in(txt)
+    p = plot(framestyle = :none, ticks = false, legend = false, xlims = (0, 1), ylims = (0, 1), margin = -2mm,
+        size = (100FIG_FULL_WIDTH_IN, 100FIG_HEADING_IN))
+    annotate!(p, 0.5, 0.5, Plots.text(txt, FIG_SECTION_FONTSIZE, FIG_FONT_BOLD, :center, :vcenter))
+    image = figure_image(p)
+    columns = [c for c in axes(image, 2) if any(x -> Plots.Colors.red(x) < 0.5, view(image, :, c))]
+    return (last(columns) - first(columns) + 1) / FIG_DPI
+end
+
 """
-    section_header(txt; width_in = FIG_FULL_WIDTH_IN - 4 / 25.4, gap_in = 0.12)
+    section_header(txt; width_in = FIG_FULL_WIDTH_IN - 4 / 25.4)
 
 Empty subplot carrying the heading of a section of the figure: centered as
 the section titles of the other figures of the paper (e.g.
 `plot_paper_figure_1`), bold and larger than the panel titles, between two
 thin lines that set it apart from them. `width_in` is the width of the
-heading's plot area, `gap_in` the distance of the lines from the (estimated) text.
+heading's plot area.
 """
-function section_header(txt; width_in = FIG_FULL_WIDTH_IN - 4 / 25.4, gap_in = 0.12)
+function section_header(txt; width_in = FIG_FULL_WIDTH_IN - 4 / 25.4)
     p = plot(framestyle = :none, ticks = false, legend = false, grid = false,
         xlims = (0, 1), ylims = (0, 1), margin = 0mm, top_margin = -2mm, bottom_margin = -2mm,
         fontfamily = FIG_FONT)
-    half = (0.5 * text_width_in(txt, FIG_SECTION_FONTSIZE, bold = true) + gap_in) / width_in
+    half = (0.5 * heading_width_in(txt) + FIG_HEADING_GAP_IN) / width_in
     plot!(p, [0, 0.5 - half, NaN, 0.5 + half, 1], fill(0.5, 5), linecolor = FIG_LINE_COLOR, linewidth = 0.6)
     return annotate!(p, 0.5, 0.5, Plots.text(txt, FIG_SECTION_FONTSIZE, FIG_FONT_BOLD, :center, :vcenter))
 end
@@ -151,7 +186,7 @@ end
     plot_corners(p, k; aspect = nothing)
 
 Position (left, right, bottom, top; inches from the lower left corner) of the plot area of the
-subplot `k` of the figure `p`, which must be laid out (`Plots.prepare_output`). `aspect` is its width
+subplot `k` of the figure `p`, which must be laid out (`layout_figure!`). `aspect` is its width
 per height, if it is fixed (then it is centered in the area that Plots reserves).
 """
 function plot_corners(p, k; aspect = nothing)
@@ -162,6 +197,25 @@ function plot_corners(p, k; aspect = nothing)
     width = isnothing(aspect) ? w : min(w, h * aspect)
     height = isnothing(aspect) ? h : width / aspect
     return (left = x - width / 2, right = x + width / 2, bottom = y - height / 2, top = y + height / 2)
+end
+
+# empty cell of a layout (transparent: tick labels of other cells may reach into it)
+empty_panel() = plot(framestyle = :none, ticks = false, legend = false, grid = false, margin = -2mm,
+    background_color_subplot = :transparent, background_color_inside = :transparent)
+
+"""
+    remove_padding!(p)
+
+Removes the paddings that Plots adds around the plot areas of the figure `p` (e.g. for tick labels), so that
+the plot areas fill the cells of the layout. Tick labels reach into the neighboring cells, which must be empty
+there (`empty_panel`).
+"""
+function remove_padding!(p)
+    layout_figure!(p)
+    for sp in p.subplots, (margin, pad) in zip((:left_margin, :top_margin, :right_margin, :bottom_margin), sp.minpad)
+        sp[margin] -= pad / p.attr[:thickness_scaling] # Plots scales the paddings with it
+    end
+    return layout_figure!(p)
 end
 
 """
@@ -199,6 +253,20 @@ function canvas_title!(p, canvas, x, y, letter, title)
 end
 
 
+"""
+    canvas_heading!(p, canvas, y, txt)
+
+Draws the heading of a section (centered between two lines, as `section_header`) on the `canvas` of the figure
+`p` at the height `y`.
+"""
+function canvas_heading!(p, canvas, y, txt)
+    width = p.attr[:size][1] / 100
+    half = 0.5 * heading_width_in(txt) + FIG_HEADING_GAP_IN
+    plot!(p, [0, width / 2 - half, NaN, width / 2 + half, width], fill(y, 5), subplot = canvas, label = "",
+        linecolor = FIG_LINE_COLOR, linewidth = 0.6)
+    return canvas_text!(p, canvas, width / 2, y, txt, size = FIG_SECTION_FONTSIZE, font = FIG_FONT_BOLD)
+end
+
 # sizes of a legend on the canvas (inches): distance of its frame from the axes and from its entries,
 # length of the keys, and distance between keys and labels
 const FIG_LEGEND_GAP_IN = 0.02
@@ -207,27 +275,33 @@ const FIG_LEGEND_KEY_IN = 0.16
 const FIG_LEGEND_LABEL_GAP_IN = 0.05
 
 """
-    canvas_legend!(p, canvas, k, labels)
+    canvas_legend!(p, canvas, k, labels; row_in = line_height_in(FIG_SMALL_FONTSIZE), padding_in = FIG_LEGEND_PADDING_IN)
 
 Draws a legend of the series in the subplot `k` of the figure `p` on the `canvas`, in the upper right
-corner of the plot area. `labels` are pairs of the labels of the series and those in the legend.
+corner of the plot area. `labels` are pairs of the labels of the series and those in the legend,
+`row_in` and `padding_in` the height of its rows and the distance of its frame from them (inches).
 """
-function canvas_legend!(p, canvas, k, labels)
+function canvas_legend!(p, canvas, k, labels; row_in = line_height_in(FIG_SMALL_FONTSIZE),
+    padding_in = FIG_LEGEND_PADDING_IN)
+
     area = plot_corners(p, k)
-    row = line_height_in(FIG_SMALL_FONTSIZE)
-    w = FIG_LEGEND_KEY_IN + FIG_LEGEND_LABEL_GAP_IN + 2FIG_LEGEND_PADDING_IN +
+    w = FIG_LEGEND_KEY_IN + FIG_LEGEND_LABEL_GAP_IN + 2padding_in +
         1.05 * maximum(text_width_in.(last.(labels), FIG_SMALL_FONTSIZE))
-    h = row * length(labels) + 2FIG_LEGEND_PADDING_IN
+    h = row_in * length(labels) + 2padding_in
     x, top = area.right - FIG_LEGEND_GAP_IN - w, area.top - FIG_LEGEND_GAP_IN
     plot!(p, x .+ [0, w, w, 0], top .- [0, 0, h, h], subplot = canvas, label = "", seriestype = :shape,
         fillcolor = :white, linecolor = FIG_COLORS.lightgray, linewidth = 1)
     for (i, (name, label)) in enumerate(labels)
         s = first(s for s in p[k].series_list if s[:label] == name)
-        y = top - FIG_LEGEND_PADDING_IN - (i - 0.5) * row
-        key = x .+ FIG_LEGEND_PADDING_IN .+ [0, FIG_LEGEND_KEY_IN]
+        y = top - padding_in - (i - 0.5) * row_in
+        key = x .+ padding_in .+ [0, FIG_LEGEND_KEY_IN]
         if s[:seriestype] == :shape || !isnothing(s[:fillrange])
-            plot!(p, key[[1, 2, 2, 1]], y .+ 0.3row .* [-1, -1, 1, 1], subplot = canvas, label = "",
-                seriestype = :shape, fillcolor = s[:fillcolor], linewidth = 0, linecolor = s[:fillcolor])
+            plot!(p, key[[1, 2, 2, 1]], y .+ 0.3row_in .* [-1, -1, 1, 1], subplot = canvas, label = "",
+                seriestype = :shape, fillcolor = s[:fillcolor], fillalpha = s[:fillalpha], linewidth = 0,
+                linecolor = s[:fillcolor], linealpha = s[:fillalpha])
+        elseif s[:seriestype] == :scatter
+            scatter!(p, [sum(key) / 2], [y], subplot = canvas, label = "", markercolor = s[:markercolor],
+                markeralpha = s[:markeralpha], markersize = 1.4 * s[:markersize], markerstrokewidth = 0)
         else
             plot!(p, key, [y, y], subplot = canvas, label = "", linecolor = s[:linecolor],
                 linestyle = s[:linestyle], linewidth = 1.5)
@@ -297,6 +371,7 @@ numbers of pixels; differences of up to two pixels are evened out with white (or
 function figure_image(p)
     width, height = fig_px.(p.attr[:size] ./ 100)
     p.attr[:dpi] = FIG_DPI
+    layout_figure!(p)
     image = mktempdir() do dir
         file = joinpath(dir, "plot.png")
         png(p, file)
@@ -328,15 +403,39 @@ function title_strip(title, width; height_in = 0.25, offset_in = 0.0)
 end
 
 """
-    section_strip(txt, width; height_in = 0.3)
+    section_strip(txt, width)
 
 Strip of `width` pixels with the heading of a section (see `section_header`).
 """
-function section_strip(txt, width; height_in = 0.3)
+function section_strip(txt, width)
     width_in = width / FIG_DPI
-    strip = section_header(txt, width_in = width_in, gap_in = 0.25)
-    plot!(strip, left_margin = -2mm, right_margin = -2mm, size = (100width_in, 100height_in))
+    strip = section_header(txt, width_in = width_in)
+    plot!(strip, left_margin = -2mm, right_margin = -2mm, size = (100width_in, 100FIG_HEADING_IN))
     return figure_image(strip)
+end
+
+# image without the empty (white) rows at its top and bottom
+function trim_rows(image)
+    rows = [r for r in axes(image, 1) if any(!=(FIG_WHITE), view(image, r, :))]
+    return image[first(rows):last(rows), :]
+end
+
+"""
+    stack_sections(sections)
+
+Places sections of a figure (pairs of a heading and the pixels below it) below each other, with the spacing of
+all headings that span a figure (`FIG_HEADING_ABOVE_IN`, `FIG_HEADING_BELOW_IN`).
+"""
+function stack_sections(sections)
+    width = size(last(first(sections)), 2)
+    space(inches) = white_image(fig_px(inches), width)
+    images = []
+    for (k, (heading, image)) in enumerate(sections)
+        k > 1 && push!(images, space(FIG_HEADING_ABOVE_IN))
+        push!(images, section_strip(heading, width), space(FIG_HEADING_BELOW_IN), trim_rows(image))
+    end
+    push!(images, space(FIG_HEADING_BELOW_IN))
+    return combine_panels(images, direction = :vertical)
 end
 
 """
