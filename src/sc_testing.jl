@@ -1,6 +1,7 @@
 export TestingRD
 export calc_outcomes
 export outcome_df
+export comparison_df
 export daily_df
 export summary_df
 
@@ -20,7 +21,8 @@ export replot_testing
 Result data of the testing scenarios: only what the figure and the outcome tables
 need, so that all runs can be stored (`exportJLD`) and loaded again
 (`import_resultdata`). Of the compartment periods, it holds the sums over all
-infections.
+infections. The tests are only held per day, except for the isolations after
+false positive tests (see `false_positive_isolations`).
 """
 mutable struct TestingRD <: ResultDataStyle
     data::Dict{String, Any}
@@ -37,7 +39,9 @@ mutable struct TestingRD <: ResultDataStyle
                 "r0" => r0(pP),
                 "total_quarantines" => total_quarantines(pP),
                 "total_tests" => total_tests(pP),
-                "detection_rate" => detection_rate(pP)),
+                "detection_rate" => detection_rate(pP),
+                "false_positive_isolations" => false_positive_isolations(pP),
+                "members" => count_members(sim)),
             "dataframes" => Dict(
                 "tick_cases" => tick_cases(pP),
                 "effectiveR" => effectiveR(pP),
@@ -53,9 +57,84 @@ mutable struct TestingRD <: ResultDataStyle
     end
 end
 
+# number of workers (with an office) and students (with a class of any educational setting)
+count_members(sim::Simulation) = Dict(
+    "workers" => count(is_working, individuals(sim)),
+    "students" => count(is_student, individuals(sim)))
+
+"""
+    false_positive_isolations(pP::PostProcessor)
+
+Number of individuals who were isolated after a false positive test, and the days they
+spent in isolation because of it. An isolation starts with the test and ends with the next
+test of the individual or after the isolation duration. Days on which the individual also
+tests negative do not count, since the negative result ends the isolation on the same day.
+
+Assumes that all tested individuals isolate, and that a negative test ends the isolation, as in the
+tracing scenario. The isolation duration is taken from the strategies of the simulation.
+"""
+function false_positive_isolations(pP::PostProcessor)
+    tests = testsDF(pP)
+    false_positive = tests.test_result .& .!tests.infected
+    any(false_positive) || return Dict("individuals" => 0, "days" => 0)
+
+    sim = simulation(pP)
+    isolations = [measure(m) for s in strategies(sim) for m in measures(s) if measure(m) isa SelfIsolation]
+    isolation_duration = only(unique(GEMS.duration.(isolations)))
+
+    # all tests of the individuals with a false positive test, one row per individual and day
+    ids = Set(tests.id[false_positive])
+    days = combine(groupby(tests[in.(tests.id, Ref(ids)), [:id, :test_tick, :test_result, :infected]], [:id, :test_tick]),
+        :test_result => all => :positive,
+        :infected => first => :infected)
+    sort!(days, [:id, :test_tick])
+
+    individuals = Set{eltype(days.id)}()
+    isolation_days = 0
+    for k in eachindex(days.id)
+        days.positive[k] && !days.infected[k] || continue
+        start = Int(days.test_tick[k])
+        stop = min(start + isolation_duration, Int(tick(sim)))
+        if k < nrow(days) && days.id[k + 1] == days.id[k]
+            stop = min(stop, Int(days.test_tick[k + 1]))
+        end
+        push!(individuals, days.id[k])
+        isolation_days += stop - start
+    end
+    return Dict("individuals" => length(individuals), "days" => isolation_days)
+end
+
 ###
 ### DATA ANALYSIS
 ###
+
+# first day of the maximum of the daily infections
+peak_day(rd) = tick_cases(rd).tick[argmax(tick_cases(rd).exposed_cnt)]
+
+# days from the day on which 5% of all infections have occurred to the day on which 95% have occurred
+function wave_duration(rd)
+    cases = tick_cases(rd)
+    total = cumsum(cases.exposed_cnt)
+    day(share) = cases.tick[findfirst(>=(share * total[end]), total)]
+    return day(0.95) - day(0.05)
+end
+
+# daily antigen tests (`nothing` without tests)
+antigen_tests(rd) = get(tick_tests(rd), "Antigen Test", nothing)
+
+# total over all days of a column of the daily counts of individuals, or of the difference of two columns
+total_days(rd, col) = sum(compartment_fill(rd)[!, col])
+total_days(rd, col, minus) = total_days(rd, col) - total_days(rd, minus)
+
+# `x` per member of the `group` ("workers" or "students"), `missing` if their number is not known
+per_member(x, rd, members, group) = x / get(get(sim_data(rd), "members", members), group, missing)
+
+# `key` of the isolations after false positive tests (0 without false positives, `missing` if not stored)
+function false_positive_isolation(rd, key)
+    sum(detected_tick_cases(rd).false_positives) == 0 && return 0
+    haskey(sim_data(rd), "false_positive_isolations") || return missing
+    return sim_data(rd)["false_positive_isolations"][key]
+end
 
 """
     calc_outcomes(rds; kwargs...)
@@ -84,12 +163,31 @@ function calc_outcomes(rds; kwargs...)
 end
 
 """
-    outcome_df(rds)
+    outcome_df(rds; members = Dict())
 
 Builds a dataframe with main simulation outcomes of each of the `rds`
-that come out of `run_testing_sims()` (one row per run).
+that come out of `run_testing_sims()` (one row per run). Among them:
+
+- `peak_day`, `max_daily_infections`: day and height of the peak of the daily infections
+- `wave_duration`: days between 5% and 95% of all infections
+- `max_undetected_infections`: maximum of the active infections that are not detected (dark figure)
+- `max_quarantined`: maximum of the individuals in isolation or quarantine on one day
+- `max_daily_tests`, `test_positivity`: maximum of the daily tests and share of positive results
+  (`missing` without tests)
+- `false_positives`: number of positive test results of individuals who are not infected
+- `false_positive_isolated`, `false_positive_isolation_days`: individuals isolated after a false positive test
+  and the days they spent in isolation because of it (see `false_positive_isolations`; `missing` for runs that
+  were stored without them)
+- `workdays_absent`, `schooldays_absent`: days on which workers (students) are isolated, severely ill, or in hospital.
+  They are the sum of `..._isolated_infected` and `..._isolated_not_infected` (isolated, and infected or not infected
+  on that day; together `lost_workdays` and `lost_schooldays`) and `..._ill_not_isolated` (severely ill or in
+  hospital without isolation). Students are the members of all classes, and every day of the week counts.
+- `max_absent_workers`, `max_absent_students`: maximum of the absent workers (students) on one day
+- `max_absent_workers_share`, `max_absent_students_share`, `lost_workdays_per_worker`, `lost_schooldays_per_student`:
+  the same and the lost days, divided by the number of workers (students) in the population. For runs that were stored
+  without these numbers, they are taken from `members` (`missing` if empty).
 """
-function outcome_df(rds)
+function outcome_df(rds; members = Dict())
     df = calc_outcomes(rds,
         label = label,
         seed = rd -> sim_data(rd)["seed"],
@@ -118,7 +216,35 @@ function outcome_df(rds)
         severe_days = rd -> sum(compartment_periods(rd).severe),
         hospital_days = rd -> sum(compartment_periods(rd).hospitalized),
         icu_days = rd -> sum(compartment_periods(rd).icu),
-        ventilation_days = rd -> sum(compartment_periods(rd).ventilated)
+        ventilation_days = rd -> sum(compartment_periods(rd).ventilated),
+        peak_day = peak_day,
+        max_daily_infections = rd -> maximum(tick_cases(rd).exposed_cnt),
+        wave_duration = wave_duration,
+        max_undetected_infections = rd -> maximum(compartment_fill(rd).exposed_cnt .+
+            compartment_fill(rd).infectious_cnt .- compartment_fill(rd).detected_cnt),
+        max_quarantined = rd -> maximum(cumulative_quarantines(rd).quarantined),
+        max_daily_tests = rd -> isnothing(antigen_tests(rd)) ? 0 : maximum(antigen_tests(rd).total_tests),
+        test_positivity = rd -> isnothing(antigen_tests(rd)) ? missing :
+            sum(antigen_tests(rd).positive_tests) / sum(antigen_tests(rd).total_tests),
+        false_positives = rd -> sum(detected_tick_cases(rd).false_positives),
+        false_positive_isolated = rd -> false_positive_isolation(rd, "individuals"),
+        false_positive_isolation_days = rd -> false_positive_isolation(rd, "days"),
+        workdays_absent = rd -> total_days(rd, :unable_to_attend_workers),
+        workdays_isolated_infected = rd -> total_days(rd, :isolated_workers),
+        workdays_isolated_not_infected = rd -> total_days(rd, :quarantined_workers, :isolated_workers),
+        workdays_ill_not_isolated = rd -> total_days(rd, :unable_to_attend_workers, :quarantined_workers),
+        schooldays_absent = rd -> total_days(rd, :unable_to_attend_students),
+        schooldays_isolated_infected = rd -> total_days(rd, :isolated_students),
+        schooldays_isolated_not_infected = rd -> total_days(rd, :quarantined_students, :isolated_students),
+        schooldays_ill_not_isolated = rd -> total_days(rd, :unable_to_attend_students, :quarantined_students),
+        max_absent_workers = rd -> maximum(compartment_fill(rd).unable_to_attend_workers),
+        max_absent_students = rd -> maximum(compartment_fill(rd).unable_to_attend_students),
+        max_absent_workers_share = rd ->
+            per_member(maximum(compartment_fill(rd).unable_to_attend_workers), rd, members, "workers"),
+        max_absent_students_share = rd ->
+            per_member(maximum(compartment_fill(rd).unable_to_attend_students), rd, members, "students"),
+        lost_workdays_per_worker = rd -> per_member(sum(cumulative_quarantines(rd).workers), rd, members, "workers"),
+        lost_schooldays_per_student = rd -> per_member(sum(cumulative_quarantines(rd).students), rd, members, "students")
     )
     return DataFrames.select(df, :label, :seed, :) # label and seed first
 end
@@ -157,18 +283,50 @@ end
 """
     summary_df(outcomes)
 
-Summarizes the `outcomes` of all runs (from `outcome_df()`) per strategy and
-metric: number of runs, mean, standard deviation, minimum, maximum, and
+Summarizes the `outcomes` of all runs (from `outcome_df()` or `comparison_df()`) per strategy
+and metric: number of runs with a value, mean, standard deviation, minimum, maximum, and
 95% confidence interval of the mean.
 """
 function summary_df(outcomes)
     rows = [(label = lab, metric = metric,
-            values = Float64.(outcomes[outcomes.label .== lab, metric]))
+            values = Float64.(collect(skipmissing(outcomes[outcomes.label .== lab, metric]))))
         for metric in names(outcomes, Not(:label, :seed)) for lab in unique(outcomes.label)]
     return DataFrame(map(rows) do r
-        stats = GEMS.aggregate_values(r.values)
-        (label = r.label, metric = r.metric, runs = length(r.values), mean = stats["mean"], std = stats["std"],
-            min = stats["min"], max = stats["max"], lower_95 = stats["lower_95"], upper_95 = stats["upper_95"])
+        stats = isempty(r.values) ? Dict() : GEMS.aggregate_values(r.values)
+        stat(key) = get(stats, key, missing)
+        (label = r.label, metric = r.metric, runs = length(r.values), mean = stat("mean"), std = stat("std"),
+            min = stat("min"), max = stat("max"), lower_95 = stat("lower_95"), upper_95 = stat("upper_95"))
+    end)
+end
+
+"""
+    comparison_df(outcomes; strategy = "Isolation, Testing & Tracing")
+
+Compares the `strategy` with each of the other strategies of the `outcomes` (from `outcome_df()`), one row
+per repetition of `run_testing_sims()` (in the order of the random seeds): averted infections, deaths, and
+lost workdays and schooldays, additional tests, and additional tests per averted infection, death, lost workday, and
+lost schoolday.
+"""
+function comparison_df(outcomes; strategy = "Isolation, Testing & Tracing")
+    runs(lab) = sort(outcomes[outcomes.label .== lab, :], :seed)
+    a = runs(strategy)
+    return reduce(vcat, map(filter(!=(strategy), unique(outcomes.label))) do lab
+        b = runs(lab)
+        k = 1:min(nrow(a), nrow(b))
+        averted(metric) = b[k, metric] .- a[k, metric]
+        additional_tests = -averted(:total_tests)
+        DataFrame(
+            label = "$strategy vs. $lab",
+            seed = a.seed[k],
+            averted_infections = averted(:total_infections),
+            averted_deaths = averted(:deaths),
+            averted_lost_workdays = averted(:lost_workdays),
+            averted_lost_schooldays = averted(:lost_schooldays),
+            additional_tests = additional_tests,
+            tests_per_averted_infection = additional_tests ./ averted(:total_infections),
+            tests_per_averted_death = additional_tests ./ averted(:deaths),
+            tests_per_averted_lost_workday = additional_tests ./ averted(:lost_workdays),
+            tests_per_averted_lost_schoolday = additional_tests ./ averted(:lost_schooldays))
     end)
 end
 
@@ -455,7 +613,7 @@ end
 
 # run of the strategy `lab` with the median peak day of infections (lower median)
 function typical_run(rds, lab)
-    runs = sort(filter(rd -> label(rd) == lab, rds), by = rd -> argmax(tick_cases(rd).exposed_cnt))
+    runs = sort(filter(rd -> label(rd) == lab, rds), by = peak_day)
     return runs[cld(length(runs), 2)]
 end
 
@@ -628,7 +786,7 @@ function scenario_testing(;
 end
 
 """
-    replot_testing(folder)
+    replot_testing(folder; population = nothing)
 
 Generates the figure and the tables of the testing scenario from the `ResultData` objects
 that `scenario_testing()` stored in `folder`, without re-running the simulations:
@@ -637,8 +795,12 @@ that `scenario_testing()` stored in `folder`, without re-running the simulations
 - `sc_testing_outcomes.csv`: outcomes of every run (see `outcome_df`)
 - `sc_testing_daily.csv`: daily data of every run (see `daily_df`)
 - `sc_testing_summary.csv`: statistics of the outcomes over the runs of a strategy (see `summary_df`)
+- `sc_testing_comparison.csv`: statistics of the comparison of tracing with the other strategies (see `comparison_df`)
+
+For runs that were stored without the number of workers and students, these are taken from the other runs in `folder`
+or counted in the `population` (e.g., `"NRW"`), if provided.
 """
-function replot_testing(folder)
+function replot_testing(folder; population = nothing)
 
     # load the result data objects (sorted by seed)
     rds = [import_resultdata(joinpath(f, "resultdata.jld2"))
@@ -647,9 +809,15 @@ function replot_testing(folder)
     # plot results
     save_figure(plot_scenario_testing(rds), :testing_scenarios, folder)
 
+    # number of workers and students for runs that were stored without them
+    stored = [sim_data(rd)["members"] for rd in rds if haskey(sim_data(rd), "members")]
+    members = !isempty(stored) ? first(stored) :
+        isnothing(population) ? Dict() : count_members(Simulation(population = population))
+
     # extract KPIs and daily data, store as CSV
-    outcomes = outcome_df(rds)
+    outcomes = outcome_df(rds, members = members)
     CSV.write(joinpath(folder, "sc_testing_outcomes.csv"), outcomes)
     CSV.write(joinpath(folder, "sc_testing_summary.csv"), summary_df(outcomes))
+    CSV.write(joinpath(folder, "sc_testing_comparison.csv"), summary_df(comparison_df(outcomes)))
     CSV.write(joinpath(folder, "sc_testing_daily.csv"), daily_df(rds))
 end
