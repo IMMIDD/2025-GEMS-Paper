@@ -144,18 +144,20 @@ function run_sweeps(;
         outvals = outvals)
 end
 
-# size of the heatmap (inches): next to the panel of the strategy (2.5 in) and a gap, it fills the page
-const SWEEP_WIDTH_IN = 4.9
-const SWEEP_HEIGHT_IN = 3.2
+# figure at text width: the drawn strategy at 90 % of its size, and the heatmap with its colour bar
+# title in the remaining width, both without white margins at the sides
+const SWEEP_STRATEGY_SCALE = 0.9
+const SWEEP_HEIGHT_IN = 2.6
 const SWEEP_GAP_IN = 0.1
+const SWEEP_COLORBAR_TITLE = "Initial reproduction number"
 
 """
-    plot_sweeps(df)
+    plot_sweeps(df; width_in = 3.0)
 
-Generates a GEMS heatmap from a dataframe with xvals, yvals, and outvals.
-Requires the input of `run_sweeps()`.
+Generates a GEMS heatmap from a dataframe with xvals, yvals, and outvals, `width_in` wide.
+Requires the input of `run_sweeps()`. The colour bar has no title (see `sweep_heatmap`).
 """
-function plot_sweeps(df)
+function plot_sweeps(df; width_in = 3.0)
 
     # tick labels every 10 % (the y axis starts with 0 % at the top)
     ticks(vals) = [(k, string(round(Int, 100v))) for (k, v) in enumerate(vals) if round(100v, digits = 6) % 10 == 0]
@@ -164,7 +166,7 @@ function plot_sweeps(df)
     return gemsheatmap(df.xvals, df.yvals, df.outvals,
         xlabel = "Fraction of asymptomatic cases (%)",
         ylabel = "Probability of adherence (%)",
-        colorbar_title = "\nInitial reproduction number",
+        colorbar_title = "",
         xrev = false,
         yrev = true,
         xticks = axis(sort(unique(df.xvals))),
@@ -176,24 +178,45 @@ function plot_sweeps(df)
         colorbar_tickfontsize = FIG_SMALL_FONTSIZE,
         colorbar_titlefontsize = FIG_FONTSIZE,
         tick_direction = :out,
-        right_margin = 3mm,
-        size = (100SWEEP_WIDTH_IN, 100SWEEP_HEIGHT_IN))
+        right_margin = 0mm,
+        size = (100width_in, 100SWEEP_HEIGHT_IN))
+end
+
+"""
+    sweep_heatmap(df, width)
+
+Pixels of the heatmap of `plot_sweeps` with its colour bar title, `width` pixels wide without
+white margins at the sides. The labels take a fixed width, so the width of the plot is corrected
+until the image fits.
+"""
+function sweep_heatmap(df, width)
+    image(w) = add_colorbar_title(trim_columns(figure_image(plot_sweeps(df, width_in = w))), SWEEP_COLORBAR_TITLE)
+    w = width / FIG_DPI
+    heatmap = image(w)
+    for _ in 1:5
+        size(heatmap, 2) == width && break
+        w += (width - size(heatmap, 2)) / FIG_DPI
+        heatmap = image(w)
+    end
+    return heatmap
 end
 
 """
     save_sweep_figure(df, folder)
 
-Saves the figure of the paper (`Fig_17_parameter_sweep.png`: the strategy, drawn in
-`figures/drawn_figures.pptx`, and the heatmap of `plot_sweeps`) and the heatmap alone
-(`Fig_17B_sweep_heatmap.png`) in `folder`.
+Saves the figure of the paper (`Fig_17_parameter_sweep.png`, text width: the strategy, drawn in
+`figures/drawn_figures.pptx` and shown at 90 % of its size, and the heatmap of `sweep_heatmap`)
+and the heatmap alone (`Fig_17B_sweep_heatmap.png`) in `folder`.
 """
 function save_sweep_figure(df, folder)
-    heatmap = figure_image(plot_sweeps(df))
+    strategy = load_panel(joinpath(FIG_PANEL_FOLDER, figure_name(:parameter_sweep, panel = "A", name = "sweep_strategy") * ".png"))
+    strategy = trim_columns(scale_image(strategy, round(Int, SWEEP_STRATEGY_SCALE * size(strategy, 2))))
+
+    heatmap = sweep_heatmap(df, fig_px(FIG_TEXT_WIDTH_IN) - size(strategy, 2) - fig_px(SWEEP_GAP_IN))
     save_figure(heatmap, :parameter_sweep, folder, panel = "B", panel_name = "sweep_heatmap")
 
-    strategy = load_panel(joinpath(FIG_PANEL_FOLDER, figure_name(:parameter_sweep, panel = "A", name = "sweep_strategy") * ".png"))
     titles = combine_panels([
-        title_strip("A) Self-isolation strategy", size(strategy, 2), offset_in = 0.06),
+        title_strip("A) Self-isolation strategy", size(strategy, 2)),
         title_strip("B) Parameter sweep", size(heatmap, 2))], gap_in = SWEEP_GAP_IN)
     panels = combine_panels([strategy, heatmap], gap_in = SWEEP_GAP_IN, align = :center)
     return save_figure(combine_panels([titles, panels], direction = :vertical), :parameter_sweep, folder)

@@ -360,6 +360,37 @@ end
 
 white_image(height, width) = fill(FIG_WHITE, height, width)
 
+"""
+    trim_columns(image)
+
+`image` without the white columns at its left and right edge.
+"""
+function trim_columns(image)
+    used = findall(c -> any(!=(FIG_WHITE), view(image, :, c)), axes(image, 2))
+    return image[:, first(used):last(used)]
+end
+
+"""
+    add_colorbar_title(image, title; gap_in = 0.06, width_in = 0.16)
+
+Adds `title` to the right of the `image` of a plot with a colour bar that was drawn without a
+colour bar title: rotated, `gap_in` to the right of the image (the tick labels of the bar), and
+centered on the bar (the rightmost column in which more than half of the pixels are colored).
+GR places its own colour bar titles at a fixed distance from the bar, which overlaps the tick
+labels of narrow bars, or is far from them with a leading line break.
+"""
+function add_colorbar_title(image, title; gap_in = 0.06, width_in = 0.16)
+    colored(p) = max(p.r, p.g, p.b) - min(p.r, p.g, p.b) > 0.3
+    bar = findlast(c -> count(colored, view(image, :, c)) > size(image, 1) / 2, axes(image, 2))
+    isnothing(bar) && throw(ArgumentError("The image has no colour bar."))
+    rows = findall(colored, view(image, :, bar))
+    center = (first(rows) + last(rows)) / 2
+    strip = plot(framestyle = :none, ticks = false, legend = false, grid = false, xlims = (0, 1), ylims = (0, 1),
+        widen = false, margin = -2mm, size = (100width_in, 100size(image, 1) / FIG_DPI), fontfamily = FIG_FONT)
+    annotate!(strip, 0.5, 1 - center / size(image, 1), Plots.text(title, FIG_FONTSIZE, FIG_FONT, :center, :vcenter, rotation = 90))
+    return combine_panels([image, figure_image(strip)], gap_in = gap_in)
+end
+
 # drawn panels and screenshots that are combined with plots
 const FIG_PANEL_FOLDER = joinpath(dirname(@__DIR__), "figures", "panels")
 
