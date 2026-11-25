@@ -188,10 +188,11 @@ end
 
 # PLOTTING
 
+# stages in the GEMS colors, as in the other figures
 const _STAGES = [
-    (:initialization_time, "Initialization", :steelblue),
-    (:simulation_time, "Simulation", :darkorange),
-    (:post_processing_time, "Post-processing", :seagreen)]
+    (:initialization_time, "Initialization", gemscolors(3)[1]),
+    (:simulation_time, "Simulation", gemscolors(3)[2]),
+    (:post_processing_time, "Post-processing", gemscolors(3)[3])]
 
 # fonts and print size of the population validation figure
 _bench_style() = (
@@ -281,10 +282,13 @@ function plot_benchmarks(summary::DataFrame; speedup = nothing, physical_cores =
         for (i, (s, title, color)) in enumerate(_STAGES)]
 
     # 2x2: the size of four agreement plots of the population validation figure; row: its width
-    grid || return plot(ps..., layout = (1, 3), size = (100PV_WIDTH_IN, 240), dpi = PV_DPI, right_margin = 2mm)
-    push!(ps, plot_thread_speedup(speedup; physical_cores = physical_cores, on_the_fly = on_the_fly,
+    grid && push!(ps, plot_thread_speedup(speedup; physical_cores = physical_cores, on_the_fly = on_the_fly,
         title = "D) Speedup by threads"))
-    return plot(ps..., layout = (2, 2), size = (500, 480), dpi = PV_DPI, right_margin = 2mm)
+
+    # panel letters in bold, as in the population validation figure (plot areas about 1.75 in square)
+    foreach(p -> (panel_title!(p, 1.75, 1.75); plot!(p, top_margin = 5mm)), ps)
+    grid || return plot(ps..., layout = (1, 3), size = (100PV_WIDTH_IN, 260), dpi = PV_DPI, right_margin = 2mm)
+    return plot(ps..., layout = (2, 2), size = (500, 500), dpi = PV_DPI, right_margin = 2mm)
 end
 
 # TEMPORARY: single-panel alternative to `plot_benchmarks` for comparison; delete once the figure is decided
