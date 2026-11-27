@@ -35,10 +35,11 @@ const BENCHMARK_CONFIG = "models/DE_model_first_wave.toml"
 """
     machine_info()
 
-Returns a one-row DataFrame with the hardware, Julia and GEMS versions, and Julia threads of this process.
+Returns a one-row DataFrame with the hardware, the Julia and GEMS versions (GEMS repository, branch,
+and tree from the Manifest), the commit of this repository, and the Julia threads of this process.
 """
 function machine_info()
-    return DataFrame(
+    return DataFrame(;
         cpu = strip(Sys.cpu_info()[1].model),
         physical_cores = try GEMS.CpuId.cpucores() catch; missing end,
         cpu_threads = Sys.CPU_THREADS,
@@ -46,7 +47,31 @@ function machine_info()
         os = string(Sys.KERNEL),
         julia_version = string(VERSION),
         gems_version = string(pkgversion(GEMS)),
+        _gems_source()...,
+        repo_commit = _repo_commit(),
         julia_threads = Threads.nthreads())
+end
+
+# GEMS entry of the active Manifest: repository, branch (or commit), and tree hash
+function _gems_source()
+    entry = try
+        TOML.parsefile(joinpath(dirname(Base.active_project()), "Manifest.toml"))["deps"]["GEMS"][1]
+    catch
+        Dict()
+    end
+    return (gems_repo = get(entry, "repo-url", missing), gems_rev = get(entry, "repo-rev", missing),
+        gems_tree = get(entry, "git-tree-sha1", missing))
+end
+
+# commit of this repository, with "-dirty" if tracked files have uncommitted changes
+function _repo_commit()
+    dir = dirname(Base.active_project())
+    return try
+        commit = readchomp(`git -C $dir rev-parse --short HEAD`)
+        isempty(readchomp(`git -C $dir status --porcelain --untracked-files=no`)) ? commit : commit * "-dirty"
+    catch
+        missing
+    end
 end
 
 # keyword arguments, name, and type of a population: a population model code or an on-the-fly size
@@ -86,6 +111,8 @@ function _timed_run(p, seed, configfile)
     post_live = Base.gc_live_bytes()
     # post-processing with the LightRD style (fewer analyses), timed separately
     light_t = @timed ResultData(sim; style = "LightRD")
+    # infection duration from exposure to removal (days), outside the timings
+    inf = infections(proc_t.value)
     return (
         model = _population_name(p),
         type = _population_type(p),
@@ -93,6 +120,7 @@ function _timed_run(p, seed, configfile)
         threads = Threads.nthreads(),
         pop_size = length(individuals(sim)),
         infections = total_infections(proc_t.value),
+        mean_infection_duration = mean(inf.removed_tick .- inf.tick),
         initialization_time = init_t.time,
         simulation_time = sim_t.time,
         post_processing_time = proc_t.time,
@@ -185,6 +213,7 @@ function summarize_benchmarks(runs::DataFrame)
     return combine(groupby(runs, [:model, :type, :threads]),
         :pop_size => median => :pop_size,
         :infections => median => :infections,
+        :mean_infection_duration => median => :mean_infection_duration,
         nrow => :runs,
         [s => f => Symbol("$(s)_$(n)") for s in [:initialization_time, :simulation_time, :post_processing_time, :post_processing_light_time]
             for (n, f) in [("median", median), ("q25", x -> q(x, 0.25)), ("q75", x -> q(x, 0.75))]]...,
