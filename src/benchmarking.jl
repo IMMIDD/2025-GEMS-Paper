@@ -111,8 +111,8 @@ function _timed_run(p, seed, configfile)
     post_live = Base.gc_live_bytes()
     # post-processing with the LightRD style (fewer analyses), timed separately
     light_t = @timed ResultData(sim; style = "LightRD")
-    # infection duration from exposure to removal (days), outside the timings
-    inf = infections(proc_t.value)
+    # infection duration from exposure to recovery (days), as in the GEMS infection duration plot
+    periods = aggregated_compartment_periods(proc_t.value)
     return (
         model = _population_name(p),
         type = _population_type(p),
@@ -120,7 +120,7 @@ function _timed_run(p, seed, configfile)
         threads = Threads.nthreads(),
         pop_size = length(individuals(sim)),
         infections = total_infections(proc_t.value),
-        mean_infection_duration = mean(inf.removed_tick .- inf.tick),
+        mean_infection_duration = sum(periods.duration .* periods.total) / sum(periods.total),
         initialization_time = init_t.time,
         simulation_time = sim_t.time,
         post_processing_time = proc_t.time,
