@@ -446,7 +446,7 @@ The outcomes are defined in `outcome_df()`. The duration of the wave is the numb
 
 ### 5.5 Performance benchmark (Sec. 3.3, Fig 19)
 
-Code: [benchmarking.jl](src/benchmarking.jl). Config: reference model.
+Code: [benchmarking.jl](src/benchmarking.jl). Config: reference model. `benchmark(configfile = nothing)` runs the same protocol with the GEMS default parameterization instead, for comparison; `benchmark_machine.csv` records the config.
 
 | Parameter | Reference model | This example |
 |---|---|---|

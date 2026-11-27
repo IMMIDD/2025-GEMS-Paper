@@ -27,7 +27,8 @@ const BENCHMARK_SYNTHETIC_SIZES = [100_000, 1_000_000, 5_000_000, 10_000_000, 20
 """
     BENCHMARK_CONFIG
 
-Config of the benchmark: the reference model, run for 365 days with 0.1 % initial infections.
+Default config of the benchmark: the reference model, run for 365 days with 0.1 % initial
+infections. `configfile = nothing` runs the GEMS defaults with the same settings.
 """
 const BENCHMARK_CONFIG = "models/DE_model_first_wave.toml"
 
@@ -56,14 +57,15 @@ _population_name(p::Integer) = "Size_$p"
 _population_type(::AbstractString) = "Gesyland"
 _population_type(::Integer) = "Synthetic"
 
-# reference model with 0.1 % initial infections, run for 365 days
-_benchmark_simulation(; kwargs...) = Simulation(; configfile = BENCHMARK_CONFIG, infected_fraction = 0.001,
-    stop_criterion = TimesUp(limit = 365), kwargs...)
+# config (`nothing`: GEMS defaults) with 0.1 % initial infections, run for 365 days
+_benchmark_simulation(configfile; kwargs...) = Simulation(;
+    (isnothing(configfile) ? (;) : (configfile = configfile,))...,
+    infected_fraction = 0.001, stop_criterion = TimesUp(limit = 365), kwargs...)
 
 # compiles both population paths (on-the-fly and population model) before anything is timed
-function _warm_up()
+function _warm_up(configfile)
     for kwargs in ((;), (population = "SL",))
-        sim = _benchmark_simulation(; kwargs...)
+        sim = _benchmark_simulation(configfile; kwargs...)
         run!(sim)
         ResultData(sim)
     end
@@ -72,9 +74,9 @@ end
 
 # one timed run; initialization covers reading the (already downloaded) population and settings
 # files up to the ready simulation; live memory is measured after a full GC outside the timings
-function _timed_run(p, seed)
+function _timed_run(p, seed, configfile)
     GC.gc()
-    init_t = @timed _benchmark_simulation(; seed = seed, _population_kwargs(p)...)
+    init_t = @timed _benchmark_simulation(configfile; seed = seed, _population_kwargs(p)...)
     sim = init_t.value
     sim_t = @timed run!(sim)
     GC.gc()
@@ -103,38 +105,41 @@ function _timed_run(p, seed)
 end
 
 """
-    run_sims(; populations = BENCHMARK_POPULATIONS, synthetic_sizes = BENCHMARK_SYNTHETIC_SIZES, num_runs = 11)
+    run_sims(; populations = BENCHMARK_POPULATIONS, synthetic_sizes = BENCHMARK_SYNTHETIC_SIZES, num_runs = 11, configfile = BENCHMARK_CONFIG)
 
 Runs the benchmark `num_runs` times (random seeds 1 to `num_runs`) for each population model and
 on-the-fly population size, after a warm-up. Returns a DataFrame with one row per run.
 """
-function run_sims(; populations = BENCHMARK_POPULATIONS, synthetic_sizes = BENCHMARK_SYNTHETIC_SIZES, num_runs::Int = 11)
+function run_sims(; populations = BENCHMARK_POPULATIONS, synthetic_sizes = BENCHMARK_SYNTHETIC_SIZES, num_runs::Int = 11,
+    configfile = BENCHMARK_CONFIG)
     # download population files before timing anything
     foreach(GEMS.obtain_remote_files, populations)
-    _warm_up()
-    rows = [_timed_run(p, seed) for p in vcat(populations, synthetic_sizes) for seed in 1:num_runs]
+    _warm_up(configfile)
+    rows = [_timed_run(p, seed, configfile) for p in vcat(populations, synthetic_sizes) for seed in 1:num_runs]
     return DataFrame(rows)
 end
 
 # timed runs of one Julia process for `run_thread_speedup`, written to `out`
-function _speedup_worker(populations, num_runs, out)
+function _speedup_worker(populations, num_runs, out, configfile)
     foreach(GEMS.obtain_remote_files, filter(p -> p isa AbstractString, populations))
-    _warm_up()
-    CSV.write(out, DataFrame([_timed_run(p, seed) for p in populations for seed in 1:num_runs]))
+    _warm_up(configfile)
+    CSV.write(out, DataFrame([_timed_run(p, seed, configfile) for p in populations for seed in 1:num_runs]))
 end
 
 """
-    run_thread_speedup(; populations = ["RP"], threads = [1, 2, 4, 8, 16, 32, 64, 128], num_runs = 5, folder = mktempdir())
+    run_thread_speedup(; populations = ["RP"], threads = [1, 2, 4, 8, 16, 32, 64, 128], num_runs = 5, folder = mktempdir(),
+        configfile = BENCHMARK_CONFIG)
 
 Runs the benchmark for each population with each number of threads, in one Julia process per
 thread count (the thread count is fixed at startup). Returns a DataFrame with one row per run.
 """
-function run_thread_speedup(; populations = ["RP"], threads = [1, 2, 4, 8, 16, 32, 64, 128], num_runs::Int = 5, folder = mktempdir())
+function run_thread_speedup(; populations = ["RP"], threads = [1, 2, 4, 8, 16, 32, 64, 128], num_runs::Int = 5, folder = mktempdir(),
+    configfile = BENCHMARK_CONFIG)
     project = dirname(Base.active_project())
     files = String[]
     for n in threads
         out = joinpath(folder, "speedup_$(n)_threads.csv")
-        code = "using GEMSPaper; GEMSPaper._speedup_worker($(repr(populations)), $num_runs, $(repr(out)))"
+        code = "using GEMSPaper; GEMSPaper._speedup_worker($(repr(populations)), $num_runs, $(repr(out)), $(repr(configfile)))"
         run(`$(Base.julia_cmd()) --project=$project --threads=$n -e $code`)
         push!(files, out)
     end
@@ -142,8 +147,8 @@ function run_thread_speedup(; populations = ["RP"], threads = [1, 2, 4, 8, 16, 3
 end
 
 # peak memory of one run in a fresh process, written to `out`
-function _peak_memory_worker(population, out)
-    sim = _benchmark_simulation(; _population_kwargs(population)...)
+function _peak_memory_worker(population, out, configfile)
+    sim = _benchmark_simulation(configfile; _population_kwargs(population)...)
     run!(sim)
     rss_sim = Sys.maxrss()
     ResultData(sim)
@@ -156,15 +161,16 @@ function _peak_memory_worker(population, out)
 end
 
 """
-    run_peak_memory(population = "DE"; threads = Threads.nthreads(), folder = mktempdir())
+    run_peak_memory(population = "DE"; threads = Threads.nthreads(), folder = mktempdir(), configfile = BENCHMARK_CONFIG)
 
 Peak resident memory of one run (simulation and post-processing) of `population` in a fresh
 Julia process, as the RAM a machine needs. Returns a one-row DataFrame.
 """
-function run_peak_memory(population = "DE"; threads::Int = Threads.nthreads(), folder = mktempdir())
+function run_peak_memory(population = "DE"; threads::Int = Threads.nthreads(), folder = mktempdir(),
+    configfile = BENCHMARK_CONFIG)
     population isa AbstractString && GEMS.obtain_remote_files(population)
     out = joinpath(folder, "peak_memory.csv")
-    code = "using GEMSPaper; GEMSPaper._peak_memory_worker($(repr(population)), $(repr(out)))"
+    code = "using GEMSPaper; GEMSPaper._peak_memory_worker($(repr(population)), $(repr(out)), $(repr(configfile)))"
     run(`$(Base.julia_cmd()) --project=$(dirname(Base.active_project())) --threads=$threads -e $code`)
     return CSV.read(out, DataFrame)
 end
@@ -458,9 +464,10 @@ end
         speedup_populations = ["RP"],
         speedup_threads = [1, 2, 4, 8, 16, 32, 64, 128],
         speedup_runs = 5,
-        peak_memory_population = "DE")
+        peak_memory_population = "DE",
+        configfile = BENCHMARK_CONFIG)
 
-Runs all benchmark-related analyses: runtime by population size (with the threads of this
+Runs all benchmark-related analyses with `configfile` (`nothing`: GEMS defaults): runtime by population size (with the threads of this
 process), speedup by number of threads (one process per thread count; skipped if `speedup_populations` or
 `speedup_threads` is empty), and the peak memory of one run of `peak_memory_population` in a fresh
 process (skipped if `nothing`). Writes all runs, their summaries, the machine information, and the
@@ -478,22 +485,25 @@ function benchmark(;
     speedup_populations = ["RP"],
     speedup_threads = [1, 2, 4, 8, 16, 32, 64, 128],
     speedup_runs::Int = 5,
-    peak_memory_population = "DE")
+    peak_memory_population = "DE",
+    configfile = BENCHMARK_CONFIG)
 
     # create result folder if not passed
     isnothing(folder) ? folder = result_folder(folder_tag) : nothing
 
-    CSV.write(joinpath(folder, "benchmark_machine.csv"), machine_info())
+    CSV.write(joinpath(folder, "benchmark_machine.csv"),
+        hcat(machine_info(), DataFrame(config = something(configfile, "GEMS defaults"))))
 
     # runtime by population size
-    runs = run_sims(populations = populations, synthetic_sizes = synthetic_sizes, num_runs = num_runs)
+    runs = run_sims(populations = populations, synthetic_sizes = synthetic_sizes, num_runs = num_runs,
+        configfile = configfile)
     CSV.write(joinpath(folder, "benchmark_runs.csv"), runs)
     CSV.write(joinpath(folder, "benchmark_summary.csv"), summarize_benchmarks(runs))
 
     # speedup by number of threads
     if !isempty(speedup_populations) && !isempty(speedup_threads)
         speedup = run_thread_speedup(populations = speedup_populations, threads = speedup_threads,
-            num_runs = speedup_runs, folder = mkpath(joinpath(folder, "thread_speedup")))
+            num_runs = speedup_runs, folder = mkpath(joinpath(folder, "thread_speedup")), configfile = configfile)
         CSV.write(joinpath(folder, "benchmark_speedup_runs.csv"), speedup)
         CSV.write(joinpath(folder, "benchmark_speedup_summary.csv"), summarize_benchmarks(speedup))
     end
@@ -501,7 +511,8 @@ function benchmark(;
     # peak memory
     if !isnothing(peak_memory_population)
         CSV.write(joinpath(folder, "benchmark_peak_memory.csv"),
-            run_peak_memory(peak_memory_population, folder = mkpath(joinpath(folder, "peak_memory"))))
+            run_peak_memory(peak_memory_population, folder = mkpath(joinpath(folder, "peak_memory")),
+                configfile = configfile))
     end
 
     replot_benchmarks(folder)
