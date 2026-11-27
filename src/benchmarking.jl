@@ -202,7 +202,11 @@ _bench_style() = (
     titlefontsize = FIG_HEADING_FONTSIZE,
     titlelocation = :left,
     legendfontsize = FIG_SMALL_FONTSIZE,
-    framestyle = :box,
+    framestyle = :axes,
+    grid = true,
+    gridalpha = 0.15,
+    gridlinewidth = 0.5,
+    tick_direction = :in,
     dpi = FIG_DPI)
 const _BENCH_MARKER = (markersize = 3.5, markerstrokewidth = 1)
 
