@@ -190,20 +190,20 @@ end
 
 # stages in the GEMS colors, as in the other figures
 const _STAGES = [
-    (:initialization_time, "Initialization", gemscolors(3)[1]),
-    (:simulation_time, "Simulation", gemscolors(3)[2]),
-    (:post_processing_time, "Post-processing", gemscolors(3)[3])]
+    (:initialization_time, "Initialization", FIG_COLORS.blue),
+    (:simulation_time, "Simulation", FIG_COLORS.green),
+    (:post_processing_time, "Post-processing", FIG_COLORS.red)]
 
-# fonts and print size of the population validation figure
+# fonts and resolution of the shared figure style (`figure_style.jl`)
 _bench_style() = (
-    fontfamily = PV_FONT,
-    tickfontsize = PV_SMALL_FONTSIZE,
-    guidefontsize = PV_FONTSIZE,
-    titlefontsize = PV_HEADING_FONTSIZE,
+    fontfamily = FIG_FONT,
+    tickfontsize = FIG_SMALL_FONTSIZE,
+    guidefontsize = FIG_FONTSIZE,
+    titlefontsize = FIG_HEADING_FONTSIZE,
     titlelocation = :left,
-    legendfontsize = PV_SMALL_FONTSIZE,
+    legendfontsize = FIG_SMALL_FONTSIZE,
     framestyle = :box,
-    dpi = PV_DPI)
+    dpi = FIG_DPI)
 const _BENCH_MARKER = (markersize = 3.5, markerstrokewidth = 1)
 
 # log ticks within [lo, hi] with readable labels; adds 2 and 5 if fewer than three decades fit
@@ -253,10 +253,10 @@ function _stage_panel(d, stage, title, color, xlims, ylims; legend = false, xlab
     # slope of the population models (of all populations if there are none)
     fit = any(d.type .== "Gesyland") ? d[d.type .== "Gesyland", :] : d
     nrow(fit) > 1 && annotate!(p, xlims[2] / 1.6, ylims[1] * 1.6,
-        text("slope $(round(_loglog_slope(fit.pop_size, fit[!, col]), digits = 2))", PV_SMALL_FONTSIZE, PV_FONT, :right))
+        text("slope $(round(_loglog_slope(fit.pop_size, fit[!, col]), digits = 2))", FIG_SMALL_FONTSIZE, FIG_FONT, :right))
 
     de = d[d.model .== "DE", :]
-    nrow(de) > 0 && annotate!(p, de.pop_size[1] / 1.1, de[1, col] * 1.5, text("Germany", PV_SMALL_FONTSIZE, PV_FONT, :right))
+    nrow(de) > 0 && annotate!(p, de.pop_size[1] / 1.1, de[1, col] * 1.5, text("Germany", FIG_SMALL_FONTSIZE, FIG_FONT, :right))
     return p
 end
 
@@ -281,14 +281,15 @@ function plot_benchmarks(summary::DataFrame; speedup = nothing, physical_cores =
             ylabel = (grid ? i == 2 : i > 1) ? "" : "Runtime (s)")
         for (i, (s, title, color)) in enumerate(_STAGES)]
 
-    # 2x2: the size of four agreement plots of the population validation figure; row: its width
+    # 2x2 at text width (about the size of four agreement plots of the population validation figure);
+    # without the speedup panel, a row at page width
     grid && push!(ps, plot_thread_speedup(speedup; physical_cores = physical_cores, on_the_fly = on_the_fly,
         title = "D) Speedup by threads"))
 
-    # panel letters in bold, as in the population validation figure (plot areas about 1.75 in square)
-    foreach(p -> (panel_title!(p, 1.75, 1.75); plot!(p, top_margin = 5mm)), ps)
-    grid || return plot(ps..., layout = (1, 3), size = (100PV_WIDTH_IN, 260), dpi = PV_DPI, right_margin = 2mm)
-    return plot(ps..., layout = (2, 2), size = (500, 500), dpi = PV_DPI, right_margin = 2mm)
+    # panel letters in bold, as in the other figures (plot areas about 2 in square)
+    foreach(p -> (panel_title!(p, 2.0, 2.0); plot!(p, top_margin = 5mm)), ps)
+    grid || return plot(ps..., layout = (1, 3), size = (100FIG_FULL_WIDTH_IN, 260), dpi = FIG_DPI, right_margin = 2mm)
+    return plot(ps..., layout = (2, 2), size = (100FIG_TEXT_WIDTH_IN, 500), dpi = FIG_DPI, right_margin = 2mm)
 end
 
 # TEMPORARY: single-panel alternative to `plot_benchmarks` for comparison; delete once the figure is decided
@@ -329,7 +330,7 @@ function plot_benchmarks_single_panel(summary::DataFrame; on_the_fly::Bool = tru
     # label Germany
     de = d[d.model .== "DE", :]
     if nrow(de) > 0
-        annotate!(p, de.pop_size[1] / 1.1, de.simulation_time_median[1] * 1.6, text("Germany", PV_SMALL_FONTSIZE, PV_FONT, :right))
+        annotate!(p, de.pop_size[1] / 1.1, de.simulation_time_median[1] * 1.6, text("Germany", FIG_SMALL_FONTSIZE, FIG_FONT, :right))
     end
     return p
 end
@@ -355,10 +356,10 @@ function plot_thread_speedup(summary::DataFrame; physical_cores = missing, on_th
     # reference lines labelled directly, in the free space below the linear speedup
     n = maximum(threads)
     plot!(p, threads, threads, linestyle = :dot, color = :gray, label = "")
-    annotate!(p, n / 1.05, n / 2.1, text("linear", PV_SMALL_FONTSIZE, PV_FONT, :gray, :right))
+    annotate!(p, n / 1.05, n / 2.1, text("linear", FIG_SMALL_FONTSIZE, FIG_FONT, :gray, :right))
     if !ismissing(physical_cores) && physical_cores < n
         vline!(p, [physical_cores], color = :black, linestyle = :dashdot, linewidth = 1, label = "")
-        annotate!(p, physical_cores * 1.08, n / 3.2, text("$physical_cores cores", PV_SMALL_FONTSIZE, PV_FONT, :left))
+        annotate!(p, physical_cores * 1.08, n / 3.2, text("$physical_cores cores", FIG_SMALL_FONTSIZE, FIG_FONT, :left))
     end
     for (_, label, color) in _STAGES
         plot!(p, [NaN], [NaN], color = color, linewidth = 1.5, label = label)
@@ -419,8 +420,8 @@ end
     replot_benchmarks(folder; on_the_fly = true)
 
 Draws the benchmark figures from the CSV files that `benchmark()` wrote to `folder`, without
-running anything: `benchmarks.png` (with the speedup panel if its summary exists),
-`benchmarks_per_agent.png`, and, temporarily, `benchmarks_single_panel.png`.
+running anything: `Fig_19_benchmarks.png` (`save_figure`; with the speedup panel if its summary
+exists), `benchmarks_per_agent.png`, and, temporarily, `benchmarks_single_panel.png`.
 """
 function replot_benchmarks(folder; on_the_fly::Bool = true)
     summary = CSV.read(joinpath(folder, "benchmark_summary.csv"), DataFrame)
@@ -429,15 +430,15 @@ function replot_benchmarks(folder; on_the_fly::Bool = true)
     cores = hasproperty(machine, :physical_cores) ? machine.physical_cores[1] : missing
     speedup_file = joinpath(folder, "benchmark_speedup_summary.csv")
     speedup = isfile(speedup_file) ? CSV.read(speedup_file, DataFrame) : nothing
-    png(plot_benchmarks(summary; speedup = speedup, physical_cores = cores, on_the_fly = on_the_fly),
-        joinpath(folder, "benchmarks.png"))
-    png(plot_runtime_per_agent(summary; on_the_fly = on_the_fly), joinpath(folder, "benchmarks_per_agent.png"))
+    save_figure(plot_benchmarks(summary; speedup = speedup, physical_cores = cores, on_the_fly = on_the_fly),
+        :benchmarks, folder)
+    png(set_text_size!(plot_runtime_per_agent(summary; on_the_fly = on_the_fly)), joinpath(folder, "benchmarks_per_agent.png"))
 
     # TEMPORARY: single-panel alternative, see `plot_benchmarks_single_panel`
     p_single = plot_benchmarks_single_panel(summary; on_the_fly = on_the_fly)
     isnothing(speedup) || (p_single = plot(p_single, plot_thread_speedup(speedup; physical_cores = cores, on_the_fly = on_the_fly),
-        layout = (1, 2), size = (100PV_WIDTH_IN, 280), dpi = PV_DPI, left_margin = 3mm, bottom_margin = 3mm))
-    png(p_single, joinpath(folder, "benchmarks_single_panel.png"))
+        layout = (1, 2), size = (100FIG_FULL_WIDTH_IN, 280), dpi = FIG_DPI, left_margin = 3mm, bottom_margin = 3mm))
+    png(set_text_size!(p_single), joinpath(folder, "benchmarks_single_panel.png"))
 end
 
 

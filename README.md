@@ -461,7 +461,7 @@ Protocol:
 - **Speedup by number of threads:** RP, 5 runs each with 1, 2, 4, 8, 16, 32, 64, and 128 threads, in one Julia process per thread count.
 - **Peak memory:** maximum resident set size of one run of Germany (simulation and post-processing) in a fresh Julia process, i.e., the RAM a machine needs.
 
-Outputs: `benchmark_machine.csv` (hardware, Julia and GEMS versions, threads), `benchmark_runs.csv` and `benchmark_summary.csv` (all runs; median and interquartile range per population), `benchmark_speedup_runs.csv` and `benchmark_speedup_summary.csv`, `benchmark_peak_memory.csv`, `benchmarks.png` (A–C: runtime of each stage by population size, D: speedup by number of threads; the size of four agreement plots of the population validation figure), and `benchmarks_per_agent.png` (runtime per million agents). `replot_benchmarks(folder)` redraws the figures from the CSV files; `replot_benchmarks(folder; on_the_fly = false)` leaves out the on-the-fly populations.
+Outputs: `benchmark_machine.csv` (hardware, Julia and GEMS versions, threads), `benchmark_runs.csv` and `benchmark_summary.csv` (all runs; median and interquartile range per population), `benchmark_speedup_runs.csv` and `benchmark_speedup_summary.csv`, `benchmark_peak_memory.csv`, `Fig_19_benchmarks.png` (A–C: runtime of each stage by population size, D: speedup by number of threads; text width), and `benchmarks_per_agent.png` (runtime per million agents). `replot_benchmarks(folder)` redraws the figures from the CSV files; `replot_benchmarks(folder; on_the_fly = false)` leaves out the on-the-fly populations.
 
 ## 6. Population analyses and validation
 
