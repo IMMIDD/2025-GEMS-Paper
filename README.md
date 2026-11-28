@@ -130,7 +130,7 @@ This writes a TIFF of the same name next to every PNG (LZW compression, 300 dpi,
 | Fig 13B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
 | Sec. 3.2.2 Parameter sweep (Fig 15) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 5 / 1–8405 |
 | Sec. 3.2.3 Multi-criteria evaluation (Fig 16, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | NRW | 365 d | 11 per scenario / 0–32 |
-| Sec. 3.3 Performance (Fig 17) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | GEMS defaults | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / 1–11 |
+| Sec. 3.3 Performance (Fig 17) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | reference model | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / 1–11 |
 
 ## 4. Reference model (COVID-19, wild type, first wave 2020)
 
@@ -147,7 +147,7 @@ Config: [models/DE_model_first_wave.toml](models/DE_model_first_wave.toml). The 
 | Initial infections | none (`InfectedFraction`, fraction 0.0) | [I] the scenarios set their own initial infections |
 | Duration | 112 days (`TimesUp`) | [I] the scenarios set their own horizon |
 | Global setting | none | [D] |
-| `[Population]` | n = 100,000, household size 3, office size 5, school size 100 | [D] only used for generated populations; all examples use the GEMS population models |
+| `[Population]` | n = 100,000, household size 3, office size 5, school size 100 | [D] only used for generated populations; all examples except the on-the-fly populations of the benchmark ([5.5](#55-performance-benchmark-sec-33-fig-17)) use the GEMS population models |
 
 ### 4.2 Contacts
 
@@ -388,7 +388,7 @@ The baseline run also produces the GEMS readout figure (Fig 14, `Fig_14_baseline
 
 Outputs: `Fig_13_household_isolation.png` (the effect of household isolation above the code listing), `Fig_13A_household_isolation.png` (without the listing), and the readout figure.
 
-The Fig 13B listing ([sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl)) uses the same intervention with GEMS defaults ([Section 5.5](#55-performance-benchmark-sec-33-fig-17)) on 100,000 agents, without a fixed random seed.
+The Fig 13B listing ([sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl)) uses the same intervention with the GEMS default parameterization ([data/DefaultConf.toml @ 7f3b79e](https://github.com/IMMIDD/GEMS/blob/7f3b79e51752f1d316a836c2e9d78a76d73572fe/data/DefaultConf.toml)) on 100,000 agents, without a fixed random seed.
 
 ### 5.3 Parameter sweep (Sec. 3.2.2, Fig 15)
 
@@ -446,20 +446,22 @@ The outcomes are defined in `outcome_df()`. The duration of the wave is the numb
 
 ### 5.5 Performance benchmark (Sec. 3.3, Fig 17)
 
-GEMS default parameterization ([data/DefaultConf.toml @ 7f3b79e](https://github.com/IMMIDD/GEMS/blob/7f3b79e51752f1d316a836c2e9d78a76d73572fe/data/DefaultConf.toml)), also used for Fig 13B.
+Code: [benchmarking.jl](src/benchmarking.jl). Config: reference model. `benchmark(configfile = nothing)` runs the same protocol with the GEMS default parameterization instead, for comparison; `benchmark_machine.csv` records the config.
 
-| Parameter | Value |
-|---|---|
-| Initial infections | 0.1 % random |
-| Duration | 365 days |
-| Transmission probability | 0.2 |
-| Daily contacts | Poisson(λ = 1.0) on every setting level |
-| Progression category (ages ≤14 / 15–65 / 66+) | Categorical(p): Asymptomatic 0.40 / 0.25 / 0.15; Symptomatic 0.58 / 0.60 / 0.40; Severe 0.01 / 0.11 / 0.25; Hospitalized 0.007 / 0.03 / 0.12; Critical 0.003 / 0.01 / 0.08 |
-| Durations (days) | exposure → infectiousness 1 + Poisson(λ = 1); infectiousness → symptoms Poisson(λ = 1); symptom → recovery Poisson(λ = 7) (asymptomatic: infectiousness → recovery Poisson(λ = 8)); symptom → severeness onset Poisson(λ = 1); severeness duration (Severe) Poisson(λ = 7); to hospital Poisson(λ = 2); hospital stay Poisson(λ = 7); to ICU Poisson(λ = 2); ICU stay Poisson(λ = 7); ICU discharge → hospital discharge Poisson(λ = 7); ICU → death Poisson(λ = 10); hospital discharge → severeness offset Poisson(λ = 3); severeness offset → recovery Poisson(λ = 4) |
-| Death (Critical) | Bernoulli(p = 0.3) |
-| On-the-fly population | 100,000 agents, mean household size 3, office size 5, school size 100 |
+| Parameter | Reference model | This example |
+|---|---|---|
+| Initial infections | none | 0.1 % of the population, random (`infected_fraction = 0.001`) |
+| Duration | 112 days | 365 days |
+| Random seed | – | 1–11 (one per run) |
+| On-the-fly populations | – | generated with the `[Population]` parameters of the reference model (household size 3, office size 5, school size 100) |
 
-Protocol: one warm-up run, then 11 runs per population (random seeds 1–11), medians reported. Populations: 16 German states and Germany, plus on-the-fly populations of 0.1, 1, 5, 10, 20, and 50 million agents.
+Protocol:
+
+- **Runtime by population size:** 16 German states and Germany, plus on-the-fly populations of 0.1, 1, 5, 10, 20, and 50 million agents. The population files are downloaded and both population paths (population model and on-the-fly) are run once for compilation before anything is timed. Then 11 runs per population (random seeds 1–11), all with the threads of the running Julia process. Each run times three stages separately: initialization (reading population and settings files up to the ready simulation), simulation (`run!`), and post-processing (`ResultData` with all analyses). Post-processing with the `LightRD` style (fewer analyses) is timed separately and only reported in the summary. Each run also records the number of infections, the mean infection duration (exposure to recovery, as in the GEMS infection duration plot), compile time, garbage collection time, allocated memory, and the live heap after a full garbage collection, once after the simulation and once after post-processing. Fig 17 shows medians with interquartile ranges.
+- **Speedup by number of threads:** RP, 5 runs each with 1, 2, 4, 8, 16, 32, 64, and 128 threads, in one Julia process per thread count.
+- **Peak memory:** maximum resident set size of one run of Germany (simulation and post-processing) in a fresh Julia process, i.e., the RAM a machine needs.
+
+Outputs: `benchmark_machine.csv` (hardware, Julia version, GEMS version with repository, branch and tree from the Manifest, commit of this repository, threads, config), `benchmark_runs.csv` and `benchmark_summary.csv` (all runs; median and interquartile range per population), `benchmark_speedup_runs.csv` and `benchmark_speedup_summary.csv`, `benchmark_peak_memory.csv`, `Fig_17_benchmarks.png` (A–C: runtime of each stage by population size, D: speedup by number of threads; text width), and `benchmarks_per_agent.png` (runtime per million agents). `replot_benchmarks(folder)` redraws the figures from the CSV files; `replot_benchmarks(folder; on_the_fly = false)` leaves out the on-the-fly populations.
 
 ## 6. Population analyses and validation
 
