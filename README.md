@@ -21,10 +21,10 @@ All disease examples share one **reference model**, [models/DE_model_first_wave.
    - [4.5 Transition durations](#45-transition-durations)
 5. [Example-specific parameterization](#5-example-specific-parameterization)
    - [5.1 First wave 2020 (Sec. 3.1.1, Fig 11–12)](#51-first-wave-2020-sec-311-fig-1112)
-   - [5.2 Scenario modeling (Sec. 3.2.1, Fig 15–16)](#52-scenario-modeling-sec-321-fig-1516)
-   - [5.3 Parameter sweep (Sec. 3.2.2, Fig 17)](#53-parameter-sweep-sec-322-fig-17)
-   - [5.4 Multi-criteria strategy evaluation (Sec. 3.2.3, Fig 18, Tab 2)](#54-multi-criteria-strategy-evaluation-sec-323-fig-18-tab-2)
-   - [5.5 Performance benchmark (Sec. 3.3, Fig 19)](#55-performance-benchmark-sec-33-fig-19)
+   - [5.2 Scenario modeling (Sec. 3.2.1, Fig 13–14)](#52-scenario-modeling-sec-321-fig-1314)
+   - [5.3 Parameter sweep (Sec. 3.2.2, Fig 15)](#53-parameter-sweep-sec-322-fig-15)
+   - [5.4 Multi-criteria strategy evaluation (Sec. 3.2.3, Fig 16, Tab 2)](#54-multi-criteria-strategy-evaluation-sec-323-fig-16-tab-2)
+   - [5.5 Performance benchmark (Sec. 3.3, Fig 17)](#55-performance-benchmark-sec-33-fig-17)
 6. [Population analyses and validation](#6-population-analyses-and-validation)
    - [6.1 Population and contact figures (Fig 4–8)](#61-population-and-contact-figures-fig-48)
    - [6.2 Population validation](#62-population-validation)
@@ -47,7 +47,7 @@ All disease examples share one **reference model**, [models/DE_model_first_wave.
 | [src/demographics.jl](src/demographics.jl), [src/demographic_maps.jl](src/demographic_maps.jl), [src/settings_map.jl](src/settings_map.jl), [src/settings.jl](src/settings.jl), [src/mobility.jl](src/mobility.jl), [src/contacts.jl](src/contacts.jl) | Population analyses (Fig 4, 6, 8) |
 | [src/population_validation.jl](src/population_validation.jl), [src/setting_validation.jl](src/setting_validation.jl) | Population validation against official statistics: age, sex, households, employment and education, setting sizes (Fig 5, [Section 6.2](#62-population-validation)) |
 | [src/commuter_validation.jl](src/commuter_validation.jl) | Commuting balance and validation against the BA commuter statistics (Fig 7, [Section 6.3](#63-commuting-validation)) |
-| [src/benchmarking.jl](src/benchmarking.jl) | Performance benchmark (Fig 19) |
+| [src/benchmarking.jl](src/benchmarking.jl) | Performance benchmark (Fig 17) |
 | [calibrate_first_wave.jl](calibrate_first_wave.jl) | Calibration of the reference model (transmission scale, generation time, contact factors); not part of `runall()` |
 | [derive_contact_parameters.jl](derive_contact_parameters.jl) | Derivation of the contact parameters of the reference model from POLYMOD; not part of `runall()` |
 | [inputs/](inputs/) | Calibration results read by the scenarios, contact parameters derived from POLYMOD, reference data from official statistics (population, settings, commuting), county income; sources and licenses of every file in [inputs/README.md](inputs/README.md) |
@@ -93,7 +93,7 @@ All simulations use fixed random seeds ([Section 3](#3-overview-examples-code-an
 
 ### Drawn figures
 
-The figures that are not generated from data (Fig 1–3, 9, 10, and the strategy of Fig 17) are drawn in [figures/drawn_figures.pptx](figures/drawn_figures.pptx), one figure per slide. The slides have the size of a full page of PLOS (7.5 × 8.75 in), so fonts and lines have their print sizes. On Windows with PowerPoint (closed), export them with
+The figures that are not generated from data (Fig 1–3, 9, 10, and the strategy of Fig 15) are drawn in [figures/drawn_figures.pptx](figures/drawn_figures.pptx), one figure per slide. The slides have the size of a full page of PLOS (7.5 × 8.75 in), so fonts and lines have their print sizes. On Windows with PowerPoint (closed), export them with
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\export_figures.ps1
@@ -101,7 +101,7 @@ powershell -ExecutionPolicy Bypass -File tools\export_figures.ps1
 
 This writes a PNG of every figure (300 dpi, cropped to its width and height) to `results/<timestamp>_drawn_figures/`. The layout of a slide sets the width of its figure (full width 2250 px, text width 1560 px, panel width 750 px). The notes of a slide hold its file name, or `skip` if it is not exported (style sheet).
 
-Slides with `panel` in the second line of their notes are panels that the Julia code combines with a plot. Julia reads them from `figures/panels/`, so PowerPoint is not needed to reproduce the results. After changing such a slide, update its panel with `-UpdatePanels`. The code listing of Fig 15 (`Fig_15B_code_listing.png`) is a screenshot of [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl).
+Slides with `panel` in the second line of their notes are panels that the Julia code combines with a plot. Julia reads them from `figures/panels/`, so PowerPoint is not needed to reproduce the results. After changing such a slide, update its panel with `-UpdatePanels`. The code listing of Fig 13 (`Fig_13B_code_listing.png`) is a screenshot of [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl).
 
 ### TIFF files for the submission
 
@@ -125,12 +125,12 @@ This writes a TIFF of the same name next to every PNG (LZW compression, 300 dpi,
 | Fig 8 (contact patterns) | [contacts.jl](src/contacts.jl) → `contacts()` | reference model, plus uniform and strict mixing in the municipalities | DE | – | 1 day, all members of all settings |
 | Contact parameters (Sec. 2.4, reference model) | [derive_contact_parameters.jl](derive_contact_parameters.jl) → `derive_contact_parameters()` | reference model | DE (age weights) | – | – |
 | Sec. 3.1.1 First wave 2020 (Fig 11–12), incl. municipality mixing comparison | [sc_first_wave.jl](src/sc_first_wave.jl) → `scenario_first_wave()` | reference model | DE | 10.02.–31.05.2020 | see [5.1](#51-first-wave-2020-sec-311-fig-1112) |
-| Sec. 3.1.2 RSV immunization 2025/26 (Fig 13–14) | separate repository: [IMMIDD/2025-RSV-scenario](https://github.com/IMMIDD/2025-RSV-scenario) | – | – | – | – |
-| Sec. 3.2.1 Scenario modeling (Fig 15A, baseline readouts Fig 16) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 180 d | 1 per scenario / 0 |
-| Fig 15B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
-| Sec. 3.2.2 Parameter sweep (Fig 17) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 5 / 1–8405 |
-| Sec. 3.2.3 Multi-criteria evaluation (Fig 18, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | NRW | 365 d | 11 per scenario / 0–32 |
-| Sec. 3.3 Performance (Fig 19) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | GEMS defaults | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / 1–11 |
+| Sec. 3.1.2 Contributions to ECDC multi-model assessments on COVID-19 and RSV (no figures) | RSV application in a separate repository: [IMMIDD/2025-RSV-scenario](https://github.com/IMMIDD/2025-RSV-scenario) | – | – | – | – |
+| Sec. 3.2.1 Scenario modeling (Fig 13A, baseline readouts Fig 14) | [sc_household_isolation.jl](src/sc_household_isolation.jl) → `scenario_household_isolation()` | reference model | DE | 180 d | 1 per scenario / 0 |
+| Fig 13B (code listing) | [sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl) | GEMS defaults | on-the-fly, 100,000 | 365 d | 1 per scenario / none (random) |
+| Sec. 3.2.2 Parameter sweep (Fig 15) | [sc_sweeping.jl](src/sc_sweeping.jl) → `scenario_sweeping()` | reference model | SL | 365 d | 41 × 41 grid × 5 / 1–8405 |
+| Sec. 3.2.3 Multi-criteria evaluation (Fig 16, Tab 2) | [sc_testing.jl](src/sc_testing.jl) → `scenario_testing()` | reference model | NRW | 365 d | 11 per scenario / 0–32 |
+| Sec. 3.3 Performance (Fig 17) | [benchmarking.jl](src/benchmarking.jl) → `benchmark()` | GEMS defaults | 16 states + DE; on-the-fly 0.1–50 M | 365 d | 11 per population (median) / 1–11 |
 
 ## 4. Reference model (COVID-19, wild type, first wave 2020)
 
@@ -366,7 +366,7 @@ By default, `scenario_first_wave()` runs only the parts of the paper (`FIRST_WAV
 | Age and settings | age groups of cases and deaths, mean age of the infected, share of transmissions per setting type, share of municipality transmissions within the same 10-year age band, expected municipality contacts per member relative to c |
 | Outputs | `sc_first_wave_mixing_summary.csv` (one column per model), `sc_first_wave_mixing_ages.csv`, and the outputs of each variant (`sc_first_wave_mixing_<variant>[_random_seeds]_*.csv`) |
 
-### 5.2 Scenario modeling (Sec. 3.2.1, Fig 15–16)
+### 5.2 Scenario modeling (Sec. 3.2.1, Fig 13–14)
 
 Code: [sc_household_isolation.jl](src/sc_household_isolation.jl). Config: reference model.
 
@@ -384,13 +384,13 @@ Code: [sc_household_isolation.jl](src/sc_household_isolation.jl). Config: refere
 
 All household members, including the symptomatic individual, isolate at home for 14 days. Each new symptomatic household member triggers the strategy again and restarts the 14 days for the whole household.
 
-The baseline run also produces the GEMS readout figure (Fig 16, `Fig_16_baseline_readouts.png`): daily infections, effective reproduction number, household attack rate (household sizes 2–6), infection duration, cumulative disease progressions, progression categories, and maps of the initial reproduction number and the infection fatality per county. The ResultData objects of both runs (style `HouseholdIsolationRD`) are stored in `household_isolation/` in the result folder. They hold the aggregated data that the figures need; of the raw infections, these are the infections per progression category and age group and the deaths per infection per county.
+The baseline run also produces the GEMS readout figure (Fig 14, `Fig_14_baseline_readouts.png`): daily infections, effective reproduction number, household attack rate (household sizes 2–6), infection duration, cumulative disease progressions, progression categories, and maps of the initial reproduction number and the infection fatality per county. The ResultData objects of both runs (style `HouseholdIsolationRD`) are stored in `household_isolation/` in the result folder. They hold the aggregated data that the figures need; of the raw infections, these are the infections per progression category and age group and the deaths per infection per county.
 
-Outputs: `Fig_15_household_isolation.png` (the effect of household isolation above the code listing), `Fig_15A_household_isolation.png` (without the listing), and the readout figure.
+Outputs: `Fig_13_household_isolation.png` (the effect of household isolation above the code listing), `Fig_13A_household_isolation.png` (without the listing), and the readout figure.
 
-The Fig 15B listing ([sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl)) uses the same intervention with GEMS defaults ([Section 5.5](#55-performance-benchmark-sec-33-fig-19)) on 100,000 agents, without a fixed random seed.
+The Fig 13B listing ([sc_household_isolation_screenshot_file.jl](src/sc_household_isolation_screenshot_file.jl)) uses the same intervention with GEMS defaults ([Section 5.5](#55-performance-benchmark-sec-33-fig-17)) on 100,000 agents, without a fixed random seed.
 
-### 5.3 Parameter sweep (Sec. 3.2.2, Fig 17)
+### 5.3 Parameter sweep (Sec. 3.2.2, Fig 15)
 
 Code: [sc_sweeping.jl](src/sc_sweeping.jl). Config: reference model.
 
@@ -411,9 +411,9 @@ To focus on the regime where self-isolation can be decisive, we assume that othe
 |---|---|---|
 | `SymptomTrigger` | Self Isolation (adheres ~ Bernoulli(p = adherence), drawn from the simulation's RNG) | `SelfIsolation(14)` (0) |
 
-The heatmap shows the mean R_init per combination. Alongside the data (`sc_sweep_data.csv`) and the figure (`Fig_17_parameter_sweep.png`, text width, with the [drawn](#drawn-figures) strategy; the heatmap alone is `Fig_17B_sweep_heatmap.png`), the scenario writes `sc_sweep_variability.txt`, which summarizes the variability between replicates: the per-cell sample SD across replicates, aggregated over the grid as the pooled SD (root of the mean variance), mean, 95th percentile, and maximum; the per-cell range (maximum − minimum) across replicates, aggregated as its minimum, maximum, mean, and median; the standard error of the cell means; and the number of cells whose replicates lie on both sides of R = 1.
+The heatmap shows the mean R_init per combination. Alongside the data (`sc_sweep_data.csv`) and the figure (`Fig_15_parameter_sweep.png`, text width, with the [drawn](#drawn-figures) strategy; the heatmap alone is `Fig_15B_sweep_heatmap.png`), the scenario writes `sc_sweep_variability.txt`, which summarizes the variability between replicates: the per-cell sample SD across replicates, aggregated over the grid as the pooled SD (root of the mean variance), mean, 95th percentile, and maximum; the per-cell range (maximum − minimum) across replicates, aggregated as its minimum, maximum, mean, and median; the standard error of the cell means; and the number of cells whose replicates lie on both sides of R = 1.
 
-### 5.4 Multi-criteria strategy evaluation (Sec. 3.2.3, Fig 18, Tab 2)
+### 5.4 Multi-criteria strategy evaluation (Sec. 3.2.3, Fig 16, Tab 2)
 
 Code: [sc_testing.jl](src/sc_testing.jl). Config: reference model.
 
@@ -440,13 +440,13 @@ To focus on the regime where tracing can be decisive, we assume that other measu
 
 The tests in Isolation & Testing have no follow-up: the scenario detects cases without changing the spread, so it differs from Isolation Only only by the random seed. The tracing scenario corresponds to Fig 10 of the paper.
 
-The top panels of the figure (`Fig_18_testing_scenarios.png`) show all runs, the bottom panels the run with the median peak day of infections of each scenario. The scenario stores the results of every run (`runs/seed_*/resultdata.jld2`, GEMS `ResultData` in the style `TestingRD`) and writes the outcomes of every run (`sc_testing_outcomes.csv`), their statistics per scenario (`sc_testing_summary.csv`: mean, standard deviation, minimum, maximum, and 95 % confidence interval of the mean), the comparison of tracing with the other scenarios (`sc_testing_comparison.csv`: averted infections, deaths, and workdays and schooldays of absence, additional tests, and additional tests per averted infection, death, workday of absence, and schoolday of absence; same statistics), and the daily data of every run (`sc_testing_daily.csv`). If it is interrupted, calling it again with the same `folder` and parameters skips the stored runs.
+The top panels of the figure (`Fig_16_testing_scenarios.png`) show all runs, the bottom panels the run with the median peak day of infections of each scenario. The scenario stores the results of every run (`runs/seed_*/resultdata.jld2`, GEMS `ResultData` in the style `TestingRD`) and writes the outcomes of every run (`sc_testing_outcomes.csv`), their statistics per scenario (`sc_testing_summary.csv`: mean, standard deviation, minimum, maximum, and 95 % confidence interval of the mean), the comparison of tracing with the other scenarios (`sc_testing_comparison.csv`: averted infections, deaths, and workdays and schooldays of absence, additional tests, and additional tests per averted infection, death, workday of absence, and schoolday of absence; same statistics), and the daily data of every run (`sc_testing_daily.csv`). If it is interrupted, calling it again with the same `folder` and parameters skips the stored runs.
 
 The outcomes are defined in `outcome_df()`. The duration of the wave is the number of days between 5 % and 95 % of all infections. Absent workers and students are isolated, severely ill, or in hospital. Their days are split into isolated and infected, isolated and not infected, and severely ill without isolation. The lost workdays and schooldays are the isolated days. Every day of the week counts, and students are the members of all educational settings. The isolations after false positive tests (individuals and days) are computed from the individual tests when a run is stored, and left empty for runs stored before this was added. The number of workers and students is stored with each run, too. If no run in the folder has it, `replot_testing(folder, population = "NRW")` counts them in the population.
 
-### 5.5 Performance benchmark (Sec. 3.3, Fig 19)
+### 5.5 Performance benchmark (Sec. 3.3, Fig 17)
 
-GEMS default parameterization ([data/DefaultConf.toml @ 7f3b79e](https://github.com/IMMIDD/GEMS/blob/7f3b79e51752f1d316a836c2e9d78a76d73572fe/data/DefaultConf.toml)), also used for Fig 15B.
+GEMS default parameterization ([data/DefaultConf.toml @ 7f3b79e](https://github.com/IMMIDD/GEMS/blob/7f3b79e51752f1d316a836c2e9d78a76d73572fe/data/DefaultConf.toml)), also used for Fig 13B.
 
 | Parameter | Value |
 |---|---|

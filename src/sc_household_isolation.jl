@@ -339,9 +339,9 @@ end
 """
     save_household_isolation_figure(rd_b, rd_s, folder)
 
-Saves the figure of the paper (`Fig_15_household_isolation.png`: the plots of
+Saves the figure of the paper (`Fig_13_household_isolation.png`: the plots of
 `plot_scenario_household_isolation` above the code listing, a screenshot of
-`sc_household_isolation_screenshot_file.jl`) and the plots alone (`Fig_15A_household_isolation.png`)
+`sc_household_isolation_screenshot_file.jl`) and the plots alone (`Fig_13A_household_isolation.png`)
 in `folder`.
 """
 function save_household_isolation_figure(rd_b, rd_s, folder)

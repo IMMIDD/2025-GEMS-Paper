@@ -791,7 +791,7 @@ end
 Generates the figure and the tables of the testing scenario from the `ResultData` objects
 that `scenario_testing()` stored in `folder`, without re-running the simulations:
 
-- `Fig_18_testing_scenarios.png`: figure (see `plot_scenario_testing`)
+- `Fig_16_testing_scenarios.png`: figure (see `plot_scenario_testing`)
 - `sc_testing_outcomes.csv`: outcomes of every run (see `outcome_df`)
 - `sc_testing_daily.csv`: daily data of every run (see `daily_df`)
 - `sc_testing_summary.csv`: statistics of the outcomes over the runs of a strategy (see `summary_df`)

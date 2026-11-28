@@ -204,9 +204,9 @@ end
 """
     save_sweep_figure(df, folder)
 
-Saves the figure of the paper (`Fig_17_parameter_sweep.png`, text width: the strategy, drawn in
+Saves the figure of the paper (`Fig_15_parameter_sweep.png`, text width: the strategy, drawn in
 `figures/drawn_figures.pptx` and shown at 90 % of its size, and the heatmap of `sweep_heatmap`)
-and the heatmap alone (`Fig_17B_sweep_heatmap.png`) in `folder`.
+and the heatmap alone (`Fig_15B_sweep_heatmap.png`) in `folder`.
 """
 function save_sweep_figure(df, folder)
     strategy = load_panel(joinpath(FIG_PANEL_FOLDER, figure_name(:parameter_sweep, panel = "A", name = "sweep_strategy") * ".png"))
