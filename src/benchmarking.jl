@@ -459,7 +459,7 @@ end
     replot_benchmarks(folder; on_the_fly = true)
 
 Draws the benchmark figures from the CSV files that `benchmark()` wrote to `folder`, without
-running anything: `Fig_19_benchmarks.png` (`save_figure`; with the speedup panel if its summary
+running anything: `Fig_17_benchmarks.png` (`save_figure`; with the speedup panel if its summary
 exists), `benchmarks_per_agent.png`, and, temporarily, `benchmarks_single_panel.png`.
 """
 function replot_benchmarks(folder; on_the_fly::Bool = true)

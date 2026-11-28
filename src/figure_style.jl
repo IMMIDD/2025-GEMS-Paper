@@ -64,9 +64,8 @@ const FIG_COLORS = (
 """
     FIGURE_NUMBERS
 
-Numbers of the figures in the paper by name. Figures 13 and 14 are in the repository
-of the RSV example. The drawn figures (1-3, 9, 10) carry their file names in the notes
-of their slides.
+Numbers of the figures in the paper by name. The drawn figures (1-3, 9, 10) and the drawn
+panel of figure 15 carry their file names in the notes of their slides.
 """
 const FIGURE_NUMBERS = (
     setting_overview = 1,
@@ -81,19 +80,19 @@ const FIGURE_NUMBERS = (
     trism_example = 10,
     first_wave = 11,
     first_wave_states = 12,
-    household_isolation = 15,
-    baseline_readouts = 16,
-    parameter_sweep = 17,
-    testing_scenarios = 18,
-    benchmarks = 19)
+    household_isolation = 13,
+    baseline_readouts = 14,
+    parameter_sweep = 15,
+    testing_scenarios = 16,
+    benchmarks = 17)
 
 """
     figure_name(figure::Symbol; panel = "", name = figure)
 
 File name (without extension) of a figure of the paper (`FIGURE_NUMBERS`), e.g.
-`figure_name(:parameter_sweep)` is `"Fig_17_parameter_sweep"`, or of one of its panels, e.g.
+`figure_name(:parameter_sweep)` is `"Fig_15_parameter_sweep"`, or of one of its panels, e.g.
 `figure_name(:parameter_sweep, panel = "B", name = "sweep_heatmap")` is
-`"Fig_17B_sweep_heatmap"`.
+`"Fig_15B_sweep_heatmap"`.
 """
 function figure_name(figure::Symbol; panel = "", name = figure)
     haskey(FIGURE_NUMBERS, figure) ||
